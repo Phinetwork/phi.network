@@ -119,7 +119,7 @@ export interface BuildStatusChipsArgs {
  * Produces the <IconCircle/> list for the modal header strip.
  * Idempotent + safe for null/partial data.
  */
-export function buildStatusChips({
+function buildStatusChips({
   uiState,
   meta,
   contentSigMatches,

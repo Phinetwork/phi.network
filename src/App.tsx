@@ -1,55 +1,42 @@
+// src/App.tsx
+import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import React, { useState } from "react";
-import { VerifierForm } from "./components/VerifierForm";
-import { ResultCard } from "./components/ResultCard";
-import type { VerificationResult } from "./types";
+import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
 import VerifySigilPage from "./pages/VerifySigil";
-
-// existing imports...
+import SigilPage from "./pages/SigilPage/SigilPage";
+import SigilExplorer from "./components/SigilExplorer";
+import SigilFeedPage from "./pages/SigilFeedPage";
+import "./App.css";
 
 const App: React.FC = () => {
-  const [result, setResult] = useState<VerificationResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
   return (
-    <div className="page">
-      <header className="header">
-        <div className="header-inner">
-          <h1>verify.kai</h1>
-          <p className="header-subtitle">
-            Sovereign verifier for Kai Sigils — inspect embedded Kai Signature
-            metadata in any KKS-compliant SVG.
-          </p>
-        </div>
-      </header>
-
-      <main className="layout">
-        <VerifierForm
-          onResult={setResult}
-          onLoadingChange={setIsLoading}
-        />
-        <ResultCard result={result} isLoading={isLoading} />
-      </main>
     <BrowserRouter>
-      <Routes>
+      <div className="app-shell">
+        {/* Atlantean background layers */}
+        <div className="app-bg-orbit" aria-hidden="true" />
+        <div className="app-bg-grid" aria-hidden="true" />
+        <div className="app-bg-glow" aria-hidden="true" />
 
-
-        {/* NEW: verify.kai/verify → VerifySigilPage */}
-        <Route path="/verify" element={<VerifySigilPage />} />
-
-        {/* Optional alias: verify.kai/verify/sigil if you want it */}
-        {/* <Route path="/verify/sigil" element={<VerifySigilPage />} /> */}
-
-        {/* ...your other routes */}
-      </Routes>
+        {/* Centered sacred frame */}
+        <main className="app-stage" role="main">
+          <div className="app-frame">
+            <div className="app-frame-inner">
+              <Routes>
+                {/* Root → VerifierStamper */}
+                <Route path="/" element={<VerifierStamper />} />
+                {/* Optional secondary route */}
+                <Route path="/verify" element={<VerifySigilPage />} />
+                        <Route path="/s" element={<SigilPage />} />
+          <Route path="/s/:hash" element={<SigilPage />} />
+          <Route path="/explorer" element={<SigilExplorer />} />
+          <Route path="/feed" element={<SigilFeedPage />} />
+              </Routes>
+            </div>
+          </div>
+        </main>
+      </div>
     </BrowserRouter>
-      <footer className="footer">
-        <p>Powered by Kai-Klok · IKANN resolver</p>
-      </footer>
-    </div>
   );
 };
-
-
 
 export default App;

@@ -1,0 +1,323 @@
+/* src/components/KaiVoh/VerifierFrame.css
+   Kai-Sigil Verifier — Atlantean Proof Capsule
+
+   - Glassy card with subtle φ-proportioned spacing
+   - Works in both compact + full layouts
+   - Strong focus outlines for keyboard users
+   - Motion-respectful glow (prefers-reduced-motion)
+*/
+
+.kv-verifier {
+  --kvv-radius: 16px;
+  --kvv-padding: 1.25rem;
+  --kvv-gap: 1.25rem;
+  --kvv-bg: rgba(6, 10, 18, 0.9);
+  --kvv-border: rgba(180, 240, 255, 0.25);
+  --kvv-border-soft: rgba(180, 240, 255, 0.12);
+  --kvv-ink: #e7f6ff;
+  --kvv-ink-soft: #b5cadd;
+  --kvv-accent: #37ffe4;
+  --kvv-accent-soft: #8ef0ff;
+  --kvv-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+  --kvv-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
+
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: var(--kvv-gap);
+  padding: var(--kvv-padding);
+  border-radius: var(--kvv-radius);
+  background: radial-gradient(
+      circle at 0% 0%,
+      rgba(55, 255, 228, 0.09),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 100% 100%,
+      rgba(167, 139, 250, 0.1),
+      transparent 55%
+    ),
+    var(--kvv-bg);
+  border: 1px solid var(--kvv-border-soft);
+  box-shadow: var(--kvv-shadow);
+  color: var(--kvv-ink);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+
+.kv-verifier--compact {
+  --kvv-padding: 0.75rem;
+  --kvv-gap: 0.75rem;
+  border-radius: 12px;
+}
+
+/* QR shell */
+
+.kv-verifier__qr-shell {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  border-radius: calc(var(--kvv-radius) * 0.85);
+  border: 1px solid var(--kvv-border);
+  background: radial-gradient(
+      circle at 50% 0%,
+      rgba(55, 255, 228, 0.22),
+      transparent 60%
+    ),
+    rgba(8, 12, 20, 0.95);
+  box-shadow: 0 0 0 1px rgba(4, 10, 14, 0.8),
+    0 16px 40px rgba(6, 255, 208, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+
+.kv-verifier__qr-inner {
+  display: inline-flex;
+  padding: 0.35rem;
+  border-radius: 10px;
+  background: radial-gradient(
+      circle at 0% 100%,
+      rgba(255, 255, 255, 0.2),
+      transparent 55%
+    ),
+    rgba(5, 5, 10, 0.96);
+}
+
+.kv-verifier--compact .kv-verifier__qr-shell {
+  padding: 0.5rem;
+}
+
+/* Content area */
+
+.kv-verifier__content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.kv-verifier__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kv-verifier__title {
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--kvv-accent-soft);
+  margin: 0;
+}
+
+.kv-verifier__subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--kvv-ink-soft);
+}
+
+/* Meta list */
+
+.kv-verifier__meta {
+  margin: 0;
+  padding: 0.35rem 0.45rem;
+  border-radius: 10px;
+  border: 1px solid var(--kvv-border-soft);
+  background: linear-gradient(
+      135deg,
+      rgba(8, 22, 32, 0.8),
+      rgba(6, 14, 24, 0.9)
+    );
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 0.25rem;
+}
+
+.kv-verifier__meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.kv-verifier__meta-label {
+  font-weight: 500;
+  color: var(--kvv-ink-soft);
+}
+
+.kv-verifier__meta-value {
+  font-weight: 500;
+  text-align: right;
+}
+
+.kv-verifier__mono {
+  font-family: var(--kvv-mono);
+  letter-spacing: 0.03em;
+}
+
+/* Caption */
+
+.kv-verifier__caption {
+  margin: 0;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--kvv-ink-soft);
+}
+
+/* Actions */
+
+.kv-verifier__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.kv-verifier__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  line-height: 1;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--kvv-ink);
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    transform 120ms ease-out;
+}
+
+.kv-verifier__btn--primary {
+  background: radial-gradient(
+      circle at 0% 0%,
+      rgba(55, 255, 228, 0.5),
+      transparent 50%
+    ),
+    linear-gradient(
+      120deg,
+      rgba(55, 255, 228, 0.9),
+      rgba(120, 215, 255, 0.95)
+    );
+  color: #020309;
+  border-color: rgba(197, 254, 255, 0.9);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+}
+
+.kv-verifier__btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.6);
+}
+
+.kv-verifier__btn--ghost {
+  border-color: var(--kvv-border-soft);
+  background: rgba(6, 12, 20, 0.8);
+}
+
+.kv-verifier__btn--ghost:hover {
+  border-color: var(--kvv-border);
+  background: rgba(8, 16, 28, 0.96);
+}
+
+/* Button focus & states */
+
+.kv-verifier__btn:focus-visible {
+  outline: 2px solid var(--kvv-accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px rgba(4, 9, 12, 0.9),
+    0 0 0 4px rgba(55, 255, 228, 0.35);
+}
+
+.kv-verifier__btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.6);
+}
+
+/* URL line */
+
+.kv-verifier__url {
+  margin: 0;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--kvv-ink-soft);
+  word-break: break-all;
+}
+
+.kv-verifier__url-label {
+  opacity: 0.7;
+  margin-right: 0.25rem;
+}
+
+.kv-verifier__url-value {
+  font-family: var(--kvv-mono);
+}
+
+/* Compact adjustments */
+
+.kv-verifier--compact .kv-verifier__title {
+  font-size: 0.85rem;
+}
+
+.kv-verifier--compact .kv-verifier__subtitle {
+  font-size: 0.72rem;
+}
+
+.kv-verifier--compact .kv-verifier__meta-row {
+  font-size: 0.74rem;
+}
+
+.kv-verifier--compact .kv-verifier__caption {
+  font-size: 0.74rem;
+}
+
+.kv-verifier--compact .kv-verifier__url {
+  font-size: 0.7rem;
+}
+
+/* Mobile layout */
+
+@media (max-width: 640px) {
+  .kv-verifier {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .kv-verifier__qr-shell {
+    align-self: center;
+  }
+
+  .kv-verifier__actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Motion sensitivity */
+
+@media (prefers-reduced-motion: reduce) {
+  .kv-verifier,
+  .kv-verifier__btn,
+  .kv-verifier__qr-shell {
+    transition: none !important;
+    animation: none !important;
+  }
+}
