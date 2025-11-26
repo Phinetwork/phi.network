@@ -1,42 +1,319 @@
 // src/App.tsx
-import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+
+/**
+ * ✅ Console App (2-tab) updates:
+ * - Nav: ONLY Verifier + KaiVoh
+ * - Top bar: LIVE + green orb pulsing every 5.236s + **Kai Pulse NOW** (replaces /5236 countdown)
+ * - KaiVoh opens as a modal via /voh route
+ * - Deep links retained (routes remain reachable): /stream, /feed, /p~:token, /explorer, /s, /p
+ */
+
 import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
-import VerifySigilPage from "./pages/VerifySigil";
-import SigilPage from "./pages/SigilPage/SigilPage";
+import KaiVohModal from "./components/KaiVoh/KaiVohModal";
+
+// ✅ Kai Pulse NOW (no missing export; uses existing canonical utility)
+import { momentFromUTC } from "./utils/kai_pulse";
+
+// Keep routes reachable even if not shown in nav
 import SigilExplorer from "./components/SigilExplorer";
 import SigilFeedPage from "./pages/SigilFeedPage";
+import SigilPage from "./pages/SigilPage/SigilPage";
+import PShort from "./pages/PShort";
+
 import "./App.css";
 
-const App: React.FC = () => {
-  return (
-    <BrowserRouter>
-      <div className="app-shell">
-        {/* Atlantean background layers */}
-        <div className="app-bg-orbit" aria-hidden="true" />
-        <div className="app-bg-grid" aria-hidden="true" />
-        <div className="app-bg-glow" aria-hidden="true" />
-
-        {/* Centered sacred frame */}
-        <main className="app-stage" role="main">
-          <div className="app-frame">
-            <div className="app-frame-inner">
-              <Routes>
-                {/* Root → VerifierStamper */}
-                <Route path="/" element={<VerifierStamper />} />
-                {/* Optional secondary route */}
-                <Route path="/verify" element={<VerifySigilPage />} />
-                        <Route path="/s" element={<SigilPage />} />
-          <Route path="/s/:hash" element={<SigilPage />} />
-          <Route path="/explorer" element={<SigilExplorer />} />
-          <Route path="/feed" element={<SigilFeedPage />} />
-              </Routes>
-            </div>
-          </div>
-        </main>
-      </div>
-    </BrowserRouter>
-  );
+type NavItem = {
+  to: string;
+  label: string;
+  desc: string;
+  end?: boolean;
 };
 
-export default App;
+// Strict: allow CSS custom vars without `any`
+type AppShellStyle = CSSProperties & {
+  ["--breath-s"]?: string;
+};
+
+function KaiVohRoute() {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState<boolean>(true);
+
+  const handleClose = useCallback((): void => {
+    setOpen(false);
+    navigate("/", { replace: true });
+  }, [navigate]);
+
+  return (
+    <>
+      <KaiVohModal open={open} onClose={handleClose} />
+      <div className="sr-only" aria-live="polite">
+        KaiVoh portal open
+      </div>
+    </>
+  );
+}
+
+function AppChrome() {
+  const location = useLocation();
+
+  // φ-exact breath (seconds): 3 + √5  → ~5.236067977...
+  const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
+  const BREATH_MS = useMemo(() => BREATH_S * 1000, [BREATH_S]);
+
+  const shellStyle = useMemo<AppShellStyle>(
+    () => ({
+      "--breath-s": `${BREATH_S}s`,
+    }),
+    [BREATH_S]
+  );
+
+  // ✅ Kai Pulse NOW (replaces the 0..5236 ms-within-breath counter UI)
+  const kaiPulseNow = useCallback((): number => {
+    return momentFromUTC(new Date()).pulse;
+  }, []);
+
+  const [pulseNow, setPulseNow] = useState<number>(() => kaiPulseNow());
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setPulseNow(kaiPulseNow());
+    }, 250); // smooth UI without being heavy
+    return () => window.clearInterval(id);
+  }, [kaiPulseNow]);
+
+  const pulseNowStr = useMemo(() => {
+    if (!Number.isFinite(pulseNow)) return "—";
+    if (pulseNow < 0) return String(pulseNow);
+    if (pulseNow < 1_000_000) return String(pulseNow).padStart(6, "0");
+    return pulseNow.toLocaleString("en-US");
+  }, [pulseNow]);
+
+  const navItems = useMemo<NavItem[]>(
+    () => [
+      { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
+      { to: "/voh", label: "KaiVoh", desc: "Sovereign Broadcast OS" },
+    ],
+    []
+  );
+
+  const pageTitle = useMemo<string>(() => {
+    const p = location.pathname;
+    if (p === "/") return "Verifier";
+    if (p.startsWith("/voh")) return "KaiVoh";
+
+    // Hidden routes (not in nav, but still supported)
+    if (p.startsWith("/s")) return "Sigil View";
+    if (p.startsWith("/explorer")) return "Explorer";
+    if (p.startsWith("/stream")) return "Stream";
+    if (p.startsWith("/feed")) return "Stream";
+    if (p.startsWith("/p~")) return "Stream";
+    if (p === "/p") return "Stream";
+
+    return "Console";
+  }, [location.pathname]);
+
+  useEffect(() => {
+    document.title = `ΦNet • ${pageTitle}`;
+  }, [pageTitle]);
+
+  return (
+    <div className="app-shell" data-ui="atlantean-banking" style={shellStyle}>
+      {/* A11y */}
+      <a className="skip-link" href="#app-content">
+        Skip to content
+      </a>
+
+      {/* Atlantean background layers */}
+      <div className="app-bg-orbit" aria-hidden="true" />
+      <div className="app-bg-grid" aria-hidden="true" />
+      <div className="app-bg-glow" aria-hidden="true" />
+
+      {/* Top Bar */}
+      <header
+        className="app-topbar"
+        role="banner"
+        aria-label="PhiNet Console Header"
+      >
+        <div className="topbar-left">
+          <div className="brand" aria-label="PhiNet Verification Console">
+            <div className="brand__mark" aria-hidden="true">
+              Φ
+            </div>
+            <div className="brand__text">
+              <div className="brand__title">ΦNet Verification Console</div>
+              <div className="brand__subtitle">
+                Sovereign Value • Asset Integrity • Transfer Gate
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ✅ LIVE — orb pulses every 5.236s, text shows Kai Pulse NOW */}
+        <div
+          className="topbar-live"
+          role="status"
+          aria-live="polite"
+          aria-label={`LIVE. Kai Pulse now ${pulseNow}. Breath length ${BREATH_S.toFixed(
+            3
+          )} seconds.`}
+          title={`LIVE • NOW PULSE ${pulseNowStr} • Breath ${BREATH_S.toFixed(
+            6
+          )}s (${Math.round(BREATH_MS)}ms)`}
+        >
+          <span className="live-orb" aria-hidden="true" />
+          <div className="live-text">
+            <div className="live-title">LIVE</div>
+            <div className="live-meta">
+              <span className="mono">NOW</span>{" "}
+              <span className="mono">PULSE</span>{" "}
+              <span className="mono">{pulseNowStr}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Stage */}
+      <main
+        className="app-stage"
+        id="app-content"
+        role="main"
+        aria-label="Application workspace"
+      >
+        <div className="app-frame" role="region" aria-label="Secure frame">
+          <div className="app-frame-inner">
+            <div className="app-workspace">
+              {/* Navigation */}
+              <nav className="app-nav" aria-label="Primary navigation">
+                <div className="nav-head">
+                  <div className="nav-head__title">Console</div>
+                  <div className="nav-head__sub">
+  Breath-Sealed Auth Panel · ZK-Kai Identity Verification
+</div>
+
+                </div>
+
+                <div className="nav-list" role="list">
+                  {navItems.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        `nav-item ${isActive ? "nav-item--active" : ""}`
+                      }
+                      aria-label={`${item.label}: ${item.desc}`}
+                    >
+                      <div className="nav-item__label">{item.label}</div>
+                      <div className="nav-item__desc">{item.desc}</div>
+                    </NavLink>
+                  ))}
+                </div>
+
+<div className="nav-foot" aria-label="Console disclaimers">
+  <div className="nav-foot__line">
+    <span className="mono">Φ</span> issued under the Eternal Authority of Yahuah via Proof of Breath™ — one breath, one seal, one origin.
+  </div>
+  <div className="nav-foot__line">
+    Sigil-Glyphs constitute legal tender. Redeemable in Kairos.
+  </div>
+</div>
+</nav>
+
+{/* Content */}
+<section className="app-panel" aria-label="Console content">
+  <div className="panel-head">
+    <div className="panel-head__title">{pageTitle}</div>
+    <div className="panel-head__meta">
+      <span className="meta-chip">Proof of Breath™</span>
+      <span className="meta-chip">Kai-Signature™</span>
+    </div>
+  </div>
+
+
+                <div className="panel-body">
+                  <Outlet />
+                </div>
+
+                <footer className="panel-foot" aria-label="Footer">
+                  <div className="panel-foot__left">
+                    <span className="mono">ΦNet</span> • Verification UI
+                  </div>
+                  <div className="panel-foot__right">
+                    <span className="mono">v</span>{" "}
+                    <span className="mono">24.3</span>
+                  </div>
+                </footer>
+              </section>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function NotFound() {
+  return (
+    <div className="notfound" role="region" aria-label="Not found">
+      <div className="notfound__code">404</div>
+      <div className="notfound__title">Route not found</div>
+      <div className="notfound__hint">
+        Use the Console navigation to return to Verifier or KaiVoh.
+      </div>
+      <div className="notfound__actions">
+        <NavLink className="notfound__cta" to="/">
+          Go to Verifier
+        </NavLink>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppChrome />}>
+          {/* Root → VerifierStamper */}
+          <Route index element={<VerifierStamper />} />
+
+          {/* KaiVoh Portal (modal route) */}
+          <Route path="voh" element={<KaiVohRoute />} />
+
+          {/* Hidden but supported routes (not shown in nav) */}
+          <Route path="s" element={<SigilPage />} />
+          <Route path="s/:hash" element={<SigilPage />} />
+
+          <Route path="explorer" element={<SigilExplorer />} />
+
+          {/* Canonical stream + aliases */}
+          <Route path="stream" element={<SigilFeedPage />} />
+          <Route path="stream/p/:token" element={<SigilFeedPage />} />
+          <Route path="feed" element={<SigilFeedPage />} />
+          <Route path="feed/p/:token" element={<SigilFeedPage />} />
+          <Route path="p~:token" element={<SigilFeedPage />} />
+          <Route path="p" element={<PShort />} />
+
+          {/* Fallback */}
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}

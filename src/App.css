@@ -1,42 +1,78 @@
+/* src/App.css
+   ΦNet — Atlantean Banking Console Shell
+   Official, sovereign, glass + audit-grade UI chrome
+*/
+
 /* ────────────────────────────────────────────────────────────────
-   Global Atlantean Shell
-   Sacred, glassy, sovereign tech field for VerifierStamper.
+   0) Tokens (Atlantean palette + security-grade UI)
    ─────────────────────────────────────────────────────────────── */
 
 :root {
+  /* Core depths */
   --bg-0: #02030a;
   --bg-1: #03091b;
   --bg-2: #040f24;
 
+  /* Accents */
   --accent-cyan: #33f6ff;
   --accent-teal: #26ffc4;
   --accent-violet: #9b5bff;
   --accent-gold: #ffd979;
 
+  /* Semantic */
+  --good: #26ffc4;
+  --warn: #ffd979;
+  --bad: #ff4d8d;
+
+  /* Text */
+  --text-main: #f5f7ff;
+  --text-subtle: #c3c7e6;
+  --text-dim: rgba(245, 247, 255, 0.72);
+
+  /* Frame */
   --frame-border: rgba(176, 255, 247, 0.48);
   --frame-bg: rgba(6, 14, 35, 0.85);
   --frame-inner-bg: rgba(3, 8, 24, 0.96);
 
+  /* Lines / surfaces */
+  --line-soft: rgba(255, 255, 255, 0.06);
+  --line-med: rgba(255, 255, 255, 0.1);
+  --glass-0: rgba(10, 20, 48, 0.55);
+  --glass-1: rgba(6, 14, 35, 0.72);
+  --glass-2: rgba(3, 8, 24, 0.9);
+
+  /* Shadows / halos */
   --shadow-soft: 0 0 40px rgba(0, 0, 0, 0.65);
   --shadow-halo: 0 0 120px rgba(51, 246, 255, 0.3);
+  --shadow-hard: 0 24px 80px rgba(0, 0, 0, 0.7);
 
+  /* Radii */
   --radius-xl: 32px;
   --radius-lg: 24px;
   --radius-md: 16px;
+  --radius-sm: 12px;
 
-  --line-soft: rgba(255, 255, 255, 0.06);
-  --text-main: #f5f7ff;
-  --text-subtle: #c3c7e6;
-
-  --grid-line: rgba(117, 211, 255, 0.12);
-  --grid-glow: rgba(95, 180, 255, 0.18);
-
+  /* Blur */
   --blur-strong: 26px;
   --blur-soft: 18px;
 
+  /* Motion */
   --transition-fast: 180ms ease-out;
   --transition-med: 260ms ease-out;
+
+  /* Layout */
+  --topbar-h: 76px;
+  --breath: 5.236s; /* golden breath cadence */
+  --ring: 0 0 0 3px rgba(51, 246, 255, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+
+  /* Grid */
+  --grid-line: rgba(117, 211, 255, 0.12);
+  --grid-glow: rgba(95, 180, 255, 0.18);
 }
+
+/* ────────────────────────────────────────────────────────────────
+   1) Reset + base
+   ─────────────────────────────────────────────────────────────── */
 
 *,
 *::before,
@@ -53,15 +89,81 @@ body,
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Inter", "Segoe UI", sans-serif;
   background: radial-gradient(circle at top, #050819 0%, #02030a 52%, #000000);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: rgba(51, 246, 255, 0.22);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 10px;
+}
+
+a {
+  color: var(--accent-cyan);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "SF Mono", Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.02em;
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Atlantean App Shell
+   2) A11y — Skip link
+   ─────────────────────────────────────────────────────────────── */
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: 0.75rem;
+  transform: translateY(-160%);
+  background: rgba(10, 20, 48, 0.92);
+  border: 1px solid rgba(170, 241, 255, 0.35);
+  color: var(--text-main);
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  z-index: 9999;
+  box-shadow: var(--shadow-soft);
+  transition: transform var(--transition-fast);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   3) Atlantean App Shell + background layers
    ─────────────────────────────────────────────────────────────── */
 
 .app-shell {
@@ -77,7 +179,7 @@ body {
   color: var(--text-main);
 }
 
-/* Subtle holographic grid behind everything */
+/* Subtle holographic grid */
 .app-bg-grid {
   pointer-events: none;
   position: fixed;
@@ -103,7 +205,7 @@ body {
   mask-image: radial-gradient(circle at center, black 0, transparent 80%);
 }
 
-/* Rotating Atlantean halo */
+/* Rotating halo ring */
 .app-bg-orbit {
   pointer-events: none;
   position: fixed;
@@ -136,7 +238,7 @@ body {
   }
 }
 
-/* Central vertical glow column */
+/* Vertical glow column (breath-synced) */
 .app-bg-glow {
   pointer-events: none;
   position: fixed;
@@ -153,48 +255,246 @@ body {
       rgba(38, 255, 196, 0.0),
       rgba(38, 255, 196, 0.55),
       rgba(155, 91, 255, 0.4),
+      rgba(255, 217, 121, 0.10),
       rgba(0, 0, 0, 0.0)
     );
   opacity: 0.6;
   filter: blur(32px);
   mix-blend-mode: screen;
+  animation: golden-breath var(--breath) ease-in-out infinite;
+  transform-origin: 50% 30%;
+}
+
+@keyframes golden-breath {
+  0% {
+    opacity: 0.42;
+    filter: blur(34px);
+    transform: translateX(-50%) scaleY(0.98);
+  }
+  45% {
+    opacity: 0.72;
+    filter: blur(28px);
+    transform: translateX(-50%) scaleY(1.04);
+  }
+  100% {
+    opacity: 0.45;
+    filter: blur(34px);
+    transform: translateX(-50%) scaleY(0.99);
+  }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .app-bg-orbit,
+  .app-bg-glow {
+    animation: none !important;
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Stage + Central Frame
+   4) Topbar — “This is a real console”
+   ─────────────────────────────────────────────────────────────── */
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem clamp(1rem, 2.5vw, 1.75rem);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(51, 246, 255, 0.12), transparent 55%),
+    radial-gradient(circle at 80% 100%, rgba(155, 91, 255, 0.10), transparent 60%),
+    linear-gradient(180deg, rgba(2, 6, 18, 0.88), rgba(2, 6, 18, 0.62));
+  backdrop-filter: blur(var(--blur-soft)) saturate(140%);
+}
+
+@supports not ((backdrop-filter: blur(1px))) {
+  .app-topbar {
+    background: rgba(2, 6, 18, 0.92);
+  }
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  user-select: none;
+}
+
+.brand__mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: rgba(2, 6, 18, 0.95);
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.85) 0, rgba(255, 217, 121, 0.55) 28%, rgba(51, 246, 255, 0.45) 55%, rgba(155, 91, 255, 0.35) 78%),
+    linear-gradient(135deg, rgba(38, 255, 196, 0.65), rgba(51, 246, 255, 0.55));
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 0 40px rgba(255, 217, 121, 0.16);
+  position: relative;
+  overflow: hidden;
+}
+
+.brand__mark::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 45%,
+    transparent 70%
+  );
+  transform: rotate(18deg) translateX(-40%);
+  animation: brand-sheen calc(var(--breath) * 2) ease-in-out infinite;
+  opacity: 0.55;
+}
+
+@keyframes brand-sheen {
+  0% {
+    transform: rotate(18deg) translateX(-55%);
+    opacity: 0.0;
+  }
+  35% {
+    opacity: 0.55;
+  }
+  70% {
+    transform: rotate(18deg) translateX(55%);
+    opacity: 0.0;
+  }
+  100% {
+    opacity: 0.0;
+  }
+}
+
+.brand__text {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.brand__title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+.brand__subtitle {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Status pills */
+.pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(10, 20, 48, 0.55);
+  border: 1px solid rgba(170, 241, 255, 0.18);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  backdrop-filter: blur(10px) saturate(140%);
+}
+
+.pill__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(245, 247, 255, 0.7);
+}
+
+.pill__value {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.pill--good {
+  border-color: rgba(38, 255, 196, 0.35);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(38, 255, 196, 0.12) inset,
+    0 0 28px rgba(38, 255, 196, 0.10);
+}
+
+.pill--warn {
+  border-color: rgba(255, 217, 121, 0.38);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 217, 121, 0.10) inset,
+    0 0 28px rgba(255, 217, 121, 0.10);
+}
+
+.pill--bad {
+  border-color: rgba(255, 77, 141, 0.38);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 77, 141, 0.10) inset,
+    0 0 28px rgba(255, 77, 141, 0.10);
+}
+
+.pill--neutral {
+  border-color: rgba(170, 241, 255, 0.18);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   5) Stage + Sacred Frame
    ─────────────────────────────────────────────────────────────── */
 
 .app-stage {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  min-height: calc(100vh - var(--topbar-h));
   width: 100%;
   display: flex;
-  align-items: center;        /* vertically center */
-  justify-content: center;    /* horizontally center */
-  padding: clamp(1.5rem, 3vw, 3.5rem);
+  align-items: center;        /* center bias */
+  justify-content: center;
+  padding: clamp(1.25rem, 3vw, 3rem);
 }
 
-/* The sacred Atlantean frame around VerifierStamper */
+/* Outer “vault frame” */
 .app-frame {
   position: relative;
   width: 100%;
-  max-width: 1120px;
-  max-height: calc(100vh - 3rem);
+  max-width: 1180px;
   border-radius: var(--radius-xl);
-  background: radial-gradient(circle at top left, rgba(51, 246, 255, 0.19), transparent 55%),
+  background:
+    radial-gradient(circle at top left, rgba(51, 246, 255, 0.19), transparent 55%),
     radial-gradient(circle at top right, rgba(155, 91, 255, 0.16), transparent 52%),
+    radial-gradient(circle at 50% 100%, rgba(255, 217, 121, 0.10), transparent 60%),
     linear-gradient(145deg, rgba(5, 14, 40, 0.96), rgba(1, 4, 16, 0.98));
   border: 1px solid rgba(157, 255, 244, 0.6);
   box-shadow:
-    var(--shadow-soft),
+    var(--shadow-hard),
     0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 0 80px rgba(51, 246, 255, 0.35);
+    0 0 90px rgba(51, 246, 255, 0.24);
   overflow: hidden;
   backdrop-filter: blur(var(--blur-strong)) saturate(150%);
 }
 
-/* Inner chrome: inset border and soft glow lines */
+/* Inner chrome lines */
 .app-frame::before,
 .app-frame::after {
   content: "";
@@ -206,7 +506,7 @@ body {
 
 .app-frame::before {
   border: 1px solid rgba(255, 255, 255, 0.09);
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .app-frame::after {
@@ -222,89 +522,446 @@ body {
   opacity: 0.32;
 }
 
-/* Content container: this is where VerifierStamper renders */
+/* Inner container: holds nav + content */
 .app-frame-inner {
   position: relative;
   z-index: 1;
-  height: 100%;
-  max-height: calc(100vh - 3.5rem);
-  padding: clamp(1.75rem, 2.5vw, 2.5rem);
-  overflow: auto;
+  padding: clamp(1.25rem, 2.4vw, 2.25rem);
   border-radius: calc(var(--radius-xl) - 6px);
   background:
     radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
     radial-gradient(circle at 90% 100%, rgba(51, 246, 255, 0.15), transparent 60%),
     radial-gradient(circle at 0% 100%, rgba(155, 91, 255, 0.18), transparent 65%),
     linear-gradient(160deg, var(--frame-inner-bg), rgba(1, 4, 16, 0.98));
+  overflow: hidden;
 }
 
-/* Give children (like VerifierStamper) a gentle "center bias" */
-.app-frame-inner > * {
-  margin: 0 auto;
+/* Workspace grid */
+.app-workspace {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.1rem;
+  min-height: min(74vh, 780px);
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Typography & Utility
+   6) Navigation — official “console rail”
    ─────────────────────────────────────────────────────────────── */
 
-a {
-  color: var(--accent-cyan);
+.app-nav {
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(51, 246, 255, 0.10), transparent 55%),
+    linear-gradient(145deg, rgba(6, 14, 35, 0.72), rgba(3, 8, 24, 0.92));
+  border: 1px solid rgba(170, 241, 255, 0.22);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.nav-head {
+  padding: 1.1rem 1.05rem 0.95rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 217, 121, 0.09), transparent 55%),
+    linear-gradient(180deg, rgba(10, 20, 48, 0.30), rgba(10, 20, 48, 0.0));
+}
+
+.nav-head__title {
+  font-size: 0.92rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(245, 247, 255, 0.92);
+}
+
+.nav-head__sub {
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+  color: rgba(245, 247, 255, 0.68);
+}
+
+.nav-list {
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.55rem;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(170, 241, 255, 0.24) transparent;
+}
+
+.nav-item {
+  border-radius: 16px;
+  padding: 0.85rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 14% 20%, rgba(51, 246, 255, 0.08), transparent 55%),
+    linear-gradient(145deg, rgba(10, 20, 48, 0.25), rgba(10, 20, 48, 0.10));
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  transition:
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.nav-item__label {
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.nav-item__desc {
+  margin-top: 0.18rem;
+  font-size: 0.82rem;
+  color: rgba(245, 247, 255, 0.68);
+}
+
+.nav-item:hover {
   text-decoration: none;
+  transform: translateY(-1px);
+  border-color: rgba(51, 246, 255, 0.28);
+  background:
+    radial-gradient(circle at 14% 20%, rgba(51, 246, 255, 0.12), transparent 55%),
+    linear-gradient(145deg, rgba(10, 20, 48, 0.34), rgba(10, 20, 48, 0.14));
+  box-shadow:
+    0 16px 30px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(51, 246, 255, 0.08) inset,
+    0 0 30px rgba(51, 246, 255, 0.08);
 }
 
-a:hover {
-  text-decoration: underline;
+.nav-item--active {
+  border-color: rgba(255, 217, 121, 0.42);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 217, 121, 0.16), transparent 62%),
+    radial-gradient(circle at 14% 20%, rgba(51, 246, 255, 0.14), transparent 55%),
+    linear-gradient(145deg, rgba(10, 20, 48, 0.42), rgba(10, 20, 48, 0.18));
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 217, 121, 0.10) inset,
+    0 0 46px rgba(255, 217, 121, 0.08);
 }
 
-/* Optional card styling if any component still uses .card */
+.nav-foot {
+  margin-top: auto;
+  padding: 0.9rem 1.05rem 1.05rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(10, 20, 48, 0.0), rgba(10, 20, 48, 0.22));
+}
+
+.nav-foot__line {
+  font-size: 0.78rem;
+  color: rgba(245, 247, 255, 0.72);
+  line-height: 1.35;
+}
+
+.nav-foot__line + .nav-foot__line {
+  margin-top: 0.35rem;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   7) Panel — audited “vault surface”
+   ─────────────────────────────────────────────────────────────── */
+
+.app-panel {
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 70% 20%, rgba(51, 246, 255, 0.10), transparent 55%),
+    radial-gradient(circle at 10% 0%, rgba(155, 91, 255, 0.10), transparent 62%),
+    linear-gradient(145deg, rgba(6, 14, 35, 0.72), rgba(3, 8, 24, 0.92));
+  border: 1px solid rgba(170, 241, 255, 0.22);
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.panel-head {
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 217, 121, 0.10), transparent 56%),
+    linear-gradient(180deg, rgba(10, 20, 48, 0.36), rgba(10, 20, 48, 0.0));
+}
+
+.panel-head__title {
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.panel-head__meta {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(10, 20, 48, 0.34);
+  color: rgba(245, 247, 255, 0.84);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panel-body {
+  padding: 1.05rem 1.25rem 1.25rem;
+  overflow: auto;
+  min-height: 0; /* critical for nested scroll */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(170, 241, 255, 0.24) transparent;
+}
+
+/* Footer: subtle, official, quiet */
+.panel-foot {
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, rgba(10, 20, 48, 0.0), rgba(10, 20, 48, 0.22));
+  color: rgba(245, 247, 255, 0.62);
+  font-size: 0.78rem;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   8) Not Found (still official)
+   ─────────────────────────────────────────────────────────────── */
+
+.notfound {
+  padding: 2.25rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background:
+    radial-gradient(circle at 30% 10%, rgba(255, 77, 141, 0.10), transparent 60%),
+    radial-gradient(circle at 70% 0%, rgba(51, 246, 255, 0.10), transparent 60%),
+    linear-gradient(145deg, rgba(10, 20, 48, 0.35), rgba(10, 20, 48, 0.14));
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.65);
+}
+
+.notfound__code {
+  font-size: 3.25rem;
+  font-weight: 950;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.notfound__title {
+  margin-top: 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.notfound__hint {
+  margin-top: 0.5rem;
+  color: rgba(245, 247, 255, 0.72);
+}
+
+.notfound__actions {
+  margin-top: 1.15rem;
+}
+
+.notfound__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 0.95rem;
+  border-radius: 14px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(2, 6, 18, 0.95);
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.85) 0, rgba(255, 217, 121, 0.55) 26%, rgba(51, 246, 255, 0.40) 58%),
+    linear-gradient(135deg, rgba(38, 255, 196, 0.65), rgba(51, 246, 255, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.notfound__cta:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow:
+    0 20px 46px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 0 36px rgba(255, 217, 121, 0.10);
+}
+
+/* ────────────────────────────────────────────────────────────────
+   9) Scrollbars (WebKit)
+   ─────────────────────────────────────────────────────────────── */
+
+.nav-list::-webkit-scrollbar,
+.panel-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.nav-list::-webkit-scrollbar-track,
+.panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-list::-webkit-scrollbar-thumb,
+.panel-body::-webkit-scrollbar-thumb {
+  background: rgba(170, 241, 255, 0.18);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+.nav-list::-webkit-scrollbar-thumb:hover,
+.panel-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(170, 241, 255, 0.28);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   10) Optional legacy .card
+   ─────────────────────────────────────────────────────────────── */
+
 .card {
   border-radius: var(--radius-md);
-  background: radial-gradient(circle at top left, rgba(51, 246, 255, 0.12), transparent 60%),
+  background:
+    radial-gradient(circle at top left, rgba(51, 246, 255, 0.12), transparent 60%),
     linear-gradient(145deg, rgba(4, 12, 36, 0.96), rgba(5, 15, 40, 0.94));
   border: 1px solid rgba(170, 241, 255, 0.3);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.75);
-  padding: 1.75rem 1.5rem;
+  padding: 1.25rem 1.15rem;
   color: var(--text-main);
 }
 
-/* Subtle helper text */
 .read-the-docs {
   color: var(--text-subtle);
   font-size: 0.9rem;
 }
+/* LIVE indicator (top right) */
+.topbar-live {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 160, 0.22);
+  background: rgba(10, 14, 24, 0.45);
+  backdrop-filter: blur(10px);
+}
 
-/* ────────────────────────────────────────────────────────────────
-   Responsive tweaks
-   ─────────────────────────────────────────────────────────────── */
+.live-orb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(0, 255, 160, 0.95);
+  box-shadow:
+    0 0 10px rgba(0, 255, 160, 0.75),
+    0 0 26px rgba(0, 255, 160, 0.35);
+  animation: liveOrbPulse var(--breath-s, 5.236s) ease-in-out infinite;
+}
 
-@media (max-width: 900px) {
-  .app-stage {
-    padding: 1.25rem;
+@keyframes liveOrbPulse {
+  0%, 100% {
+    transform: scale(0.92);
+    filter: brightness(0.95);
+    box-shadow:
+      0 0 10px rgba(0, 255, 160, 0.65),
+      0 0 26px rgba(0, 255, 160, 0.30);
   }
-
-  .app-frame {
-    max-height: none;
-    border-radius: 24px;
-  }
-
-  .app-frame-inner {
-    max-height: none;
-    padding: 1.4rem;
+  50% {
+    transform: scale(1.22);
+    filter: brightness(1.25);
+    box-shadow:
+      0 0 14px rgba(0, 255, 160, 0.95),
+      0 0 42px rgba(0, 255, 160, 0.55);
   }
 }
 
-@media (max-width: 600px) {
+.live-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.live-title {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.live-meta {
+  opacity: 0.9;
+  font-size: 12px;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   11) Responsive — mobile becomes “mission control”
+   ─────────────────────────────────────────────────────────────── */
+
+@media (max-width: 980px) {
+  .app-workspace {
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
+    min-height: auto;
+  }
+
+  .app-nav {
+    min-height: auto;
+  }
+
+  .nav-list {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(200px, 1fr);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.75rem;
+  }
+
+  .nav-item {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 650px) {
+  :root {
+    --topbar-h: 72px;
+  }
+
   .app-stage {
     align-items: flex-start;
     padding: 1rem;
   }
 
   .app-frame {
-    margin-top: 0.75rem;
     border-radius: 20px;
   }
 
   .app-frame-inner {
-    padding: 1.1rem;
+    padding: 1rem;
+    border-radius: 16px;
+  }
+
+  .brand__subtitle {
+    display: none;
+  }
+
+  .topbar-right .pill__label {
+    display: none;
   }
 }

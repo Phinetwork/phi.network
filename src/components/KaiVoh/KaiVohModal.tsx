@@ -1,4 +1,4 @@
-// src/components/KaiVohModal.tsx
+// src/components/KaiVoh/KaiVohModal.tsx
 "use client";
 
 import {
@@ -6,10 +6,8 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
-  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
@@ -34,15 +32,68 @@ interface KaiVohModalProps {
 const PHI = (1 + Math.sqrt(5)) / 2;
 const BREATH_SEC = 5.236;
 
-export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
-  // Avoid SSR/DOM mismatch for portals
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+/** Hoisted (no nested components in render) */
+const SPIRAL_W = 610;
+const SPIRAL_H = 377;
 
-  // Trap focus into the modal while open
+function SpiralSVG({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width={SPIRAL_W}
+      height={SPIRAL_H}
+      viewBox={`0 0 ${SPIRAL_W} ${SPIRAL_H}`}
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="phiStroke" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.0" />
+          <stop offset="40%" stopColor="currentColor" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0.0" />
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke="url(#phiStroke)" strokeWidth="2">
+        <path d="M377 0 A377 377 0 0 1 0 377" />
+        <path d="M233 0 A233 233 0 0 1 0 233" />
+        <path d="M144 0 A144 144 0 0 1 0 144" />
+        <path d="M89 0 A89 89 0 0 1 0 89" />
+        <path d="M55 0 A55 55 0 0 1 0 55" />
+        <path d="M34 0 A34 34 0 0 1 0 34" />
+        <path d="M21 0 A21 21 0 0 1 0 21" />
+      </g>
+    </svg>
+  );
+}
+
+function SealEmblem({ className }: { className?: string }) {
+  return (
+    <div className={`seal-emblem ${className ?? ""}`} aria-hidden="true">
+      <div className="seal-ring seal-ring--outer" />
+      <div className="seal-ring seal-ring--inner" />
+      <div className="seal-core" />
+    </div>
+  );
+}
+
+export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
+  // Hooks MUST run unconditionally (rules-of-hooks)
   const firstFocusableRef = useRef<HTMLButtonElement | null>(null);
+
+  const [view, setView] = useState<ViewMode>("voh");
+  const [realmsMounted, setRealmsMounted] = useState(false);
+
+  const switchTo = useCallback(
+    (next: ViewMode): void => {
+      if (next === "realms" && !realmsMounted) setRealmsMounted(true);
+      setView(next);
+    },
+    [realmsMounted]
+  );
+
+  // Side-effects only when open (but effect itself is unconditional)
   useEffect(() => {
     if (!open) return;
+
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -64,33 +115,16 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
     };
   }, [open, onClose]);
 
-  // Toggle between Posting Hub (KaiVoh) and Kai Realms
-  const [view, setView] = useState<ViewMode>("voh");
-  const [realmsMounted, setRealmsMounted] = useState(false);
-  const vohMounted = true; // default screen is always ready
-
-  const switchTo = useCallback(
-    (next: ViewMode): void => {
-      if (next === "realms" && !realmsMounted) setRealmsMounted(true);
-      setView(next);
+  // Backdrop close (only if pointer down on backdrop itself)
+  const onBackdropPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>): void => {
+      if (e.target !== e.currentTarget) return;
+      onClose();
     },
-    [realmsMounted]
+    [onClose]
   );
 
-  // Backdrop close
-  const onBackdropPointerDown = useCallback((): void => {
-    onClose();
-  }, [onClose]);
-
-  // Stop clicks inside panel from reaching backdrop
-  const stopBubblePointer = useCallback((e: ReactPointerEvent): void => {
-    e.stopPropagation();
-  }, []);
-  const stopBubbleMouse = useCallback((e: ReactMouseEvent): void => {
-    e.stopPropagation();
-  }, []);
-
-  // Ensure the X button always closes (pointer + click + keyboard)
+  // Close button handlers
   const handleClosePointerDown = useCallback(
     (e: ReactPointerEvent<HTMLButtonElement>): void => {
       e.stopPropagation();
@@ -98,13 +132,7 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
     },
     [onClose]
   );
-  const handleCloseClick = useCallback(
-    (e: ReactMouseEvent<HTMLButtonElement>): void => {
-      e.stopPropagation();
-      onClose();
-    },
-    [onClose]
-  );
+
   const handleCloseKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLButtonElement>): void => {
       if (e.key === "Enter" || e.key === " ") {
@@ -116,46 +144,8 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
     [onClose]
   );
 
-  // Decorative spiral geometry (cached)
-  const spiralBox = useMemo(() => ({ w: 610, h: 377 }), []);
-  const SpiralSVG = ({ className }: { className?: string }) => (
-    <svg
-      className={className}
-      width={spiralBox.w}
-      height={spiralBox.h}
-      viewBox={`0 0 ${spiralBox.w} ${spiralBox.h}`}
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="phiStroke" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.0" />
-          <stop offset="40%" stopColor="currentColor" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0.0" />
-        </linearGradient>
-      </defs>
-      <g fill="none" stroke="url(#phiStroke)" strokeWidth="2">
-        <path d="M377 0 A377 377 0 0 1 0 377" />
-        <path d="M233 0 A233 233 0 0 1 0 233" />
-        <path d="M144 0 A144 144 0 0 1 0 144" />
-        <path d="M89 0 A89 89 0 0 1 0 89" />
-        <path d="M55 0 A55 55 0 0 1 0 55" />
-        <path d="M34 0 A34 34 0 0 1 0 34" />
-        <path d="M21 0 A21 21 0 0 1 0 21" />
-      </g>
-    </svg>
-  );
-
-
-  // Single living orb emblem (top-center)
-  const SealEmblem = ({ className }: { className?: string }) => (
-    <div className={`seal-emblem ${className ?? ""}`} aria-hidden>
-      <div className="seal-ring seal-ring--outer" />
-      <div className="seal-ring seal-ring--inner" />
-      <div className="seal-core" />
-    </div>
-  );
-
-  if (!open || !mounted) return null;
+  // After hooks are declared, it's safe to early-return
+  if (!open) return null;
 
   const node = (
     <div
@@ -167,20 +157,15 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
       data-view={view}
     >
       {/* Dim stars + parallax halos */}
-      <div className="atlantean-stars" aria-hidden />
-      <div className="atlantean-halo atlantean-halo--1" aria-hidden />
-      <div className="atlantean-halo atlantean-halo--2" aria-hidden />
+      <div className="atlantean-stars" aria-hidden="true" />
+      <div className="atlantean-halo atlantean-halo--1" aria-hidden="true" />
+      <div className="atlantean-halo atlantean-halo--2" aria-hidden="true" />
 
-      <div
-        className="kai-voh-container kai-pulse-border glass-omni"
-        onPointerDown={stopBubblePointer}
-        onMouseDown={stopBubbleMouse}
-        role="document"
-      >
+      <div className="kai-voh-container kai-pulse-border glass-omni" role="document">
         {/* Sacred border rings + phi grid */}
-        <div className="breath-ring breath-ring--outer" aria-hidden />
-        <div className="breath-ring breath-ring--inner" aria-hidden />
-        <div className="phi-grid" aria-hidden />
+        <div className="breath-ring breath-ring--outer" aria-hidden="true" />
+        <div className="breath-ring breath-ring--inner" aria-hidden="true" />
+        <div className="phi-grid" aria-hidden="true" />
 
         {/* Corner spirals */}
         <SpiralSVG className="phi-spiral phi-spiral--tl" />
@@ -194,16 +179,15 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
             className="kai-voh-close auric-btn"
             aria-label="Close portal"
             onPointerDown={handleClosePointerDown}
-            onClick={handleCloseClick}
             onKeyDown={handleCloseKeyDown}
           >
-            <X size={22} aria-hidden />
+            <X size={22} aria-hidden="true" />
           </button>
         )}
 
-        {/* === TOP-CENTER ORB (hide in Realms to avoid double orb) === */}
+        {/* Top-center orb (hide in Realms to avoid double orb) */}
         {view !== "realms" && (
-          <div className="voh-top-orb" aria-hidden>
+          <div className="voh-top-orb" aria-hidden="true">
             <SealEmblem />
           </div>
         )}
@@ -217,8 +201,12 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
             className={`kai-voh-tab auric-tab ${view === "voh" ? "active" : ""}`}
             onClick={() => switchTo("voh")}
           >
-            <span className="tab-glyph" aria-hidden>🜂</span> Voh
+            <span className="tab-glyph" aria-hidden="true">
+              🜂
+            </span>{" "}
+            Voh
           </button>
+
           <button
             type="button"
             role="tab"
@@ -226,17 +214,19 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
             className={`kai-voh-tab auric-tab ${view === "realms" ? "active" : ""}`}
             onClick={() => switchTo("realms")}
           >
-            <span className="tab-glyph" aria-hidden>⚚</span> Realms
+            <span className="tab-glyph" aria-hidden="true">
+              ⚚
+            </span>{" "}
+            Realms
           </button>
 
           {/* Breath progress (phi-timed) */}
-          <div className="breath-meter" aria-hidden>
+          <div className="breath-meter" aria-hidden="true">
             <div className="breath-meter__dot" />
           </div>
         </div>
 
         {/* Body */}
-        {/* NEW: Wrap both panes with SigilAuthProvider so SigilLogin/useSigilAuth works */}
         <SigilAuthProvider>
           <div className="kai-voh-body">
             <h2 id="kaivoh-title" className="sr-only">
@@ -249,18 +239,16 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
                 style={{ display: view === "voh" ? "block" : "none" }}
                 aria-hidden={view !== "voh"}
               >
-                {vohMounted && (
-                  <Suspense
-                    fallback={
-                      <div className="kai-voh-center">
-                        <div className="kai-voh-spinner" />
-                        <div>Summoning Voh…</div>
-                      </div>
-                    }
-                  >
-                    <KaiVohApp />
-                  </Suspense>
-                )}
+                <Suspense
+                  fallback={
+                    <div className="kai-voh-center">
+                      <div className="kai-voh-spinner" />
+                      <div>Summoning Voh…</div>
+                    </div>
+                  }
+                >
+                  <KaiVohApp />
+                </Suspense>
               </section>
 
               <section
@@ -277,8 +265,6 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
                       </div>
                     }
                   >
-                    {/* Realms close: route back to VOH (keeps modal open).
-                       To close the entire modal instead, replace with onClose={onClose}. */}
                     <KaiRealmsApp onClose={() => switchTo("voh")} />
                   </Suspense>
                 ) : null}
@@ -286,8 +272,6 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
             </KaiVohBoundary>
           </div>
         </SigilAuthProvider>
-
- 
       </div>
     </div>
   );
