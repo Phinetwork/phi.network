@@ -57,6 +57,14 @@ export type LiveChartProps = {
 
   /** If you know it's a child glyph, pass true to force USD mode. */
   isChildGlyph?: boolean;
+
+  /**
+   * Force chart unit mode.
+   * - "auto" (default): child => USD, parent => Φ
+   * - "phi": always Φ
+   * - "usd": always USD
+   */
+  mode?: "auto" | "phi" | "usd";
 };
 
 /* Recharts helper types */
@@ -125,6 +133,7 @@ export default function LiveChart({
   scalePvToChild = true,
   usdPerPhi,
   isChildGlyph = false,
+  mode = "auto",
 }: LiveChartProps) {
   // Container & width
   const [wrapRef, wrapWidth] = useContainerWidth();
@@ -146,7 +155,13 @@ export default function LiveChart({
 
   // Force child mode from prop if known
   const isChild = isChildGlyph || childΦ != null;
-  const isUsdMode = isChild; // child charts in USD; parent in Φ
+
+  // Unit mode (Φ vs USD)
+  const isUsdMode = useMemo(() => {
+    if (mode === "usd") return true;
+    if (mode === "phi") return false;
+    return isChild; // auto
+  }, [mode, isChild]);
 
   /* ─────────────────── STABLE FX LATCH ───────────────────
    * Remember last known positive FX and use it whenever a new
@@ -191,10 +206,10 @@ export default function LiveChart({
     [fxOf],
   );
 
-  // Build plot series in correct units (Φ for parent; USD for child)
+  // Build plot series in correct units (Φ or USD)
   const plotData = useMemo<ChartPoint[]>(() => {
     if (!hasData) return safeData;
-    if (!isUsdMode) return safeData; // parent in Φ
+    if (!isUsdMode) return safeData; // Φ mode
 
     let lastGoodUsd: number | null = null;
     return safeData.map((p) => {
@@ -371,25 +386,26 @@ export default function LiveChart({
     (props: TooltipContentProps<RechartsValue, RechartsName>) => {
       const { active, payload } = props;
 
-      // payload is readonly in recharts types; treat it read-only.
       const first = payload?.[0];
       if (!active || !first) return null;
 
       const p = first.payload as FXPoint;
 
-      // Chart value (already in chart units via plotData)
-      const chartVal = (p.value as number) ?? 0;
+      // chartVal is always *chart units* (= Φ in Φ-mode, USD in USD-mode)
+      const chartVal = Number(p.value) || 0;
 
-      // Derive both units for display
+      // derive both units
       const fx = fxOf(p);
 
-      // Φ value to show:
-      const phiHere = isUsdMode ? (childΦ ?? livePhi) : chartVal;
+      const usdHereNum = isUsdMode ? chartVal : chartVal * fx;
 
-      // USD value to show:
-      // - parent mode -> parent's USD at point (chartVal * fx)
-      // - child mode  -> child’s USD at hovered point (child Φ × point FX)
-      const usdHereNum = isUsdMode ? phiHere * fx : chartVal * fx;
+      const phiHere = isUsdMode
+        ? isChild
+          ? (childΦ ?? livePhi) // child: φ is constant; USD fluctuates via FX
+          : fx > 0
+            ? chartVal / fx // forced USD on parent: invert to show Φ
+            : 0
+        : chartVal;
 
       // Change vs first visible in *chart units*
       const firstVisible = plotData.find((pt) => pt.i >= xMin)?.value ?? chartVal;
@@ -435,7 +451,7 @@ export default function LiveChart({
         </div>
       );
     },
-    [childΦ, fxOf, isUsdMode, livePhi, momentX, premiumX, pvChart, plotData, xMin],
+    [childΦ, fxOf, isUsdMode, isChild, livePhi, momentX, premiumX, pvChart, plotData, xMin],
   );
 
   /** Active point under cursor/pin */
@@ -592,7 +608,12 @@ export default function LiveChart({
   /** Render */
   if (!hasData) {
     return (
-      <div className="live-chart empty" style={{ minHeight: height + 40 }} role="region" aria-label="Live valuation chart">
+      <div
+        className="live-chart empty"
+        style={{ minHeight: height + 40 }}
+        role="region"
+        aria-label="Live valuation chart"
+      >
         <div className="chart-empty">
           <div className="chart-empty-title">No data yet</div>
           <div className="chart-empty-sub">Waiting for the first sovereign tick…</div>
@@ -601,9 +622,12 @@ export default function LiveChart({
     );
   }
 
-  const childBaselineY = isUsdMode
-    ? childΦ! * (finitePos(usdPerPhi) ? usdPerPhi : stableFxRef.current)
-    : childΦ!;
+  const childBaselineY =
+    isChild && childΦ != null
+      ? isUsdMode
+        ? childΦ * (finitePos(usdPerPhi) ? usdPerPhi : stableFxRef.current)
+        : childΦ
+      : 0;
 
   return (
     <div
@@ -692,7 +716,7 @@ export default function LiveChart({
           />
 
           {/* CHILD baseline */}
-          {isChild && (
+          {isChild && childΦ != null && (
             <ReferenceLine
               y={childBaselineY}
               stroke={colors[0]}
@@ -733,7 +757,7 @@ export default function LiveChart({
             />
           )}
 
-          {/* Area + Price line (Φ for parent; USD for child) */}
+          {/* Area + Price line (Φ for Φ-mode; USD for USD-mode) */}
           <Area type="monotone" dataKey="value" stroke="none" fill={`url(#${areaId})`} isAnimationActive={false} />
           <Line
             type="monotone"
@@ -766,9 +790,29 @@ export default function LiveChart({
             if (!Number.isFinite(activeIdx) || !ap) return null;
             return (
               <>
-                <ReferenceLine x={activeIdx} stroke="rgba(255,255,255,.35)" strokeDasharray="4 6" strokeWidth={1} ifOverflow="extendDomain" />
-                <ReferenceLine y={ap.value} stroke="rgba(255,255,255,.25)" strokeDasharray="4 6" strokeWidth={1} ifOverflow="extendDomain" />
-                <ReferenceDot x={activeIdx} y={ap.value} r={5} fill={colors[0]} stroke="rgba(0,0,0,.55)" strokeWidth={1} ifOverflow="extendDomain" />
+                <ReferenceLine
+                  x={activeIdx}
+                  stroke="rgba(255,255,255,.35)"
+                  strokeDasharray="4 6"
+                  strokeWidth={1}
+                  ifOverflow="extendDomain"
+                />
+                <ReferenceLine
+                  y={ap.value}
+                  stroke="rgba(255,255,255,.25)"
+                  strokeDasharray="4 6"
+                  strokeWidth={1}
+                  ifOverflow="extendDomain"
+                />
+                <ReferenceDot
+                  x={activeIdx}
+                  y={ap.value}
+                  r={5}
+                  fill={colors[0]}
+                  stroke="rgba(0,0,0,.55)"
+                  strokeWidth={1}
+                  ifOverflow="extendDomain"
+                />
                 {localHL && (
                   <>
                     <ReferenceDot x={activeIdx} y={localHL.high} r={0} ifOverflow="extendDomain">

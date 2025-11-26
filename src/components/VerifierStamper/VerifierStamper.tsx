@@ -2,8 +2,10 @@
 
 // src/components/verifier/VerifierStamper.tsx
 // VerifierStamper.tsx · Divine Sovereign Transfer Gate (mobile-first)
-// v24.4 — μΦ-locked exhale parity, ChakraGate surfacing, child-lock + valuation parity,
-//         breath-synced trend pills (▲ green / ▼ red / none on flat)
+// v24.6 — value strip positioned under Pulse/Beat/Step/Day (above Presence/Stewardship/Memory tabs),
+//         breath-synced trend pills (▲ green / ▼ red / none on flat),
+//         + click-to-open LiveChart popover (Φ/$ pills), μΦ-locked exhale parity + ChakraGate surfacing,
+//         child-lock + valuation parity
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./VerifierStamper.css";
@@ -95,6 +97,10 @@ import { DEFAULT_ISSUANCE_POLICY, quotePhiForUsd } from "../../utils/phi-issuanc
 import { BREATH_MS } from "../valuation/constants";
 import { recordSend, getSpentScaledFor, markConfirmedByLeaf } from "../../utils/sendLedger";
 
+/* Live chart popover (stay inside Verifier modal) */
+import LiveChart from "../valuation/chart/LiveChart";
+import type { ChartPoint } from "../valuation/series";
+
 /* ─────────── Shared inline styles / tiny components to shrink markup ─────────── */
 const S = {
   full: {
@@ -138,6 +144,44 @@ const S = {
   modalBody: { flex: "1 1 auto", minHeight: 0, overflowY: "auto", overflowX: "hidden", paddingBottom: 80 } as const,
   headerImg: { maxWidth: "64px", height: "auto", flex: "0 0 auto" } as const,
   valueStrip: { overflowX: "auto", whiteSpace: "nowrap" } as const,
+
+  /* Minimal inline popover safety (we’ll replace with CSS next) */
+  popBg: {
+    position: "fixed" as const,
+    inset: 0,
+    zIndex: 9999,
+    background: "rgba(0,0,0,.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+  },
+  popCard: {
+    width: "min(980px, 100%)",
+    maxHeight: "min(680px, calc(100dvh - 28px))",
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "rgba(8,10,16,.92)",
+    border: "1px solid rgba(255,255,255,.12)",
+    boxShadow: "0 24px 70px rgba(0,0,0,.6)",
+    display: "flex",
+    flexDirection: "column" as const,
+  },
+  popHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "12px 12px 10px 14px",
+    borderBottom: "1px solid rgba(255,255,255,.08)",
+  },
+  popBody: {
+    flex: "1 1 auto",
+    minHeight: 0,
+    overflow: "auto",
+    padding: 10,
+  },
+  popTitle: { fontSize: 12, color: "rgba(255,255,255,.82)", letterSpacing: ".02em" },
 };
 
 // Auto-shrink text to fit inside its container (down to a floor scale)
@@ -206,15 +250,33 @@ const ValueChip: React.FC<{
   flash: boolean;
   title: string;
   children: React.ReactNode;
-}> = ({ kind, trend, flash, title, children }) => {
+  onClick?: () => void;
+  ariaLabel?: string;
+}> = ({ kind, trend, flash, title, children, onClick, ariaLabel }) => {
   const { boxRef, textRef, scale } = useAutoShrink<HTMLSpanElement>([children, trend, flash], 16, 0.65);
+
+  const clickable = typeof onClick === "function";
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!clickable) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.();
+    }
+  };
 
   return (
     <div
       ref={boxRef}
-      className={`value-chip ${kind} ${trend}${flash ? " is-flashing" : ""}`}
+      className={`value-chip ${kind} ${trend}${flash ? " is-flashing" : ""}${clickable ? " is-clickable" : ""}`}
       data-trend={trend}
       title={title}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? ariaLabel || title : undefined}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      style={clickable ? ({ cursor: "pointer", userSelect: "none" } as any) : undefined}
     >
       <span
         ref={textRef}
@@ -1199,6 +1261,36 @@ const VerifierStamperInner: React.FC = () => {
   }, []);
 
   /* ────────────────────────────────────────────────────────────────
+     LiveChart popover (stays inside the verifier modal)
+  ───────────────────────────────────────────────────────────────── */
+  const [chartOpen, setChartOpen] = useState(false);
+  const [chartFocus, setChartFocus] = useState<"phi" | "usd">("phi");
+// force a remount when opening/switching focus so ResponsiveContainer never measures at 0
+const [chartReflowKey, setChartReflowKey] = useState(0);
+const openChartPopover = useCallback((focus: "phi" | "usd") => {
+  setChartFocus(focus);
+  setChartOpen(true);
+  setChartReflowKey((k) => k + 1);
+}, []);
+useEffect(() => {
+  if (chartOpen) setChartReflowKey((k) => k + 1);
+}, [chartOpen, chartFocus]);
+
+
+  const closeChartPopover = useCallback(() => {
+    setChartOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!chartOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeChartPopover();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [chartOpen, closeChartPopover]);
+
+  /* ────────────────────────────────────────────────────────────────
      μΦ-exact conversion & send-input normalization
      - For PHI mode: normalize user input to exactly 6dp via toScaled6 → toStr6
      - For USD mode: compute Φ from USD, then round to 6dp string
@@ -1643,7 +1735,9 @@ const VerifierStamperInner: React.FC = () => {
   }, [meta, svgURL, isSendFilename, refreshHeadWindow, syncMetaAndUi]);
 
   const frequencyHz = useMemo(
-    () => getFirst(meta, ["frequencyHz", "valuationSource.frequencyHz"]) || fromSvgDataset(meta as SigilMetadataWithOptionals, "data-frequency-hz"),
+    () =>
+      getFirst(meta, ["frequencyHz", "valuationSource.frequencyHz"]) ||
+      fromSvgDataset(meta as SigilMetadataWithOptionals, "data-frequency-hz"),
     [meta]
   );
 
@@ -1661,6 +1755,133 @@ const VerifierStamperInner: React.FC = () => {
 
   const { used: childUsed, expired: childExpired } = useMemo(() => getChildLockInfo(meta, pulseNow), [meta, pulseNow]);
   const parentOpenExp = useMemo(() => getParentOpenExpiry(meta, pulseNow).expired, [meta, pulseNow]);
+function useRollingChartSeries({
+  seriesKey,
+  sampleMs,
+  valuePhi,
+  usdPerPhi,
+  maxPoints = 2048,
+  snapKey,
+}: {
+  seriesKey: string;
+  sampleMs: number;
+  valuePhi: number;
+  usdPerPhi: number;
+  maxPoints?: number;
+  snapKey?: number;
+}) {
+  const [data, setData] = React.useState<ChartPoint[]>([]);
+  const dataRef = React.useRef<ChartPoint[]>([]);
+  const vRef = React.useRef(valuePhi);
+  const fxRef = React.useRef(usdPerPhi);
+
+  // keep latest values in refs
+  React.useEffect(() => {
+    if (Number.isFinite(valuePhi)) vRef.current = valuePhi;
+  }, [valuePhi]);
+
+  React.useEffect(() => {
+    if (Number.isFinite(usdPerPhi) && usdPerPhi > 0) fxRef.current = usdPerPhi;
+  }, [usdPerPhi]);
+
+  const snapNow = React.useCallback(() => {
+    const p = kaiPulseNow();
+    const val = Number.isFinite(vRef.current) ? vRef.current : 0;
+    const fx = Number.isFinite(fxRef.current) && fxRef.current > 0 ? fxRef.current : 0;
+
+    const prev = dataRef.current;
+    if (!prev.length) {
+      const seed: ChartPoint[] = [
+        { i: p - 1, value: val, fx } as any,
+        { i: p, value: val, fx } as any,
+      ];
+      dataRef.current = seed;
+      setData(seed);
+      return;
+    }
+
+    const last = prev[prev.length - 1] as any;
+    let next: ChartPoint[];
+
+    if (last?.i === p) {
+      // update current pulse point immediately
+      next = [...prev.slice(0, -1), { ...last, value: val, fx } as any];
+    } else if (typeof last?.i === "number" && last.i < p) {
+      // pulse advanced: append
+      next = [...prev, { i: p, value: val, fx } as any];
+    } else {
+      // weird ordering: just replace last
+      next = [...prev.slice(0, -1), { ...last, value: val, fx } as any];
+    }
+
+    if (next.length > maxPoints) next.splice(0, next.length - maxPoints);
+
+    dataRef.current = next;
+    setData(next);
+  }, [maxPoints]);
+
+  // Reset when a new glyph/canonical is loaded (seed with *current* value immediately)
+  React.useEffect(() => {
+    dataRef.current = [];
+    setData([]);
+    snapNow();
+  }, [seriesKey, snapNow]);
+
+  // SNAP IMMEDIATELY on value changes (so you don’t wait for next BREATH tick)
+  React.useEffect(() => {
+    snapNow();
+  }, [valuePhi, usdPerPhi, snapNow]);
+
+  // SNAP when opening / switching focus (use snapKey from your chartReflowKey)
+  React.useEffect(() => {
+    if (typeof snapKey === "number") snapNow();
+  }, [snapKey, snapNow]);
+
+  // Continue appending at breath cadence
+  React.useEffect(() => {
+    const id = window.setInterval(() => {
+      const p = kaiPulseNow();
+      const prev = dataRef.current;
+      const last = prev[prev.length - 1] as any;
+      if (last?.i === p) return;
+
+      const nextPoint = { i: p, value: vRef.current, fx: fxRef.current } as any;
+      const next = prev.length ? [...prev, nextPoint] : [nextPoint];
+      if (next.length > maxPoints) next.splice(0, next.length - maxPoints);
+
+      dataRef.current = next;
+      setData(next);
+    }, sampleMs);
+
+    return () => window.clearInterval(id);
+  }, [sampleMs, maxPoints]);
+
+  return data;
+}
+
+const seriesKey = useMemo(() => {
+  // canonical is best; fallback to core tuple so it still resets correctly
+  if (canonical) return canonical;
+  if (!meta) return "none";
+  return `${meta.pulse ?? "x"}|${meta.beat ?? "x"}|${meta.stepIndex ?? "x"}|${meta.chakraDay ?? "x"}`;
+}, [canonical, meta]);
+
+const chartData = useRollingChartSeries({
+  seriesKey,
+  sampleMs: BREATH_MS,
+  valuePhi: headerPhi,
+  usdPerPhi,
+  maxPoints: 4096,
+  snapKey: chartReflowKey, // 👈 ensures “exact price on open”
+});
+
+
+// sensible PV: use your initialGlyph seal if present, else current live Φ
+const pvForChart = useMemo(() => {
+  const v = Number(initialGlyph?.value);
+  return Number.isFinite(v) && v > 0 ? v : headerPhi;
+}, [initialGlyph, headerPhi]);
+
 
   return (
     <div className="verifier-stamper" role="application" style={{ maxWidth: "100vw", overflowX: "hidden" }}>
@@ -1752,12 +1973,21 @@ const VerifierStamperInner: React.FC = () => {
                       trend={phiTrend}
                       flash={phiFlash}
                       title={canonicalContext === "derivative" ? "Resonance Φ for this derivative glyph" : "Resonance Φ on this glyph"}
+                      ariaLabel="Open live chart for Φ value"
+                      onClick={() => openChartPopover("phi")}
                     >
                       <span className="sym">Φ</span>
                       {headerPhi.toFixed(6)}
                     </ValueChip>
 
-                    <ValueChip kind="usd" trend={usdTrend} flash={usdFlash} title="Indicative USD (issuance model)">
+                    <ValueChip
+                      kind="usd"
+                      trend={usdTrend}
+                      flash={usdFlash}
+                      title="Indicative USD (issuance model)"
+                      ariaLabel="Open live chart for USD value"
+                      onClick={() => openChartPopover("usd")}
+                    >
                       <span className="sym">$</span>
                       {fmtUsdNoSym(headerUsd)}
                     </ValueChip>
@@ -1774,6 +2004,60 @@ const VerifierStamperInner: React.FC = () => {
                   )}
                 </div>
               </header>
+
+              {/* Live chart popover (overlays inside verifier modal, easy exit, no navigation) */}
+              {chartOpen && (
+                <div
+                  className="chart-popover-backdrop"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Live chart"
+                  onMouseDown={closeChartPopover}
+                  onClick={closeChartPopover}
+                  style={S.popBg}
+                >
+                  <div
+                    className="chart-popover"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    style={S.popCard}
+                  >
+                    <div className="chart-popover-head" style={S.popHead}>
+                      <div style={S.popTitle} className="chart-popover-title">
+                        {chartFocus === "phi" ? "Φ Resonance · Live" : "$ Price · Live"}
+                      </div>
+                      <button
+                        className="close-btn holo"
+                        data-aurora="true"
+                        aria-label="Close chart"
+                        title="Close"
+                        onClick={closeChartPopover}
+                        style={{ width: 40, height: 40, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="chart-popover-body" style={S.popBody}>
+                      <React.Suspense fallback={<div style={{ padding: 16, color: "var(--dim)" }}>Loading chart…</div>}>
+                 <LiveChart
+  data={chartData}
+  live={headerPhi}
+  pv={pvForChart}
+  premiumX={1}
+  momentX={1}
+  colors={["rgba(167,255,244,1)"]}
+  usdPerPhi={usdPerPhi}
+  mode={chartFocus === "usd" ? "usd" : "phi"}
+  isChildGlyph={canonicalContext === "derivative"}
+  reflowKey={chartReflowKey}
+/>
+
+                      </React.Suspense>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Tabs */}
               <nav className="tabs" role="tablist" aria-label="Views" style={S.stickyTabs}>
