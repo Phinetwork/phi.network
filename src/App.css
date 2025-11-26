@@ -86,8 +86,10 @@ body,
   margin: 0;
   padding: 0;
   height: 100%;
+  width: 100%;
 }
 
+/* lock viewport like an app: no page scroll, only internal panels scroll */
 body {
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Inter", "Segoe UI", sans-serif;
@@ -95,7 +97,7 @@ body {
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  overflow: hidden; /* app-like: prevent document scroll */
 }
 
 img,
@@ -166,10 +168,14 @@ a:hover {
    3) Atlantean App Shell + background layers
    ─────────────────────────────────────────────────────────────── */
 
+/* full-viewport app shell */
 .app-shell {
-  position: relative;
-  min-height: 100vh;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  height: 100%;
   overflow: hidden;
   background:
     radial-gradient(circle at 10% -10%, rgba(0, 255, 196, 0.18) 0, transparent 55%),
@@ -296,10 +302,10 @@ a:hover {
    ─────────────────────────────────────────────────────────────── */
 
 .app-topbar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 5;
   height: var(--topbar-h);
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -466,12 +472,14 @@ a:hover {
 .app-stage {
   position: relative;
   z-index: 1;
-  min-height: calc(100vh - var(--topbar-h));
+  flex: 1;               /* take remaining height under topbar */
+  min-height: 0;         /* allow children to handle overflow */
   width: 100%;
   display: flex;
-  align-items: center;        /* center bias */
+  align-items: center;
   justify-content: center;
   padding: clamp(1.25rem, 3vw, 3rem);
+  overflow: hidden;      /* no outer scroll; only inner panels scroll */
 }
 
 /* Outer “vault frame” */
@@ -479,6 +487,7 @@ a:hover {
   position: relative;
   width: 100%;
   max-width: 1180px;
+  height: 100%;          /* fill stage */
   border-radius: var(--radius-xl);
   background:
     radial-gradient(circle at top left, rgba(51, 246, 255, 0.19), transparent 55%),
@@ -534,6 +543,7 @@ a:hover {
     radial-gradient(circle at 0% 100%, rgba(155, 91, 255, 0.18), transparent 65%),
     linear-gradient(160deg, var(--frame-inner-bg), rgba(1, 4, 16, 0.98));
   overflow: hidden;
+  height: 100%;          /* fill frame */
 }
 
 /* Workspace grid */
@@ -541,7 +551,8 @@ a:hover {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 1.1rem;
-  min-height: min(74vh, 780px);
+  height: 100%;          /* full-height grid */
+  min-height: 0;
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -560,7 +571,8 @@ a:hover {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 0;
+  height: 100%;
 }
 
 .nav-head {
@@ -681,7 +693,8 @@ a:hover {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 0;
+  height: 100%;
 }
 
 .panel-head {
@@ -721,8 +734,8 @@ a:hover {
 
 .panel-body {
   padding: 1.05rem 1.25rem 1.25rem;
-  overflow: auto;
-  min-height: 0; /* critical for nested scroll */
+  overflow: auto;   /* internal scroll only */
+  min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(170, 241, 255, 0.24) transparent;
 }
@@ -853,6 +866,7 @@ a:hover {
   color: var(--text-subtle);
   font-size: 0.9rem;
 }
+
 /* LIVE indicator (top right) */
 .topbar-live {
   display: flex;
@@ -914,14 +928,28 @@ a:hover {
    ─────────────────────────────────────────────────────────────── */
 
 @media (max-width: 980px) {
+  .app-stage {
+    padding: 1rem;
+  }
+
+  .app-frame {
+    border-radius: 24px;
+  }
+
+  .app-frame-inner {
+    padding: 1rem;
+  }
+
   .app-workspace {
     grid-template-columns: 1fr;
     gap: 0.9rem;
-    min-height: auto;
+    height: 100%;
+    min-height: 0;
   }
 
   .app-nav {
-    min-height: auto;
+    min-height: 0;
+    height: auto;
   }
 
   .nav-list {
@@ -943,17 +971,12 @@ a:hover {
     --topbar-h: 72px;
   }
 
-  .app-stage {
-    align-items: flex-start;
-    padding: 1rem;
-  }
-
   .app-frame {
     border-radius: 20px;
   }
 
   .app-frame-inner {
-    padding: 1rem;
+    padding: 0.9rem;
     border-radius: 16px;
   }
 

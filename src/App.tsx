@@ -17,9 +17,9 @@ import {
 } from "react-router-dom";
 
 /**
- * ✅ Console App (2-tab) updates:
+ * ✅ Sovereign Gate Console (2-tab) setup:
  * - Nav: ONLY Verifier + KaiVoh
- * - Top bar: LIVE + green orb pulsing every 5.236s + **Kai Pulse NOW** (replaces /5236 countdown)
+ * - Top bar: LIVE + green orb pulsing every 5.236s + Kai Pulse NOW
  * - KaiVoh opens as a modal via /voh route
  * - Deep links retained (routes remain reachable): /stream, /feed, /p~:token, /explorer, /s, /p
  */
@@ -27,7 +27,7 @@ import {
 import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
 import KaiVohModal from "./components/KaiVoh/KaiVohModal";
 
-// ✅ Kai Pulse NOW (no missing export; uses existing canonical utility)
+// ✅ Kai Pulse NOW (canonical Kai-Klok utility)
 import { momentFromUTC } from "./utils/kai_pulse";
 
 // Keep routes reachable even if not shown in nav
@@ -125,7 +125,7 @@ function AppChrome() {
     if (p.startsWith("/p~")) return "Stream";
     if (p === "/p") return "Stream";
 
-    return "Console";
+    return "Sovereign Gate";
   }, [location.pathname]);
 
   useEffect(() => {
@@ -148,22 +148,18 @@ function AppChrome() {
       <header
         className="app-topbar"
         role="banner"
-        aria-label="PhiNet Console Header"
+        aria-label="ΦNet Sovereign Gate Header"
       >
         <div className="topbar-left">
-          <div className="brand" aria-label="PhiNet Verification Console">
+          <div className="brand" aria-label="ΦNet Sovereign Gate">
             <div className="brand__mark" aria-hidden="true">
               {/* Φ logo from /public/phi.svg */}
-              <img
-                src="/phi.svg"
-                alt=""
-                className="brand__mark-img"
-              />
+              <img src="/phi.svg" alt="" className="brand__mark-img" />
             </div>
             <div className="brand__text">
               <div className="brand__title">ΦNet Sovereign Gate</div>
               <div className="brand__subtitle">
-                Sovereign Value • Asset Integrity • Transfer Gate
+                Custody of Breath-Minted Value · Kairos Identity Registry
               </div>
             </div>
           </div>
@@ -186,10 +182,8 @@ function AppChrome() {
         >
           <span className="live-orb" aria-hidden="true" />
           <div className="live-text">
-            <div className="live-title">LIVE</div>
+            <div className="live-title">☤KAI</div>
             <div className="live-meta">
-              <span className="mono">NOW</span>{" "}
-              <span className="mono">PULSE</span>{" "}
               <span className="mono">{pulseNowStr}</span>
             </div>
           </div>
@@ -201,7 +195,7 @@ function AppChrome() {
         className="app-stage"
         id="app-content"
         role="main"
-        aria-label="Application workspace"
+        aria-label="Sovereign Value Workspace"
       >
         <div className="app-frame" role="region" aria-label="Secure frame">
           <div className="app-frame-inner">
@@ -211,7 +205,8 @@ function AppChrome() {
                 <div className="nav-head">
                   <div className="nav-head__title">Atrium</div>
                   <div className="nav-head__sub">
-                    Breath-Sealed Auth Panel · ZK-Kai Identity Verification
+                    Breath-Sealed Identity Gate · Kairos-ZK Verification
+                    Authority
                   </div>
                 </div>
 
@@ -232,20 +227,21 @@ function AppChrome() {
                   ))}
                 </div>
 
-                <div className="nav-foot" aria-label="Console disclaimers">
+                <div className="nav-foot" aria-label="Sovereign declarations">
                   <div className="nav-foot__line">
                     <span className="mono">Φ</span> issued under the Eternal
                     Authority of Yahuah via Proof of Breath™ — one breath, one
                     seal, one origin.
                   </div>
                   <div className="nav-foot__line">
-                    Sigil-Glyphs constitute legal tender. Redeemable in Kairos.
+                    Sigil-Glyphs constitute lawful tender in the Realm of
+                    Kairos. Redeemable upon verification.
                   </div>
                 </div>
               </nav>
 
               {/* Content */}
-              <section className="app-panel" aria-label="Console content">
+              <section className="app-panel" aria-label="Sovereign Gate panel">
                 <div className="panel-head">
                   <div className="panel-head__title">{pageTitle}</div>
                   <div className="panel-head__meta">
@@ -261,7 +257,7 @@ function AppChrome() {
                 <footer className="panel-foot" aria-label="Footer">
                   <div className="panel-foot__left">
                     <span className="mono">ΦNet</span> • Proof-of-Breath™
-                    Atrium
+                    Sovereign Gate
                   </div>
                   <div className="panel-foot__right">
                     <span className="mono">Version</span>{" "}
@@ -283,7 +279,7 @@ function NotFound() {
       <div className="notfound__code">404</div>
       <div className="notfound__title">Route not found</div>
       <div className="notfound__hint">
-        Use the Console navigation to return to Verifier or KaiVoh.
+        Use the Sovereign Gate navigation to return to Verifier or KaiVoh.
       </div>
       <div className="notfound__actions">
         <NavLink className="notfound__cta" to="/">
