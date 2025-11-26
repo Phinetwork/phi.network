@@ -1,5 +1,7 @@
 /* VerifierStamper.css
    Atlantean Tech Theme — Mobile-first, no horizontal overflow
+   HARD RULE: never truncate dynamic data (Pulse / RGB seed / etc).
+   If space is tight: keep ONE ROW + allow INTERNAL horizontal scroll (no ellipsis).
 */
 
 /* ───────────────────────────────────────────────────────────────
@@ -11,20 +13,37 @@
   box-sizing: border-box;
 }
 
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 html,
 body {
+  margin: 0;
+  min-height: 100dvh;
+
   background: radial-gradient(1200px 800px at 10% 0%, #0b0f2a 0%, #05060a 55%) fixed;
   color: var(--ink);
+
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Apple Color Emoji",
     "Segoe UI Emoji";
-  margin: 0;
-  overflow-x: hidden;
+
+  overflow-x: hidden; /* page never scrolls horizontally */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  min-height: 100dvh;
   touch-action: pan-y;
+
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 
 /* ───────────────────────────────────────────────────────────────
@@ -42,6 +61,7 @@ body {
   --card: rgba(16, 18, 28, 0.66);
   --glass: rgba(18, 22, 34, 0.72);
   --border: rgba(255, 255, 255, 0.08);
+
   --ink: var(--seal-text, #e8ecff);
   --ink-dim: color-mix(in srgb, var(--seal-text-dim, #aab1d4) 92%, #90a7c2 8%);
 
@@ -54,6 +74,7 @@ body {
   --ok: #4ee89a;
 
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 1px var(--border);
+
   --radius: 14px;
   --radius-lg: 24px;
   --pill: 999px;
@@ -75,12 +96,9 @@ body {
 
   /* trend tokens */
   --trend: var(--ink-dim);
-  --trend-up: var(--ok, #4ee89a);
-  --trend-down: var(--error, #ff6b7a);
-  --trend-flat: color-mix(in srgb, var(--ink, #e8fbf8) 66%, transparent);
-
-  --price-glow: 0 0 0.45px rgba(255, 255, 255, 0.45);
-  --price-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  --trend-up: var(--ok);
+  --trend-down: var(--error);
+  --trend-flat: color-mix(in srgb, var(--ink) 66%, transparent);
 
   /* sacred Φ input */
   --breath: 5.236s;
@@ -112,13 +130,42 @@ body {
 }
 
 /* ───────────────────────────────────────────────────────────────
+   1a) Core helpers (NO TRUNCATION)
+   - keep one line, never ellipsis, scroll INSIDE the element
+──────────────────────────────────────────────────────────────── */
+.scroll-x-no-truncate {
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-overflow: clip;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-x-no-truncate::-webkit-scrollbar {
+  display: none;
+}
+
+.wrap-anywhere {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ───────────────────────────────────────────────────────────────
    2) Page shell
 ──────────────────────────────────────────────────────────────── */
 .verifier-stamper {
   max-width: 1100px;
+  width: 100%;
   margin: 24px auto 64px;
   padding-inline: var(--page-pad);
-  width: 100%;
   overflow: clip;
 }
 
@@ -129,15 +176,19 @@ body {
   position: sticky;
   top: 0;
   z-index: 30;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+
   margin: 0 0 18px;
   padding: 10px 12px;
+
   background: linear-gradient(180deg, rgba(10, 12, 20, 0.65), rgba(10, 12, 20, 0.25));
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
+
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
@@ -166,18 +217,22 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: clamp(18px, 1.4vw + 0.8rem, 26px);
+
   color: transparent;
   background: conic-gradient(from 180deg at 50% 50%, var(--accent), var(--accent-2), var(--accent-3), var(--accent)),
     radial-gradient(120% 180% at 10% 0%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 60%);
   -webkit-background-clip: text;
   background-clip: text;
+
   -webkit-text-stroke: 0.55px rgba(255, 255, 255, 0.28);
   text-shadow: 0 0 0.5px rgba(255, 255, 255, 0.35), 0 6px 22px color-mix(in srgb, var(--accent) 26%, transparent);
+
   background-size: 200% 200%;
   animation: holoShift 14s linear infinite;
+
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: ellipsis; /* title can truncate; NOT dynamic data */
 }
 
 .toolbar h1::after {
@@ -217,13 +272,17 @@ body {
   align-items: center;
   gap: clamp(8px, 1.2vw, 14px);
   flex-wrap: wrap;
+
   padding: 6px;
   border-radius: var(--pill);
+
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
     radial-gradient(120% 180% at 80% -20%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%);
   border: 1px solid rgba(255, 255, 255, 0.08);
+
   -webkit-backdrop-filter: blur(10px) saturate(1.15);
   backdrop-filter: blur(10px) saturate(1.15);
+
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
@@ -245,11 +304,14 @@ button {
   appearance: none;
   border: none;
   cursor: pointer;
+
   color: var(--ink);
   background: transparent;
+
   font-weight: 600;
   border-radius: 10px;
   padding: 10px 14px;
+
   transition: transform 0.08s ease, box-shadow 0.2s ease, background 0.2s ease, filter 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
@@ -308,9 +370,11 @@ dialog.glass-modal {
   max-height: calc(100vh - 2 * clamp(8px, 6vh, 24px));
   margin-block: clamp(8px, 6vh, 24px);
   margin-inline: auto;
+
   border: 0;
   padding: 0;
   border-radius: var(--radius-lg);
+
   background: linear-gradient(180deg, var(--glass), rgba(10, 12, 20, 0.7));
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--border);
   color: var(--ink);
@@ -357,43 +421,53 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   overflow: hidden;
 }
 
+/* ───────────────────────────────────────────────────────────────
+   5a) Modal topbar + close button
+──────────────────────────────────────────────────────────────── */
 .modal-topbar {
   position: sticky;
   top: 0;
   z-index: 2;
+
   min-height: var(--topbar-h);
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 8px;
+
   background: linear-gradient(180deg, rgba(10, 12, 20, 0.9), rgba(10, 12, 20, 0.7));
   border-bottom: 1px solid var(--border);
 }
 
-/* simplified close button (with later patch to lift it) */
 .modal-topbar .close-btn,
 .explorer-topbar .close-btn {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+
   width: 36px;
   height: 36px;
   min-width: 36px;
   min-height: 36px;
   margin: 2px 8px 4px;
+
   border-radius: 999px;
   border: 1px solid var(--border);
+
   font-size: 18px;
   font-weight: 700;
   line-height: 1;
   color: #e5e7eb;
+
   background: radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.22), transparent 55%), rgba(15, 23, 42, 0.98);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+
   cursor: pointer;
+
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  animation: none !important;
+
   text-shadow: none;
   transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
@@ -424,23 +498,25 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   outline-offset: 2px;
 }
 
-/* Status strip (nav chips) */
+/* ───────────────────────────────────────────────────────────────
+   5b) Status strip (nav chips)
+──────────────────────────────────────────────────────────────── */
 .status-strip {
   display: flex;
   gap: 8px;
   padding: 8px 10px;
+
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: none;
   scroll-snap-type: x proximity;
+
   mask-image: linear-gradient(to right, transparent 0, black 18px, black calc(100% - 18px), transparent 100%);
   -webkit-mask-image: linear-gradient(to right, transparent 0, black 18px, black calc(100% - 18px), transparent 100%);
 }
-
 .status-strip::-webkit-scrollbar {
   display: none;
 }
-
 .status-strip > * {
   scroll-snap-align: start;
 }
@@ -450,9 +526,11 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
+
   padding: 6px 10px;
   font-size: 12px;
   letter-spacing: 0.02em;
+
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
@@ -476,10 +554,9 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   5a) Modal header + header keys + value strip  (REFINED)
-   - value strip never stacks; stays one row with safe scroll
-   - amounts are larger, always single-line
-   - values sit at top visually (even if DOM order is later)
+   6) Modal header + header keys + VALUE STRIP
+   - amounts remain ONE ROW
+   - NO ellipsis on dynamic numbers; internal scroll instead.
 ──────────────────────────────────────────────────────────────── */
 .modal-header {
   display: grid;
@@ -504,11 +581,11 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   gap: 6px;
 }
 
-/* value strip sits UNDER Beat/Step/Day (DOM order), above tabs */
 .header-fields .value-strip {
   order: 0;
   margin: 8px 0 0;
 }
+
 .header-fields h2 {
   margin: 0;
   font-size: 18px;
@@ -541,16 +618,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   min-width: 0;
 }
 
-.header-keys .field .mono {
-  font-size: 0.92em;
-}
-
-.header-keys .field.phikey,
-.header-keys .field.kai-signature {
-  font-size: clamp(11px, 1.9vw, 12px);
-}
-
-/* raise Φ-key chip slightly */
+/* raised Φ-key chip */
 .header-keys .field.phikey {
   margin-top: -20px;
 }
@@ -560,21 +628,23 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   }
 }
 
-/* Kai signature should never be truncated */
+/* Kai signature should never be masked */
 .header-keys .field.kai-signature,
 .header-keys .field.kai-signature * {
   -webkit-mask-image: none !important;
   mask-image: none !important;
 }
 
+/* allow signature to wrap (never ellipsis) */
 .header-keys .field.kai-signature {
   flex: 1 1 auto;
   min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  word-break: break-word;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
 }
 
 .header-keys .field.warn {
@@ -582,23 +652,22 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   border-color: rgba(255, 209, 102, 0.35);
 }
 
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-}
-
-/* ── VALUE STRIP (NO STACKS): always one row, safe horizontal scroll inside strip ── */
+/* VALUE STRIP: one row, internal scroll ok */
 .value-strip {
   width: 100%;
   display: flex;
   align-items: stretch;
   flex-wrap: nowrap;
   gap: 10px;
+
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 2px 4px;
+
   scrollbar-width: none;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
+
   mask-image: linear-gradient(to right, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
   -webkit-mask-image: linear-gradient(to right, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
 }
@@ -606,7 +675,6 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   display: none;
 }
 
-/* ── VALUE CHIP (HERO AMOUNTS): amount is top + huge, never wraps ── */
 .value-chip {
   flex: 1 0 calc(50% - 5px);
   min-width: 0;
@@ -616,25 +684,23 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-
   gap: 4px;
+
   padding: 10px 12px;
   border-radius: 14px;
 
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--border);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 
   container-type: inline-size;
   container-name: valuechip;
 }
 
-/* ensure the strip can scroll instead of forcing page overflow */
 .value-chip * {
   max-width: 100%;
 }
 
-/* label sits under the amount (clean), never forces wrapping */
 .value-chip .label {
   order: 2;
   font-size: 10px;
@@ -645,7 +711,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   line-height: 1.1;
 }
 
-/* AMOUNT = top hero line, one row forever, no stacking */
+/* AMOUNT: one row, NEVER ellipsis; scroll inside the amount line */
 .value-chip .amount {
   order: 1;
   width: 100%;
@@ -654,20 +720,25 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   gap: 0.45ch;
   min-width: 0;
 
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
   font-weight: 950;
   line-height: 1.02;
-  font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: 0.01em;
 
-  /* BIGGER by default, scales with container */
+  /* size scaling */
   font-size: clamp(18px, 13.5cqi, 30px);
+
+  /* no truncation */
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-overflow: clip;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.value-chip .amount::-webkit-scrollbar {
+  display: none;
 }
 
-/* tighten if the chip gets extremely narrow */
 @container valuechip (inline-size < 220px) {
   .value-chip .amount {
     font-size: clamp(16px, 12.8cqi, 26px);
@@ -678,28 +749,23 @@ dialog.glass-modal.fullscreen[data-open="true"] {
     font-size: clamp(15px, 11.5cqi, 24px);
   }
 }
-
-/* viewport fallback if container queries missing */
 @supports not (container-type: inline-size) {
   .value-chip .amount {
     font-size: clamp(18px, 6.4vw, 28px);
   }
 }
 
-/* Φ / USD variants */
 .value-chip.phi {
-  border-color: color-mix(in srgb, var(--accent, #8af) 34%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, #8af) 12%, transparent), transparent 60%),
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
 }
-
 .value-chip.usd {
-  border-color: color-mix(in srgb, var(--ok, #5f5) 34%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ok, #5f5) 10%, transparent), transparent 60%),
+  border-color: color-mix(in srgb, var(--ok) 34%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ok) 10%, transparent), transparent 60%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
 }
 
-/* symbol glyph always matches text color */
 .value-chip .amount .sym {
   display: inline-block;
   margin-right: 0.2ch;
@@ -725,12 +791,12 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   --trend: var(--trend-flat);
 }
 
-/* ── Trend indicator: ▲ green / ▼ red / nothing on flat (no gap) ── */
+/* Trend indicator: ▲ / ▼ / none (no gap on flat) */
 .value-chip .amount::before {
   content: "";
   display: inline-block;
-  width: 0;               /* no space when flat */
-  margin-right: 0;        /* no space when flat */
+  width: 0;
+  margin-right: 0;
   font-size: 0.86em;
   font-weight: 950;
   color: currentColor;
@@ -738,8 +804,6 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   -webkit-text-fill-color: currentColor;
   transition: color 220ms ease, transform 220ms ease, width 220ms ease, margin 220ms ease;
 }
-
-/* UP */
 .value-chip.up .amount::before,
 .value-chip[data-trend="up"] .amount::before {
   content: "▲";
@@ -747,8 +811,6 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   margin-right: 0.15ch;
   color: var(--trend-up);
 }
-
-/* DOWN */
 .value-chip.down .amount::before,
 .value-chip[data-trend="down"] .amount::before {
   content: "▼";
@@ -756,15 +818,12 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   margin-right: 0.15ch;
   color: var(--trend-down);
 }
-
-/* FLAT = absolutely nothing (no square, no gap) */
 .value-chip.flat .amount::before,
 .value-chip[data-trend="flat"] .amount::before {
   content: "";
   width: 0;
   margin-right: 0;
 }
-
 
 /* Φ gradient */
 .value-chip.phi .amount {
@@ -778,14 +837,14 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 
 /* USD variant same palette as Φ (no yellow) */
 .value-chip.usd .amount {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, #8af) 85%, white 0%), color-mix(in srgb, var(--accent-2, #aef) 55%, white 0%));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 85%, white 0%), color-mix(in srgb, var(--accent-2) 55%, white 0%));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
 
-/* small delta pill (optional, next to amount) — never wraps */
+/* delta pill (never wraps; also never ellipsis) */
 .value-chip .delta {
   display: inline-grid;
   place-items: center;
@@ -793,11 +852,14 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   min-width: 34px;
   padding: 0 8px;
   margin-left: 0.45ch;
+
   border-radius: 999px;
   font: 900 11px/18px ui-sans-serif, system-ui, -apple-system, Inter, "SF Pro Text";
   letter-spacing: 0.02em;
+
   color: #031216;
   white-space: nowrap;
+
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.6) 8%, rgba(255, 255, 255, 0) 14%),
     linear-gradient(90deg, color-mix(in srgb, var(--trend) 65%, white 0%), color-mix(in srgb, var(--trend) 35%, white 0%));
   border: 1px solid rgba(0, 0, 0, 0.18);
@@ -817,13 +879,12 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   animation: valueFlash 420ms ease-out;
 }
 
-/* trend-up / trend-down shadow variants on chip */
 .value-chip.trend-up {
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), 0 0 20px color-mix(in srgb, var(--ok, #5f5) 26%, transparent),
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), 0 0 20px color-mix(in srgb, var(--ok) 26%, transparent),
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 .value-chip.trend-down {
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), 0 0 20px color-mix(in srgb, var(--error, #ff5c77) 26%, transparent),
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), 0 0 20px color-mix(in srgb, var(--error) 26%, transparent),
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
@@ -841,37 +902,36 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 .value-chip.phi .amount,
-.value-chip.usd .amount,
-.value-chip.phi.up .amount,
-.value-chip.phi.down .amount,
-.value-chip.usd.up .amount,
-.value-chip.usd.down .amount,
-.value-chip.usd.flat .amount {
-  animation: phiUsdBreath var(--kai-pulse, 5236ms) ease-in-out infinite !important;
+.value-chip.usd .amount {
+  animation: phiUsdBreath var(--kai-pulse) ease-in-out infinite !important;
 }
 
 /* ───────────────────────────────────────────────────────────────
-   5b) Tabs + modal body
+   7) Tabs + modal body  (TABS = HALF SIZE)
 ──────────────────────────────────────────────────────────────── */
 .tabs {
   display: flex;
-  gap: 8px;
-  padding: 8px 12px 12px;
+  gap: 4px;                 /* was 8px */
+  padding: 4px 6px 6px;     /* was 8px 12px 12px */
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+
   position: sticky;
   top: var(--topbar-h);
   z-index: 1;
+
   background: linear-gradient(180deg, rgba(10, 12, 20, 0.85), rgba(10, 12, 20, 0.65));
 }
 
 .tabs button {
-  padding: 8px 12px;
+  padding: 4px 6px;         /* was 8px 12px */
   border-radius: var(--pill);
   color: var(--ink-dim);
   border: 1px solid transparent;
   flex: 0 0 auto;
-  font-size: 0.5em;
+
+  font-size: 0.78rem;       /* keep readable */
+  line-height: 1.05;        /* tighter vertical */
 }
 
 .tabs button:hover {
@@ -892,9 +952,11 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   padding: 14px 16px 6px;
   overflow-y: auto;
   overflow-x: hidden;
+
   max-height: calc(90vh - 260px);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+
   content-visibility: auto;
   contain: layout paint style;
   contain-intrinsic-size: 800px 600px;
@@ -906,18 +968,30 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   }
 }
 
-/* Summary grid */
+
+/* ───────────────────────────────────────────────────────────────
+   7a) Summary grid (NO TRUNCATION EVER)
+   - values stay ONE ROW, no ellipsis, internal scroll
+   - on small screens: each kv uses full width row
+──────────────────────────────────────────────────────────────── */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
+@media (max-width: 520px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .summary-grid .kv {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
   gap: 8px;
   padding: 10px 12px;
+
   border-radius: var(--radius);
   background: var(--card);
   border: 1px solid var(--border);
@@ -931,16 +1005,24 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 .kv .k {
   color: var(--ink-dim);
 }
-/* Summary grid values: keep one line (no digit stacking like 933 / 046 / 9) */
+
+/* critical fix: NO ellipsis on values (Pulse / RGB seed / etc). */
 .kv .v {
   color: var(--ink);
   min-width: 0;
+
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-overflow: clip;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.kv .v::-webkit-scrollbar {
+  display: none;
 }
 
-/* Hashes / long keys can still wrap when explicitly mono */
+/* hashes/keys: wrap (still never ellipsis) */
 .kv .v.mono {
   white-space: normal;
   overflow: visible;
@@ -995,8 +1077,26 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   border-top: 0;
 }
 
+/* never truncate row values */
 .transfer .row .v {
+  min-width: 0;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-overflow: clip;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.transfer .row .v::-webkit-scrollbar {
+  display: none;
+}
+
+/* allow wrap for explicit monos */
+.transfer .row .v.mono {
+  white-space: normal;
+  overflow: visible;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .payload summary {
@@ -1019,7 +1119,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   6) Tooltip
+   8) Tooltip (generic)
 ──────────────────────────────────────────────────────────────── */
 .tooltip-container {
   position: relative;
@@ -1035,47 +1135,60 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 
 .tooltip {
   visibility: hidden;
-  background-color: var(--accent);
-  color: white;
+  background-color: rgba(15, 23, 42, 0.96);
+  color: var(--ink);
   text-align: left;
-  border-radius: 6px;
+
+  border-radius: 8px;
   padding: 8px 10px;
+
   position: absolute;
   z-index: 1000;
   bottom: 125%;
   left: 0;
+
   opacity: 0;
-  transition: opacity 0.3s ease;
-  width: 220px;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  transform: translateY(4px);
+
+  width: 240px;
   font-size: 11px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.4);
 }
 
 .tooltip-container:hover .tooltip,
 .tooltip-trigger:hover + .tooltip {
   visibility: visible;
   opacity: 1;
+  transform: translateY(0);
 }
 
 /* ───────────────────────────────────────────────────────────────
-   7) Modal footer / Exhale gate
+   9) Modal footer / Exhale gate
 ──────────────────────────────────────────────────────────────── */
 .modal-footer {
   position: sticky;
   bottom: 0;
   left: 0;
   right: 0;
+
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: clamp(6px, 1dvh, 8px) clamp(12px, 2vw, 16px) calc(clamp(6px, 1dvh, 8px) + env(safe-area-inset-bottom, 0px));
+
+  padding: clamp(6px, 1dvh, 8px) clamp(12px, 2vw, 16px) calc(clamp(6px, 1dvh, 8px) + var(--safe-bottom));
+
   background: radial-gradient(circle at 12% -10%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 70%),
     linear-gradient(to top, rgb(0 0 0 / 0.6) 0%, rgb(0 0 0 / 0) 60%);
   border-top: 1px solid color-mix(in srgb, var(--accent) 60%, rgb(255 255 255 / 4%));
   box-shadow: 0 -0.5px 0 rgb(255 255 255 / 6%) inset, 0 -16px 32px rgb(0 0 0 / 0.9), 0 -2px 28px color-mix(in srgb, var(--accent) 35%, transparent);
+
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
+
   isolation: isolate;
   z-index: 9999;
   overflow: visible;
@@ -1110,30 +1223,37 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   align-items: stretch;
   flex-wrap: nowrap;
   gap: 8px;
+
   width: 100%;
   min-height: clamp(40px, 4.8dvh, 48px);
   min-width: 0;
 }
 
+/* footer buttons */
 .footer-btn {
   min-height: clamp(40px, 4.8dvh, 48px);
   min-width: 0;
-  flex-shrink: 1;
-  flex-grow: 1;
+  flex: 1 1 0;
+
   border-radius: 8px;
   position: relative;
-  background: rgb(0 0 0 / 0.4);
+
   border: 1px solid rgb(255 255 255 / 0.08);
   box-shadow: 0 0 8px rgb(0 0 0 / 0.9), 0 8px 24px rgb(0 0 0 / 0.8);
+
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Inter", "SF Pro Text", Roboto, Arial;
+  font-family: ui-sans-serif, system-ui, -apple-system, Inter, Roboto, Arial;
   text-align: center;
   line-height: 1.2;
   cursor: pointer;
+
   padding: 0 12px;
+
   display: flex;
   align-items: center;
   justify-content: center;
+
+  background-color: rgb(0 0 0 / 0.4);
   background-image: radial-gradient(ellipse at 50% -10%, rgb(255 255 255 / 0.14) 0%, rgb(255 255 255 / 0) 60%),
     radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--accent) 35%, transparent) 0%, rgb(0 0 0 / 0) 70%),
     linear-gradient(to bottom right, rgb(255 255 255 / 0.06) 0%, rgb(255 255 255 / 0) 60%);
@@ -1166,14 +1286,28 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   justify-content: center;
 }
 
+/* labels: keep one row, NEVER ellipsis; internal scroll instead */
+.btn-label-main,
+.btn-label-sub,
+.balance-line {
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-overflow: clip;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.btn-label-main::-webkit-scrollbar,
+.btn-label-sub::-webkit-scrollbar,
+.balance-line::-webkit-scrollbar {
+  display: none;
+}
+
 .btn-label-main {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink);
   text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent), 0 0 1px rgb(255 255 255 / 0.9);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .btn-label-sub {
@@ -1196,10 +1330,8 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   flex-wrap: nowrap;
   gap: 4px;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+
 .balance-line .phi-amount {
   color: var(--ink);
   font-weight: 600;
@@ -1213,19 +1345,18 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   opacity: 0.4;
 }
 
-/* Seal button */
+/* specific footer button variants */
 .seal-btn {
   background-color: rgb(0 0 0 / 0.45);
   border-color: color-mix(in srgb, var(--accent) 60%, rgb(255 255 255 / 10%));
   box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 40%, transparent), 0 16px 32px rgb(0 0 0 / 0.9);
 }
 
-/* Attach button */
 .attach-btn {
-  flex-grow: 0;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   min-width: clamp(40px, 4.8dvh, 48px);
   max-width: clamp(44px, 5.2dvh, 52px);
+
   border-color: rgb(255 255 255 / 0.08);
   display: flex;
   align-items: center;
@@ -1241,7 +1372,6 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   color: var(--ink);
 }
 
-/* Send button */
 .send-btn {
   background-color: rgb(0 0 0 / 0.5);
   border-color: color-mix(in srgb, var(--accent) 70%, rgb(255 255 255 / 15%));
@@ -1302,7 +1432,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   8) Explorer dialog (condensed)
+   10) Explorer dialog (condensed)
 ──────────────────────────────────────────────────────────────── */
 .explorer-dialog {
   box-sizing: border-box;
@@ -1310,9 +1440,11 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   max-width: 100vw;
   height: 100dvh;
   max-height: 100dvh;
+
   margin: 0;
   padding: 0;
   border: 0;
+
   color: var(--ink);
   background: linear-gradient(180deg, var(--glass), rgba(10, 12, 20, 0.7));
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--border);
@@ -1342,6 +1474,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
+
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(10, 12, 20, 0.9), rgba(10, 12, 20, 0.7));
 }
@@ -1352,18 +1485,22 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+
   color: transparent;
   background: conic-gradient(from 180deg at 50% 50%, var(--accent), var(--accent-2), var(--accent-3), var(--accent)),
     radial-gradient(120% 180% at 10% 0%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 60%);
   -webkit-background-clip: text;
   background-clip: text;
+
   -webkit-text-stroke: 0.55px rgba(255, 255, 255, 0.28);
   text-shadow: 0 0 0.5px rgba(255, 255, 255, 0.35), 0 6px 22px color-mix(in srgb, var(--accent) 26%, transparent);
+
   background-size: 200% 200%;
   animation: holoShift 14s linear infinite;
+
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: ellipsis; /* title can truncate */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1377,9 +1514,12 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+
   padding: 10px 12px 16px;
+
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+
   content-visibility: auto;
   contain: layout paint style;
   contain-intrinsic-size: 800px 600px;
@@ -1394,7 +1534,6 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   }
 }
 
-/* explorer meta-row */
 .explorer-body .meta-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -1404,7 +1543,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   9) OMG WOW ICON CHIPS (status-strip icons)
+   11) OMG WOW ICON CHIPS (status-strip icons)
 ──────────────────────────────────────────────────────────────── */
 .chip.icon {
   position: relative;
@@ -1412,6 +1551,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   height: var(--chip-size);
   flex: 0 0 var(--chip-size);
   border-radius: 999px;
+
   background: radial-gradient(
       120% 120% at 30% 25%,
       rgba(255, 255, 255, 0.22) 0%,
@@ -1420,14 +1560,18 @@ dialog.glass-modal.fullscreen[data-open="true"] {
       transparent 100%
     ),
     rgba(255, 255, 255, 0.06);
+
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -12px 22px rgba(255, 255, 255, 0.06),
     0 8px 22px rgba(0, 0, 0, 0.55);
+
   border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: saturate(125%) blur(var(--chip-blur));
   -webkit-backdrop-filter: saturate(125%) blur(var(--chip-blur));
+
   display: inline-flex;
   align-items: center;
   justify-content: center;
+
   color: #a7c7ff;
   transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
   outline: none;
@@ -1529,25 +1673,34 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   position: absolute;
   right: -4px;
   top: -6px;
+
   min-width: var(--chip-badge-h);
   height: var(--chip-badge-h);
   padding: 0 var(--chip-badge-pad-x);
   border-radius: 999px;
-  font: 900 12px/var(--chip-badge-h) ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Inter", Roboto, "Segoe UI",
+
+  font: 900 12px/var(--chip-badge-h) ui-sans-serif, system-ui, -apple-system, "SF Pro Text", Inter, Roboto, "Segoe UI",
     "Helvetica Neue", Arial;
   font-variant-numeric: tabular-nums lining-nums;
+
   letter-spacing: 0.02em;
   color: var(--badge-ink);
+
   -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.35);
   text-shadow: 0 0 8px rgba(111, 231, 255, 0.55);
+
   background: radial-gradient(140% 170% at 28% 12%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.25) 28%, transparent 52%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.55) 8%, rgba(255, 255, 255, 0) 14%),
     linear-gradient(90deg, var(--badge-neon-1) 0%, var(--badge-neon-2) 50%, var(--badge-neon-3) 100%);
+
   background-size: auto, auto, 200% 100%;
   background-position: 0 0, 0 0, 0% 0%;
+
   border: 1px solid rgba(0, 0, 0, 0.22);
+
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 -1px 8px rgba(0, 0, 0, 0.18), 0 2px 4px rgba(0, 0, 0, 0.35),
     0 0 10px rgba(25, 191, 255, 0.55), 0 0 22px rgba(111, 231, 255, 0.45);
+
   will-change: background-position, filter;
   animation: badgeGlow 5.236s ease-in-out infinite, badgeShimmer 8s linear infinite;
 }
@@ -1599,9 +1752,12 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   bottom: calc(100% + var(--tip-offset));
   left: 50%;
   translate: -50% 0;
+
   background: var(--chip-tip-bg);
   color: var(--chip-tip-fg);
-  font: 600 11px/1.2 ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Inter", Roboto, "Segoe UI", "Helvetica Neue", Arial;
+  font: 600 11px/1.2 ui-sans-serif, system-ui, -apple-system, "SF Pro Text", Inter, Roboto, "Segoe UI", "Helvetica Neue",
+    Arial;
+
   padding: 7px 9px;
   border-radius: var(--chip-tip-radius);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -1635,18 +1791,17 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   11) Inline valuation row (Value / USD under headers)  (REFINED)
-   - values no longer stack; they live on ONE ROW
-   - clamps to fit; if extremely tight, it scrolls INSIDE the row
+   12) Inline valuation row (Value / USD under headers)
+   - already one row + scroll; keep as-is but guaranteed no truncation
 ──────────────────────────────────────────────────────────────── */
 .valuation-inline {
-  display: grid !important;
-  grid-template-columns: 1fr auto !important;
-  grid-auto-rows: auto !important;
-  align-items: center !important;
-  gap: 8px 14px !important;
-  margin-top: 8px !important;
-  min-width: 0 !important;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-auto-rows: auto;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 8px;
+  min-width: 0;
 }
 
 .valuation-inline .dot {
@@ -1663,83 +1818,83 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 0 8px rgba(250, 204, 21, 0.85);
 }
 
-/* Left column */
 .valuation-inline-left {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 2px !important;
-  min-width: 0 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .valuation-inline-label {
-  display: flex !important;
-  align-items: center !important;
-  font-size: 0.78rem !important;
-  letter-spacing: 0.02em !important;
-  text-transform: uppercase !important;
-  color: rgba(248, 250, 252, 0.88) !important;
-  min-width: 0 !important;
+  display: flex;
+  align-items: center;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.88);
+  min-width: 0;
 }
 
 .valuation-inline-sublabel {
-  font-size: 0.72rem !important;
-  color: rgba(148, 163, 184, 0.95) !important;
+  font-size: 0.72rem;
+  color: rgba(148, 163, 184, 0.95);
 }
 
-/* Right column: ONE ROW, no stacking */
+/* right side: one row + internal scroll, no ellipsis */
 .valuation-inline-right {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: baseline !important;
-  justify-content: flex-end !important;
-  gap: 10px !important;
-  min-width: 0 !important;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
 
-  white-space: nowrap !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  scrollbar-width: none !important;
-  -webkit-overflow-scrolling: touch !important;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  text-overflow: clip;
 }
 .valuation-inline-right::-webkit-scrollbar {
-  display: none !important;
+  display: none;
 }
 
 .valuation-inline-value-main {
-  font-size: 0.95rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.01em !important;
-  color: #e5e7eb !important;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #e5e7eb;
+  white-space: nowrap;
 }
 
 .valuation-inline-value-sub {
-  font-size: 0.82rem !important;
-  color: rgba(148, 163, 184, 0.95) !important;
+  font-size: 0.82rem;
+  color: rgba(148, 163, 184, 0.95);
+  white-space: nowrap;
 }
 
-/* Optional: emphasize Φ units vs USD */
 .valuation-inline-value-main .phi-unit {
-  font-weight: 800 !important;
-  color: #facc15 !important;
+  font-weight: 800;
+  color: #facc15;
 }
 
 .valuation-inline-value-sub .usd-unit {
-  color: rgba(190, 242, 100, 0.96) !important;
+  color: rgba(190, 242, 100, 0.96);
 }
 
-/* Mobile tightening */
 @media (max-width: 640px) {
   .valuation-inline {
-    gap: 6px 10px !important;
-    margin-top: 6px !important;
+    gap: 6px 10px;
+    margin-top: 6px;
   }
   .valuation-inline-value-main {
-    font-size: 0.9rem !important;
+    font-size: 0.9rem;
   }
   .valuation-inline-value-sub {
-    font-size: 0.78rem !important;
+    font-size: 0.78rem;
   }
   .valuation-inline-label {
-    font-size: 0.74rem !important;
+    font-size: 0.74rem;
   }
 }
