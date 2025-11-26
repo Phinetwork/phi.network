@@ -250,15 +250,16 @@ function AppChrome() {
                   <Outlet />
                 </div>
 
-                <footer className="panel-foot" aria-label="Footer">
-                  <div className="panel-foot__left">
-                    <span className="mono">ΦNet</span> • Verification UI
-                  </div>
-                  <div className="panel-foot__right">
-                    <span className="mono">v</span>{" "}
-                    <span className="mono">24.3</span>
-                  </div>
-                </footer>
+             <footer className="panel-foot" aria-label="Footer">
+  <div className="panel-foot__left">
+    <span className="mono">ΦNet</span> • Proof-of-Breath™ Interface
+  </div>
+  <div className="panel-foot__right">
+    <span className="mono">Version</span>{" "}
+    <span className="mono">24.3</span>
+  </div>
+</footer>
+
               </section>
             </div>
           </div>
