@@ -48,11 +48,29 @@ export type SigilMetadata = SigilMetadataLite & {
   [k: string]: unknown;
 };
 
+/* ─────────────────────────────────────────────────────────────
+ * WebCrypto normalization:
+ * crypto.subtle.digest wants BufferSource, but TS may infer Uint8Array<ArrayBufferLike>
+ * (SharedArrayBuffer). Always pass a real ArrayBuffer slice.
+ * ───────────────────────────────────────────────────────────── */
+function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
+  // Copy to a brand-new ArrayBuffer so TS/DOM types are satisfied across SAB environments.
+  const out = new Uint8Array(u8.byteLength);
+  out.set(u8);
+  return out.buffer;
+}
+
 /* ── tiny crypto helpers ── */
-const bytesToHex = (u8: Uint8Array) => Array.from(u8).map((b) => b.toString(16).padStart(2, "0")).join("");
+const bytesToHex = (u8: Uint8Array) =>
+  Array.from(u8)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
 export async function sha256Hex(msg: string | Uint8Array): Promise<string> {
-  const data = typeof msg === "string" ? new TextEncoder().encode(msg) : msg;
-  const buf = await crypto.subtle.digest("SHA-256", data);
+  const data: Uint8Array =
+    typeof msg === "string" ? new TextEncoder().encode(msg) : msg;
+
+  const buf = await crypto.subtle.digest("SHA-256", toArrayBuffer(data));
   return bytesToHex(new Uint8Array(buf));
 }
 
@@ -67,7 +85,10 @@ async function computeKaiSignature(meta: SigilMetadata): Promise<string | null> 
   ) {
     return null;
   }
-  const base = `${pulse}|${beat}|${stepIndex}|${chakraDay}|${typeof meta.intentionSigil === "string" ? meta.intentionSigil : ""}`;
+
+  const base = `${pulse}|${beat}|${stepIndex}|${chakraDay}|${
+    typeof meta.intentionSigil === "string" ? meta.intentionSigil : ""
+  }`;
   return sha256Hex(base);
 }
 
@@ -115,7 +136,8 @@ function parseSvgTextVerifierStyle(svg: string): SigilMetadata {
   meta.chakraGate ??= getAttr(svg, "data-chakra-gate");
 
   if (!meta.chakraDay) {
-    const dayAttr = getAttr(svg, "data-harmonic-day") || getAttr(svg, "data-chakra-day");
+    const dayAttr =
+      getAttr(svg, "data-harmonic-day") || getAttr(svg, "data-chakra-day");
     if (dayAttr) meta.chakraDay = dayAttr;
   }
 
@@ -132,13 +154,18 @@ function parseSvgTextVerifierStyle(svg: string): SigilMetadata {
 }
 
 /* Prefer producer-provided canonical/payload hash if present */
-async function canonicalHash(meta: SigilMetadata, svgText?: string): Promise<string> {
+async function canonicalHash(
+  meta: SigilMetadata,
+  svgText?: string,
+): Promise<string> {
   const hAttr = svgText ? getAttr(svgText, "data-payload-hash") : undefined;
   if (hAttr) return hAttr.toLowerCase();
   if (typeof meta.canonicalHash === "string" && meta.canonicalHash.length >= 32) {
     return meta.canonicalHash.toLowerCase();
   }
-  const s = `${meta.pulse ?? 0}|${meta.beat ?? 0}|${meta.stepIndex ?? 0}|${meta.chakraDay ?? ""}`;
+  const s = `${meta.pulse ?? 0}|${meta.beat ?? 0}|${meta.stepIndex ?? 0}|${
+    meta.chakraDay ?? ""
+  }`;
   return (await sha256Hex(s)).toLowerCase();
 }
 
@@ -152,7 +179,9 @@ export async function validateMeta(svgText: string): Promise<Validation> {
   // Tolerant SVG check (allow prolog/doctype); require an <svg> element.
   try {
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
-    if (!doc.querySelector("svg")) return { ok: false, reason: "Unrecognized SVG content." };
+    if (!doc.querySelector("svg")) {
+      return { ok: false, reason: "Unrecognized SVG content." };
+    }
   } catch {
     return { ok: false, reason: "Unrecognized SVG content." };
   }
@@ -173,7 +202,10 @@ export async function validateMeta(svgText: string): Promise<Validation> {
     typeof meta.stepIndex === "number" &&
     typeof meta.chakraDay === "string";
   if (!hasCore) {
-    return { ok: false, reason: "Missing core fields (pulse/beat/stepIndex/chakraDay)." };
+    return {
+      ok: false,
+      reason: "Missing core fields (pulse/beat/stepIndex/chakraDay).",
+    };
   }
 
   // Σ check (Verifier semantics)
@@ -188,7 +220,11 @@ export async function validateMeta(svgText: string): Promise<Validation> {
     const stepCanonical = getIntAttr(svgText, "data-step-index-canonical");
     const sigAttr = getAttr(svgText, "data-kai-signature");
     if (typeof stepCanonical === "number" && sigAttr) {
-      const alt: SigilMetadata = { ...meta, stepIndex: stepCanonical, kaiSignature: sigAttr };
+      const alt: SigilMetadata = {
+        ...meta,
+        stepIndex: stepCanonical,
+        kaiSignature: sigAttr,
+      };
       const altExpected = await computeKaiSignature(alt);
       if (altExpected && altExpected.toLowerCase() === sigAttr.toLowerCase()) {
         meta.stepIndex = stepCanonical;
@@ -198,13 +234,19 @@ export async function validateMeta(svgText: string): Promise<Validation> {
     }
   }
 
-  if (sigMismatch) return { ok: false, reason: "Content signature mismatch (Σ)." };
+  if (sigMismatch) {
+    return { ok: false, reason: "Content signature mismatch (Σ)." };
+  }
 
   // Defaults mirrored from Verifier
   meta.segmentSize ??= 2000;
   if (typeof meta.cumulativeTransfers !== "number") {
-    const segCount = ((meta.segments as SegmentEntry[]) ?? []).reduce((a, s) => a + (s.count || 0), 0);
-    meta.cumulativeTransfers = segCount + ((meta.transfers as SigilTransfer[])?.length ?? 0);
+    const segCount = ((meta.segments as SegmentEntry[]) ?? []).reduce(
+      (a, s) => a + (s.count || 0),
+      0,
+    );
+    meta.cumulativeTransfers =
+      segCount + ((meta.transfers as SigilTransfer[])?.length ?? 0);
   }
 
   const canon = await canonicalHash(meta, svgText);

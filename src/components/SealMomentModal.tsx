@@ -17,6 +17,8 @@ declare global {
     __SIGIL__?: {
       /** Optional global hook the Explorer can provide */
       registerSigilUrl?: (url: string) => void;
+      /** Optional global hook used elsewhere for sending */
+      registerSend?: (rec: unknown) => void;
     };
   }
 }
@@ -58,7 +60,7 @@ const SealMomentModal: FC<Props> = ({
   url,
   hash,
   onClose,
-
+  onDownloadZip,
 }) => {
   /* refs & state (Hooks must be unconditionally called) */
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -205,6 +207,11 @@ const SealMomentModal: FC<Props> = ({
     onClose?.();
   };
 
+  const handleDownloadZip: MouseEventHandler<HTMLButtonElement> = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onDownloadZip?.();
+  };
 
   return open
     ? createPortal(
@@ -318,7 +325,15 @@ const SealMomentModal: FC<Props> = ({
 
             {/* CTAs */}
             <div className="cta-row">
-            
+              <button
+                className="primary cta"
+                onClick={handleDownloadZip}
+                type="button"
+              >
+                <CopyGlyph />
+                <span>Download Sigil Pack</span>
+              </button>
+
               <button className="secondary cta" onClick={share} type="button">
                 <ShareGlyph />
                 <span>{canShare ? "Share" : "Kopy Link"}</span>
@@ -326,8 +341,9 @@ const SealMomentModal: FC<Props> = ({
             </div>
 
             <p className="fine">
-            This moment is now sealed in time.
-            Use the link above within the next 11 breaths to claim ownership & gain permanent access to this kairos moment.
+              This moment is now sealed in time.
+              Use the link above within the next 11 breaths to claim ownership &amp;
+              gain permanent access to this kairos moment.
             </p>
 
             {/* live region for copy/share feedback */}
@@ -361,7 +377,6 @@ const CloseGlyph = () => (
     />
   </svg>
 );
-
 
 const ShareGlyph = () => (
   <svg viewBox="0 0 24 24" aria-hidden className="ico">

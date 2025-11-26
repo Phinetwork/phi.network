@@ -12,6 +12,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.0",
+    "blakejs": "^1.2.1",
     "buffer": "^6.0.3",
     "decimal.js": "^10.6.0",
     "fast-xml-parser": "^5.3.2",
@@ -25,6 +26,7 @@
     "qrcode-generator": "^2.0.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.9.6",
     "recharts": "^3.4.1",
     "three": "^0.181.2"
