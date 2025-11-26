@@ -165,16 +165,17 @@ function AppChrome() {
         </div>
 
         {/* ✅ LIVE — orb pulses every 5.236s, text shows Kai Pulse NOW */}
-        <div
+        <a
           className="topbar-live"
-          role="status"
-          aria-live="polite"
+          href="https://kaiklok.com"
+          target="_blank"
+          rel="noopener noreferrer"
           aria-label={`LIVE. Kai Pulse now ${pulseNow}. Breath length ${BREATH_S.toFixed(
             3
-          )} seconds.`}
+          )} seconds. Open KaiKlok.com.`}
           title={`LIVE • NOW PULSE ${pulseNowStr} • Breath ${BREATH_S.toFixed(
             6
-          )}s (${Math.round(BREATH_MS)}ms)`}
+          )}s (${Math.round(BREATH_MS)}ms) • View full Kairos Time at KaiKlok.com`}
         >
           <span className="live-orb" aria-hidden="true" />
           <div className="live-text">
@@ -185,7 +186,7 @@ function AppChrome() {
               <span className="mono">{pulseNowStr}</span>
             </div>
           </div>
-        </div>
+        </a>
       </header>
 
       {/* Stage */}
@@ -203,9 +204,8 @@ function AppChrome() {
                 <div className="nav-head">
                   <div className="nav-head__title">Console</div>
                   <div className="nav-head__sub">
-  Breath-Sealed Auth Panel · ZK-Kai Identity Verification
-</div>
-
+                    Breath-Sealed Auth Panel · ZK-Kai Identity Verification
+                  </div>
                 </div>
 
                 <div className="nav-list" role="list">
@@ -225,41 +225,42 @@ function AppChrome() {
                   ))}
                 </div>
 
-<div className="nav-foot" aria-label="Console disclaimers">
-  <div className="nav-foot__line">
-    <span className="mono">Φ</span> issued under the Eternal Authority of Yahuah via Proof of Breath™ — one breath, one seal, one origin.
-  </div>
-  <div className="nav-foot__line">
-    Sigil-Glyphs constitute legal tender. Redeemable in Kairos.
-  </div>
-</div>
-</nav>
+                <div className="nav-foot" aria-label="Console disclaimers">
+                  <div className="nav-foot__line">
+                    <span className="mono">Φ</span> issued under the Eternal
+                    Authority of Yahuah via Proof of Breath™ — one breath, one
+                    seal, one origin.
+                  </div>
+                  <div className="nav-foot__line">
+                    Sigil-Glyphs constitute legal tender. Redeemable in Kairos.
+                  </div>
+                </div>
+              </nav>
 
-{/* Content */}
-<section className="app-panel" aria-label="Console content">
-  <div className="panel-head">
-    <div className="panel-head__title">{pageTitle}</div>
-    <div className="panel-head__meta">
-      <span className="meta-chip">Proof of Breath™</span>
-      <span className="meta-chip">Kai-Signature™</span>
-    </div>
-  </div>
-
+              {/* Content */}
+              <section className="app-panel" aria-label="Console content">
+                <div className="panel-head">
+                  <div className="panel-head__title">{pageTitle}</div>
+                  <div className="panel-head__meta">
+                    <span className="meta-chip">Proof of Breath™</span>
+                    <span className="meta-chip">Kai-Signature™</span>
+                  </div>
+                </div>
 
                 <div className="panel-body">
                   <Outlet />
                 </div>
 
-             <footer className="panel-foot" aria-label="Footer">
-  <div className="panel-foot__left">
-    <span className="mono">ΦNet</span> • Proof-of-Breath™ Interface
-  </div>
-  <div className="panel-foot__right">
-    <span className="mono">Version</span>{" "}
-    <span className="mono">24.3</span>
-  </div>
-</footer>
-
+                <footer className="panel-foot" aria-label="Footer">
+                  <div className="panel-foot__left">
+                    <span className="mono">ΦNet</span> • Proof-of-Breath™
+                    Interface
+                  </div>
+                  <div className="panel-foot__right">
+                    <span className="mono">Version</span>{" "}
+                    <span className="mono">24.3</span>
+                  </div>
+                </footer>
               </section>
             </div>
           </div>
