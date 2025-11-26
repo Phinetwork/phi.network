@@ -924,13 +924,13 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 .tabs button {
-  padding: 4px 6px;         /* was 8px 12px */
+  padding: 8px 12px;         /* was 8px 12px */
   border-radius: var(--pill);
   color: var(--ink-dim);
   border: 1px solid transparent;
   flex: 0 0 auto;
 
-  font-size: 0.78rem;       /* keep readable */
+  font-size: 0.68rem;       /* keep readable */
   line-height: 1.05;        /* tighter vertical */
 }
 
