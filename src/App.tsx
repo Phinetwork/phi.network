@@ -153,10 +153,15 @@ function AppChrome() {
         <div className="topbar-left">
           <div className="brand" aria-label="PhiNet Verification Console">
             <div className="brand__mark" aria-hidden="true">
-              Φ
+              {/* Φ logo from /public/phi.svg */}
+              <img
+                src="/phi.svg"
+                alt=""
+                className="brand__mark-img"
+              />
             </div>
             <div className="brand__text">
-              <div className="brand__title">ΦNet Verification Console</div>
+              <div className="brand__title">ΦNet Sovereign Gate</div>
               <div className="brand__subtitle">
                 Sovereign Value • Asset Integrity • Transfer Gate
               </div>
@@ -175,7 +180,9 @@ function AppChrome() {
           )} seconds. Open KaiKlok.com.`}
           title={`LIVE • NOW PULSE ${pulseNowStr} • Breath ${BREATH_S.toFixed(
             6
-          )}s (${Math.round(BREATH_MS)}ms) • View full Kairos Time at KaiKlok.com`}
+          )}s (${Math.round(
+            BREATH_MS
+          )}ms) • View full Kairos Time at KaiKlok.com`}
         >
           <span className="live-orb" aria-hidden="true" />
           <div className="live-text">
@@ -202,7 +209,7 @@ function AppChrome() {
               {/* Navigation */}
               <nav className="app-nav" aria-label="Primary navigation">
                 <div className="nav-head">
-                  <div className="nav-head__title">Console</div>
+                  <div className="nav-head__title">Atrium</div>
                   <div className="nav-head__sub">
                     Breath-Sealed Auth Panel · ZK-Kai Identity Verification
                   </div>
@@ -254,7 +261,7 @@ function AppChrome() {
                 <footer className="panel-foot" aria-label="Footer">
                   <div className="panel-foot__left">
                     <span className="mono">ΦNet</span> • Proof-of-Breath™
-                    Interface
+                    Atrium
                   </div>
                   <div className="panel-foot__right">
                     <span className="mono">Version</span>{" "}
