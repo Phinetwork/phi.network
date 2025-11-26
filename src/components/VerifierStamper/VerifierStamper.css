@@ -15,7 +15,8 @@ html,
 body {
   background: radial-gradient(1200px 800px at 10% 0%, #0b0f2a 0%, #05060a 55%) fixed;
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
   margin: 0;
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
@@ -166,14 +167,12 @@ body {
   letter-spacing: 0.08em;
   font-size: clamp(18px, 1.4vw + 0.8rem, 26px);
   color: transparent;
-  background:
-    conic-gradient(from 180deg at 50% 50%, var(--accent), var(--accent-2), var(--accent-3), var(--accent)),
+  background: conic-gradient(from 180deg at 50% 50%, var(--accent), var(--accent-2), var(--accent-3), var(--accent)),
     radial-gradient(120% 180% at 10% 0%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 60%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-stroke: 0.55px rgba(255, 255, 255, 0.28);
-  text-shadow: 0 0 0.5px rgba(255, 255, 255, 0.35),
-    0 6px 22px color-mix(in srgb, var(--accent) 26%, transparent);
+  text-shadow: 0 0 0.5px rgba(255, 255, 255, 0.35), 0 6px 22px color-mix(in srgb, var(--accent) 26%, transparent);
   background-size: 200% 200%;
   animation: holoShift 14s linear infinite;
   white-space: nowrap;
@@ -220,8 +219,7 @@ body {
   flex-wrap: wrap;
   padding: 6px;
   border-radius: var(--pill);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03)),
     radial-gradient(120% 180% at 80% -20%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   -webkit-backdrop-filter: blur(10px) saturate(1.15);
@@ -252,11 +250,7 @@ button {
   font-weight: 600;
   border-radius: 10px;
   padding: 10px 14px;
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease,
-    filter 0.2s ease;
+  transition: transform 0.08s ease, box-shadow 0.2s ease, background 0.2s ease, filter 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -324,8 +318,7 @@ dialog.glass-modal {
 }
 
 dialog.glass-modal::backdrop {
-  background:
-    radial-gradient(900px 600px at 80% -10%, color-mix(in srgb, var(--accent) 25%, transparent), transparent 40%),
+  background: radial-gradient(900px 600px at 80% -10%, color-mix(in srgb, var(--accent) 25%, transparent), transparent 40%),
     radial-gradient(900px 600px at 10% 110%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 40%),
     rgba(0, 0, 10, 0.55);
   -webkit-backdrop-filter: blur(4px);
@@ -395,20 +388,14 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   font-weight: 700;
   line-height: 1;
   color: #e5e7eb;
-  background:
-    radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.22), transparent 55%),
-    rgba(15, 23, 42, 0.98);
+  background: radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.22), transparent 55%), rgba(15, 23, 42, 0.98);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
   cursor: pointer;
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   animation: none !important;
   text-shadow: none;
-  transition:
-    transform 0.12s ease,
-    box-shadow 0.18s ease,
-    background 0.18s ease,
-    color 0.18s ease;
+  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
 .modal-topbar .close-btn::before,
@@ -420,9 +407,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 
 .modal-topbar .close-btn:hover,
 .explorer-topbar .close-btn:hover {
-  background:
-    radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.28), transparent 55%),
-    rgba(15, 23, 42, 1);
+  background: radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.28), transparent 55%), rgba(15, 23, 42, 1);
   box-shadow: 0 7px 20px rgba(0, 0, 0, 0.72);
   transform: translateY(-1px);
 }
@@ -491,7 +476,10 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   5a) Modal header + header keys + value strip
+   5a) Modal header + header keys + value strip  (REFINED)
+   - value strip never stacks; stays one row with safe scroll
+   - amounts are larger, always single-line
+   - values sit at top visually (even if DOM order is later)
 ──────────────────────────────────────────────────────────────── */
 .modal-header {
   display: grid;
@@ -511,10 +499,18 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 
 .header-fields {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
+/* value strip sits UNDER Beat/Step/Day (DOM order), above tabs */
+.header-fields .value-strip {
+  order: 0;
+  margin: 8px 0 0;
+}
 .header-fields h2 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 18px;
   overflow-wrap: anywhere;
 }
@@ -529,10 +525,11 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 .header-keys {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
-  gap: 1px;
+  gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .header-keys .field {
@@ -541,6 +538,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: 10px;
+  min-width: 0;
 }
 
 .header-keys .field .mono {
@@ -588,240 +586,222 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
-/* value strip (Φ + USD) */
-.header-fields .value-strip,
+/* ── VALUE STRIP (NO STACKS): always one row, safe horizontal scroll inside strip ── */
 .value-strip {
-  margin-top: 8px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 4px;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to right, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
+}
+.value-strip::-webkit-scrollbar {
+  display: none;
 }
 
-@media (max-width: 420px) {
-  .value-strip {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* base pill */
+/* ── VALUE CHIP (HERO AMOUNTS): amount is top + huge, never wraps ── */
 .value-chip {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
+  flex: 1 0 calc(50% - 5px);
   min-width: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.025));
+  scroll-snap-align: start;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+
   container-type: inline-size;
   container-name: valuechip;
-  max-width: 180px;
 }
 
-.value-chip .label {
-  font-size: 8px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-dim, rgba(255, 255, 255, 0.72));
-  white-space: nowrap;
-}
-
-/* amount typography (container query sizing) */
-.value-chip .amount {
-  white-space: nowrap;
-  overflow: visible;
-  text-overflow: clip;
+/* ensure the strip can scroll instead of forcing page overflow */
+.value-chip * {
   max-width: 100%;
-  min-width: 0;
-  font-size: clamp(8px, 7.6cqi, 12.8px);
-  line-height: 1.05;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: 0.005em;
 }
 
-/* shrink at smaller widths */
-@container valuechip (inline-size < 260px) {
-  .value-chip .amount {
-    font-size: clamp(7.6px, 8.4cqi, 12px);
-  }
+/* label sits under the amount (clean), never forces wrapping */
+.value-chip .label {
+  order: 2;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+  white-space: nowrap;
+  line-height: 1.1;
 }
+
+/* AMOUNT = top hero line, one row forever, no stacking */
+.value-chip .amount {
+  order: 1;
+  width: 100%;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45ch;
+  min-width: 0;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  font-weight: 950;
+  line-height: 1.02;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
+
+  /* BIGGER by default, scales with container */
+  font-size: clamp(18px, 13.5cqi, 30px);
+}
+
+/* tighten if the chip gets extremely narrow */
 @container valuechip (inline-size < 220px) {
   .value-chip .amount {
-    font-size: clamp(7.2px, 9.2cqi, 11.2px);
+    font-size: clamp(16px, 12.8cqi, 26px);
   }
 }
 @container valuechip (inline-size < 190px) {
   .value-chip .amount {
-    font-size: clamp(6.8px, 10cqi, 10.4px);
-  }
-}
-@container valuechip (inline-size < 170px) {
-  .value-chip .amount {
-    font-size: clamp(6.4px, 10.8cqi, 9.6px);
-  }
-}
-@container valuechip (inline-size < 150px) {
-  .value-chip .label {
-    display: none;
-  }
-  .value-chip .amount {
-    font-size: clamp(6.4px, 11.6cqi, 9.6px);
+    font-size: clamp(15px, 11.5cqi, 24px);
   }
 }
 
 /* viewport fallback if container queries missing */
-@media (max-width: 420px) {
+@supports not (container-type: inline-size) {
   .value-chip .amount {
-    font-size: 9.6px;
-    letter-spacing: 0;
-  }
-}
-/* value strip (Φ + USD) */
-.header-fields .value-strip,
-.value-strip {
-  margin-top: 8px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-@media (max-width: 420px) {
-  .value-strip {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* base pill */
-.value-chip {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  min-width: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.025));
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-  container-type: inline-size;
-  container-name: valuechip;
-  max-width: 180px;
-}
-
-.value-chip .label {
-  font-size: 8px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-dim, rgba(255, 255, 255, 0.72));
-  white-space: nowrap;
-}
-
-/* amount typography (container query sizing) */
-/* (BIGGER Φ / USD text) */
-.value-chip .amount {
-  white-space: nowrap;
-  overflow: visible;
-  text-overflow: clip;
-  max-width: 100%;
-  min-width: 0;
-  font-size: clamp(14px, 11cqi, 22px);
-  line-height: 1.05;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: 0.005em;
-}
-
-/* shrink at smaller widths (still larger than original) */
-@container valuechip (inline-size < 260px) {
-  .value-chip .amount {
-    font-size: clamp(13px, 10cqi, 20px);
-  }
-}
-@container valuechip (inline-size < 220px) {
-  .value-chip .amount {
-    font-size: clamp(12px, 9cqi, 18px);
-  }
-}
-@container valuechip (inline-size < 190px) {
-  .value-chip .amount {
-    font-size: clamp(11px, 8cqi, 16px);
-  }
-}
-@container valuechip (inline-size < 170px) {
-  .value-chip .amount {
-    font-size: clamp(10px, 7.5cqi, 15px);
-  }
-}
-@container valuechip (inline-size < 150px) {
-  .value-chip .label {
-    display: none;
-  }
-  .value-chip .amount {
-    font-size: clamp(9.5px, 7cqi, 14px);
-  }
-}
-
-/* viewport fallback if container queries missing */
-@media (max-width: 420px) {
-  .value-chip .amount {
-    font-size: 16px;
-    letter-spacing: 0;
+    font-size: clamp(18px, 6.4vw, 28px);
   }
 }
 
 /* Φ / USD variants */
 .value-chip.phi {
-  border-color: color-mix(in srgb, var(--accent, #8af) 32%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent, #8af) 10%, transparent), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+  border-color: color-mix(in srgb, var(--accent, #8af) 34%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, #8af) 12%, transparent), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
 }
 
 .value-chip.usd {
   border-color: color-mix(in srgb, var(--ok, #5f5) 34%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--ok, #5f5) 10%, transparent), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ok, #5f5) 10%, transparent), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
 }
 
 /* symbol glyph always matches text color */
 .value-chip .amount .sym {
   display: inline-block;
-  margin-right: 4px;
-  opacity: 0.9;
-  font-weight: 700;
-  transform: translateY(0.5px) scale(0.96);
+  margin-right: 0.2ch;
+  opacity: 0.92;
+  font-weight: 800;
+  transform: translateY(0.5px) scale(0.98);
   transform-origin: left center;
   color: inherit;
   -webkit-text-fill-color: inherit;
 }
 
-/* flash on update */
-@keyframes valueFlash {
-  0% {
-    filter: brightness(1.35);
-  }
-  100% {
-    filter: brightness(1);
-  }
+/* trend tokens applied */
+.value-chip.up,
+.value-chip[data-trend="up"] {
+  --trend: var(--trend-up);
+}
+.value-chip.down,
+.value-chip[data-trend="down"] {
+  --trend: var(--trend-down);
+}
+.value-chip.flat,
+.value-chip[data-trend="flat"] {
+  --trend: var(--trend-flat);
+}
+
+/* ── Trend indicator: ▲ green / ▼ red / nothing on flat (no gap) ── */
+.value-chip .amount::before {
+  content: "";
+  display: inline-block;
+  width: 0;               /* no space when flat */
+  margin-right: 0;        /* no space when flat */
+  font-size: 0.86em;
+  font-weight: 950;
+  color: currentColor;
+  transform: translateY(-0.02em);
+  -webkit-text-fill-color: currentColor;
+  transition: color 220ms ease, transform 220ms ease, width 220ms ease, margin 220ms ease;
+}
+
+/* UP */
+.value-chip.up .amount::before,
+.value-chip[data-trend="up"] .amount::before {
+  content: "▲";
+  width: 1.05ch;
+  margin-right: 0.15ch;
+  color: var(--trend-up);
+}
+
+/* DOWN */
+.value-chip.down .amount::before,
+.value-chip[data-trend="down"] .amount::before {
+  content: "▼";
+  width: 1.05ch;
+  margin-right: 0.15ch;
+  color: var(--trend-down);
+}
+
+/* FLAT = absolutely nothing (no square, no gap) */
+.value-chip.flat .amount::before,
+.value-chip[data-trend="flat"] .amount::before {
+  content: "";
+  width: 0;
+  margin-right: 0;
 }
 
 
-/* trend-up / trend-down shadow variants on chip */
-.value-chip.trend-up {
-  box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.28),
-    0 0 20px color-mix(in srgb, var(--ok, #5f5) 26%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+/* Φ gradient */
+.value-chip.phi .amount {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0 10%, rgba(255, 255, 255, 0.55) 10% 18%, rgba(255, 255, 255, 0) 24%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, white 0%), color-mix(in srgb, var(--accent-2) 55%, white 0%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
-.value-chip.trend-down {
-  box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.28),
-    0 0 20px color-mix(in srgb, var(--error, #ff5c77) 26%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+
+/* USD variant same palette as Φ (no yellow) */
+.value-chip.usd .amount {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, #8af) 85%, white 0%), color-mix(in srgb, var(--accent-2, #aef) 55%, white 0%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* small delta pill (optional, next to amount) — never wraps */
+.value-chip .delta {
+  display: inline-grid;
+  place-items: center;
+  height: 18px;
+  min-width: 34px;
+  padding: 0 8px;
+  margin-left: 0.45ch;
+  border-radius: 999px;
+  font: 900 11px/18px ui-sans-serif, system-ui, -apple-system, Inter, "SF Pro Text";
+  letter-spacing: 0.02em;
+  color: #031216;
+  white-space: nowrap;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.6) 8%, rgba(255, 255, 255, 0) 14%),
+    linear-gradient(90deg, color-mix(in srgb, var(--trend) 65%, white 0%), color-mix(in srgb, var(--trend) 35%, white 0%));
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 /* flash on update */
@@ -839,16 +819,35 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 
 /* trend-up / trend-down shadow variants on chip */
 .value-chip.trend-up {
-  box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.28),
-    0 0 20px color-mix(in srgb, var(--ok, #5f5) 26%, transparent),
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), 0 0 20px color-mix(in srgb, var(--ok, #5f5) 26%, transparent),
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 .value-chip.trend-down {
-  box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.28),
-    0 0 20px color-mix(in srgb, var(--error, #ff5c77) 26%, transparent),
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), 0 0 20px color-mix(in srgb, var(--error, #ff5c77) 26%, transparent),
     inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+/* slow breath for Φ + USD */
+@keyframes phiUsdBreath {
+  0%,
+  100% {
+    opacity: 0.82;
+    text-shadow: 0 0 0.4px rgba(255, 255, 255, 0.45), 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 0.7px rgba(255, 255, 255, 0.9), 0 0 18px color-mix(in srgb, var(--accent-2) 50%, transparent);
+  }
+}
+
+.value-chip.phi .amount,
+.value-chip.usd .amount,
+.value-chip.phi.up .amount,
+.value-chip.phi.down .amount,
+.value-chip.usd.up .amount,
+.value-chip.usd.down .amount,
+.value-chip.usd.flat .amount {
+  animation: phiUsdBreath var(--kai-pulse, 5236ms) ease-in-out infinite !important;
 }
 
 /* ───────────────────────────────────────────────────────────────
@@ -932,9 +931,22 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 .kv .k {
   color: var(--ink-dim);
 }
+/* Summary grid values: keep one line (no digit stacking like 933 / 046 / 9) */
 .kv .v {
   color: var(--ink);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hashes / long keys can still wrap when explicitly mono */
+.kv .v.mono {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* transfers / lineage */
@@ -1057,16 +1069,11 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: clamp(6px, 1dvh, 8px) clamp(12px, 2vw, 16px)
-    calc(clamp(6px, 1dvh, 8px) + env(safe-area-inset-bottom, 0px));
-  background:
-    radial-gradient(circle at 12% -10%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 70%),
+  padding: clamp(6px, 1dvh, 8px) clamp(12px, 2vw, 16px) calc(clamp(6px, 1dvh, 8px) + env(safe-area-inset-bottom, 0px));
+  background: radial-gradient(circle at 12% -10%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 70%),
     linear-gradient(to top, rgb(0 0 0 / 0.6) 0%, rgb(0 0 0 / 0) 60%);
   border-top: 1px solid color-mix(in srgb, var(--accent) 60%, rgb(255 255 255 / 4%));
-  box-shadow:
-    0 -0.5px 0 rgb(255 255 255 / 6%) inset,
-    0 -16px 32px rgb(0 0 0 / 0.9),
-    0 -2px 28px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 -0.5px 0 rgb(255 255 255 / 6%) inset, 0 -16px 32px rgb(0 0 0 / 0.9), 0 -2px 28px color-mix(in srgb, var(--accent) 35%, transparent);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
   isolation: isolate;
@@ -1117,9 +1124,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   position: relative;
   background: rgb(0 0 0 / 0.4);
   border: 1px solid rgb(255 255 255 / 0.08);
-  box-shadow:
-    0 0 8px rgb(0 0 0 / 0.9),
-    0 8px 24px rgb(0 0 0 / 0.8);
+  box-shadow: 0 0 8px rgb(0 0 0 / 0.9), 0 8px 24px rgb(0 0 0 / 0.8);
   color: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, "Inter", "SF Pro Text", Roboto, Arial;
   text-align: center;
@@ -1129,8 +1134,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-image:
-    radial-gradient(ellipse at 50% -10%, rgb(255 255 255 / 0.14) 0%, rgb(255 255 255 / 0) 60%),
+  background-image: radial-gradient(ellipse at 50% -10%, rgb(255 255 255 / 0.14) 0%, rgb(255 255 255 / 0) 60%),
     radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--accent) 35%, transparent) 0%, rgb(0 0 0 / 0) 70%),
     linear-gradient(to bottom right, rgb(255 255 255 / 0.06) 0%, rgb(255 255 255 / 0) 60%);
 }
@@ -1166,9 +1170,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink);
-  text-shadow:
-    0 0 6px color-mix(in srgb, var(--accent) 70%, transparent),
-    0 0 1px rgb(255 255 255 / 0.9);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent), 0 0 1px rgb(255 255 255 / 0.9);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1184,9 +1186,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   font-weight: 500;
   line-height: 1.1;
   color: color-mix(in srgb, var(--ink) 70%, var(--accent) 30%);
-  text-shadow:
-    0 0 4px color-mix(in srgb, var(--accent) 60%, transparent),
-    0 0 1px rgb(0 0 0 / 0.9);
+  text-shadow: 0 0 4px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 1px rgb(0 0 0 / 0.9);
   min-width: 0;
 }
 
@@ -1217,9 +1217,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 .seal-btn {
   background-color: rgb(0 0 0 / 0.45);
   border-color: color-mix(in srgb, var(--accent) 60%, rgb(255 255 255 / 10%));
-  box-shadow:
-    0 0 12px color-mix(in srgb, var(--accent) 40%, transparent),
-    0 16px 32px rgb(0 0 0 / 0.9);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 40%, transparent), 0 16px 32px rgb(0 0 0 / 0.9);
 }
 
 /* Attach button */
@@ -1239,9 +1237,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   width: 18px;
   height: 18px;
   stroke-width: 1.5;
-  filter:
-    drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 70%, transparent))
-    drop-shadow(0 0 1px rgb(255 255 255 / 0.8));
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 70%, transparent)) drop-shadow(0 0 1px rgb(255 255 255 / 0.8));
   color: var(--ink);
 }
 
@@ -1249,25 +1245,19 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 .send-btn {
   background-color: rgb(0 0 0 / 0.5);
   border-color: color-mix(in srgb, var(--accent) 70%, rgb(255 255 255 / 15%));
-  box-shadow:
-    0 0 16px color-mix(in srgb, var(--accent) 60%, transparent),
-    0 20px 36px rgb(0 0 0 / 0.9);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent), 0 20px 36px rgb(0 0 0 / 0.9);
 }
 
 /* hover / active */
 .footer-btn:not(:disabled):hover,
 .footer-btn:not(:disabled):focus-visible {
   outline: none;
-  box-shadow:
-    0 0 20px color-mix(in srgb, var(--accent) 80%, transparent),
-    0 24px 40px rgb(0 0 0 / 0.95);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 80%, transparent), 0 24px 40px rgb(0 0 0 / 0.95);
   border-color: color-mix(in srgb, var(--accent) 85%, rgb(255 255 255 / 20%));
 }
 
 .footer-btn:not(:disabled):active {
-  box-shadow:
-    0 0 10px color-mix(in srgb, var(--accent) 60%, transparent),
-    0 10px 20px rgb(0 0 0 / 0.9);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent), 0 10px 20px rgb(0 0 0 / 0.9);
   transform: translateY(0.5px) scale(0.995);
   transition: transform 60ms;
 }
@@ -1277,9 +1267,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   cursor: not-allowed;
   opacity: 0.38;
   filter: grayscale(0.6) brightness(0.8);
-  box-shadow:
-    0 0 4px rgb(0 0 0 / 0.9),
-    0 8px 16px rgb(0 0 0 / 0.8) !important;
+  box-shadow: 0 0 4px rgb(0 0 0 / 0.9), 0 8px 16px rgb(0 0 0 / 0.8) !important;
   border-color: rgb(255 255 255 / 0.06) !important;
   text-shadow: none;
 }
@@ -1301,18 +1289,15 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 @keyframes kaiBreath {
   0% {
     opacity: 0.35;
-    filter: blur(10px)
-      drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 60%, transparent));
+    filter: blur(10px) drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 60%, transparent));
   }
   50% {
     opacity: 0.7;
-    filter: blur(14px)
-      drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 80%, transparent));
+    filter: blur(14px) drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 80%, transparent));
   }
   100% {
     opacity: 0.35;
-    filter: blur(10px)
-      drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 60%, transparent));
+    filter: blur(10px) drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 60%, transparent));
   }
 }
 
@@ -1336,8 +1321,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 .explorer-dialog::backdrop {
-  background:
-    radial-gradient(900px 600px at 70% -10%, color-mix(in srgb, var(--accent) 25%, transparent), transparent 40%),
+  background: radial-gradient(900px 600px at 70% -10%, color-mix(in srgb, var(--accent) 25%, transparent), transparent 40%),
     radial-gradient(900px 600px at 15% 110%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 40%),
     rgba(0, 0, 10, 0.55);
   -webkit-backdrop-filter: blur(4px);
@@ -1369,14 +1353,12 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: transparent;
-  background:
-    conic-gradient(from 180deg at 50% 50%, var(--accent), var(--accent-2), var(--accent-3), var(--accent)),
+  background: conic-gradient(from 180deg at 50% 50%, var(--accent), var(--accent-2), var(--accent-3), var(--accent)),
     radial-gradient(120% 180% at 10% 0%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 60%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-stroke: 0.55px rgba(255, 255, 255, 0.28);
-  text-shadow: 0 0 0.5px rgba(255, 255, 255, 0.35),
-    0 6px 22px color-mix(in srgb, var(--accent) 26%, transparent);
+  text-shadow: 0 0 0.5px rgba(255, 255, 255, 0.35), 0 6px 22px color-mix(in srgb, var(--accent) 26%, transparent);
   background-size: 200% 200%;
   animation: holoShift 14s linear infinite;
   white-space: nowrap;
@@ -1430,12 +1412,15 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   height: var(--chip-size);
   flex: 0 0 var(--chip-size);
   border-radius: 999px;
-  background:
-    radial-gradient(120% 120% at 30% 25%, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.02) 60%, transparent 100%),
+  background: radial-gradient(
+      120% 120% at 30% 25%,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.08) 40%,
+      rgba(255, 255, 255, 0.02) 60%,
+      transparent 100%
+    ),
     rgba(255, 255, 255, 0.06);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -12px 22px rgba(255, 255, 255, 0.06),
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -12px 22px rgba(255, 255, 255, 0.06),
     0 8px 22px rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: saturate(125%) blur(var(--chip-blur));
@@ -1444,11 +1429,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   align-items: center;
   justify-content: center;
   color: #a7c7ff;
-  transition:
-    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.18s ease,
-    background 0.18s ease,
-    color 0.18s ease;
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
   outline: none;
 }
 
@@ -1499,30 +1480,22 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 
 .chip.icon.ok {
   color: #35e49a;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -12px 22px rgba(53, 228, 154, 0.1),
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -12px 22px rgba(53, 228, 154, 0.1),
     0 8px 22px rgba(53, 228, 154, 0.25);
 }
 .chip.icon.warn {
   color: #ffd64d;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -12px 22px rgba(255, 214, 77, 0.1),
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -12px 22px rgba(255, 214, 77, 0.1),
     0 8px 22px rgba(255, 214, 77, 0.25);
 }
 .chip.icon.err {
   color: #ff6b6b;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -12px 22px rgba(255, 107, 107, 0.1),
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -12px 22px rgba(255, 107, 107, 0.1),
     0 8px 22px rgba(255, 107, 107, 0.28);
 }
 .chip.icon.info {
   color: #7ab8ff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -12px 22px rgba(122, 184, 255, 0.1),
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -12px 22px rgba(122, 184, 255, 0.1),
     0 8px 22px rgba(122, 184, 255, 0.25);
 }
 
@@ -1560,25 +1533,21 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   height: var(--chip-badge-h);
   padding: 0 var(--chip-badge-pad-x);
   border-radius: 999px;
-  font: 900 12px/var(--chip-badge-h) ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Inter", Roboto, "Segoe UI", "Helvetica Neue", Arial;
+  font: 900 12px/var(--chip-badge-h) ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Inter", Roboto, "Segoe UI",
+    "Helvetica Neue", Arial;
   font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: 0.02em;
   color: var(--badge-ink);
   -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.35);
   text-shadow: 0 0 8px rgba(111, 231, 255, 0.55);
-  background:
-    radial-gradient(140% 170% at 28% 12%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.25) 28%, transparent 52%),
+  background: radial-gradient(140% 170% at 28% 12%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.25) 28%, transparent 52%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.55) 8%, rgba(255, 255, 255, 0) 14%),
     linear-gradient(90deg, var(--badge-neon-1) 0%, var(--badge-neon-2) 50%, var(--badge-neon-3) 100%);
   background-size: auto, auto, 200% 100%;
   background-position: 0 0, 0 0, 0% 0%;
   border: 1px solid rgba(0, 0, 0, 0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 8px rgba(0, 0, 0, 0.18),
-    0 2px 4px rgba(0, 0, 0, 0.35),
-    0 0 10px rgba(25, 191, 255, 0.55),
-    0 0 22px rgba(111, 231, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 -1px 8px rgba(0, 0, 0, 0.18), 0 2px 4px rgba(0, 0, 0, 0.35),
+    0 0 10px rgba(25, 191, 255, 0.55), 0 0 22px rgba(111, 231, 255, 0.45);
   will-change: background-position, filter;
   animation: badgeGlow 5.236s ease-in-out infinite, badgeShimmer 8s linear infinite;
 }
@@ -1666,152 +1635,18 @@ dialog.glass-modal.fullscreen[data-open="true"] {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   10) Official price styling — value-chip amounts with trend arrows
-──────────────────────────────────────────────────────────────── */
-
-/* trend tokens applied */
-.value-chip.up,
-.value-chip[data-trend="up"] {
-  --trend: var(--trend-up);
-}
-.value-chip.down,
-.value-chip[data-trend="down"] {
-  --trend: var(--trend-down);
-}
-.value-chip.flat,
-.value-chip[data-trend="flat"] {
-  --trend: var(--trend-flat);
-}
-
-/* main number treatment (Φ and USD) */
-.value-chip .amount {
-  position: relative;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4ch;
-  min-width: 0;
-  white-space: nowrap;
-  letter-spacing: 0.01em;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums lining-nums;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-/* Φ variant gradient */
-.value-chip.phi .amount {
-  background-image: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.96) 0 10%,
-      rgba(255, 255, 255, 0.55) 10% 18%,
-      rgba(255, 255, 255, 0) 24%
-    ),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--accent) 92%, white 0%),
-      color-mix(in srgb, var(--accent-2) 55%, white 0%)
-    );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-
-/* USD variant same palette as Φ (no yellow) */
-.value-chip.usd .amount {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent, #8af) 85%, white 0%),
-    color-mix(in srgb, var(--accent-2, #aef) 55%, white 0%)
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-
-/* trend arrow pseudo (before) */
-.value-chip .amount::before {
-  content: "";
-  margin-right: 0.2ch;
-  font-size: 0.85em;
-  font-weight: 900;
-  vertical-align: middle;
-}
-
-/* up / down / flat arrow glyphs */
-.value-chip.up .amount::before,
-.value-chip[data-trend="up"] .amount::before {
-  content: "▲";
-}
-.value-chip.down .amount::before,
-.value-chip[data-trend="down"] .amount::before {
-  content: "▼";
-}
-.value-chip.flat .amount::before,
-.value-chip[data-trend="flat"] .amount::before {
-  content: "■";
-}
-
-/* small delta pill (optional, next to amount) */
-.value-chip .delta {
-  display: inline-grid;
-  place-items: center;
-  height: 18px;
-  min-width: 34px;
-  padding: 0 8px;
-  margin-left: 0.45ch;
-  border-radius: 999px;
-  font: 800 11px/18px ui-sans-serif, system-ui, -apple-system, Inter, "SF Pro Text";
-  letter-spacing: 0.02em;
-  color: #031216;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.6) 8%, rgba(255, 255, 255, 0) 14%),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--trend) 65%, white 0%),
-      color-mix(in srgb, var(--trend) 35%, white 0%)
-    );
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.75);
-}
-
-/* slow breath for Φ + USD */
-@keyframes phiUsdBreath {
-  0%,
-  100% {
-    opacity: 0.78;
-    text-shadow:
-      0 0 0.4px rgba(255, 255, 255, 0.45),
-      0 0 8px color-mix(in srgb, var(--accent) 35%, transparent);
-  }
-  50% {
-    opacity: 1;
-    text-shadow:
-      0 0 0.7px rgba(255, 255, 255, 0.9),
-      0 0 18px color-mix(in srgb, var(--accent-2) 50%, transparent);
-  }
-}
-
-.value-chip.phi .amount,
-.value-chip.usd .amount,
-.value-chip.phi.up .amount,
-.value-chip.phi.down .amount,
-.value-chip.usd.up .amount,
-.value-chip.usd.down .amount,
-.value-chip.usd.flat .amount {
-  animation: phiUsdBreath var(--kai-pulse, 5236ms) ease-in-out infinite !important;
-}
-/* ───────────────────────────────────────────────────────────────
-   11) Inline valuation row (Value / USD under headers)
+   11) Inline valuation row (Value / USD under headers)  (REFINED)
+   - values no longer stack; they live on ONE ROW
+   - clamps to fit; if extremely tight, it scrolls INSIDE the row
 ──────────────────────────────────────────────────────────────── */
 .valuation-inline {
   display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
+  grid-template-columns: 1fr auto !important;
   grid-auto-rows: auto !important;
-  align-items: start !important;
+  align-items: center !important;
   gap: 8px 14px !important;
   margin-top: 8px !important;
+  min-width: 0 !important;
 }
 
 .valuation-inline .dot {
@@ -1822,20 +1657,18 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   flex-shrink: 0;
   margin-right: 6px;
   margin-top: 3px;
-  background:
-    radial-gradient(circle at 30% 30%, #ffffff 0, #ffffff 25%, transparent 60%),
+  background: radial-gradient(circle at 30% 30%, #ffffff 0, #ffffff 25%, transparent 60%),
     radial-gradient(circle at 70% 70%, rgba(255, 255, 255, 0.6) 0, transparent 70%),
     linear-gradient(135deg, #f97316, #facc15, #22c55e);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.22),
-    0 0 8px rgba(250, 204, 21, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 0 8px rgba(250, 204, 21, 0.85);
 }
 
-/* Left column: label + sublabel */
+/* Left column */
 .valuation-inline-left {
   display: flex !important;
   flex-direction: column !important;
   gap: 2px !important;
+  min-width: 0 !important;
 }
 
 .valuation-inline-label {
@@ -1845,6 +1678,7 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   letter-spacing: 0.02em !important;
   text-transform: uppercase !important;
   color: rgba(248, 250, 252, 0.88) !important;
+  min-width: 0 !important;
 }
 
 .valuation-inline-sublabel {
@@ -1852,29 +1686,40 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   color: rgba(148, 163, 184, 0.95) !important;
 }
 
-/* Right column: numeric values */
+/* Right column: ONE ROW, no stacking */
 .valuation-inline-right {
   display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-end !important;
-  gap: 2px !important;
+  flex-direction: row !important;
+  align-items: baseline !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+
+  white-space: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+.valuation-inline-right::-webkit-scrollbar {
+  display: none !important;
 }
 
 .valuation-inline-value-main {
-  font-size: 0.9rem !important;
-  font-weight: 600 !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
   letter-spacing: 0.01em !important;
   color: #e5e7eb !important;
 }
 
 .valuation-inline-value-sub {
-  font-size: 0.78rem !important;
+  font-size: 0.82rem !important;
   color: rgba(148, 163, 184, 0.95) !important;
 }
 
 /* Optional: emphasize Φ units vs USD */
 .valuation-inline-value-main .phi-unit {
-  font-weight: 700 !important;
+  font-weight: 800 !important;
   color: #facc15 !important;
 }
 
@@ -1888,11 +1733,12 @@ dialog.glass-modal.fullscreen[data-open="true"] {
     gap: 6px 10px !important;
     margin-top: 6px !important;
   }
-
   .valuation-inline-value-main {
-    font-size: 0.86rem !important;
+    font-size: 0.9rem !important;
   }
-
+  .valuation-inline-value-sub {
+    font-size: 0.78rem !important;
+  }
   .valuation-inline-label {
     font-size: 0.74rem !important;
   }

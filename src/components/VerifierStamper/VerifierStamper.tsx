@@ -181,17 +181,16 @@ const ValueChip: React.FC<{
   title: string;
   children: React.ReactNode;
 }> = ({ kind, trend, flash, title, children }) => {
-  // Recompute when the text changes (children) or trend/flash nudges layout
   const { boxRef, textRef, scale } = useAutoShrink<HTMLSpanElement>(
     [children, trend, flash],
-    16,   // padding inside pill (match your CSS)
-    0.65  // minimum scale
+    16,
+    0.65
   );
 
   return (
     <div
       ref={boxRef}
-      className={`value-chip ${kind} ${trend}${flash ? " flash" : ""}`}
+      className={`value-chip ${kind} ${trend}${flash ? " is-flashing" : ""}`}
       data-trend={trend}
       title={title}
     >
@@ -212,6 +211,7 @@ const ValueChip: React.FC<{
     </div>
   );
 };
+
 
 
 const IconBtn: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { small?: boolean; aria?: string; titleText?: string; path: string; }> =
