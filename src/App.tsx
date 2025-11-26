@@ -205,8 +205,7 @@ function AppChrome() {
                 <div className="nav-head">
                   <div className="nav-head__title">Atrium</div>
                   <div className="nav-head__sub">
-                    Breath-Sealed Identity Gate · Kairos-ZK Verification
-                    Authority
+                    Breath-Sealed Identity · Kairos-ZK Proof
                   </div>
                 </div>
 
@@ -256,11 +255,10 @@ function AppChrome() {
 
                 <footer className="panel-foot" aria-label="Footer">
                   <div className="panel-foot__left">
-                    <span className="mono">ΦNet</span> • Proof-of-Breath™
-                    Sovereign Gate
+                    <span className="mono">ΦNet</span> • Sovereign Gate
                   </div>
                   <div className="panel-foot__right">
-                    <span className="mono">Version</span>{" "}
+                    <span className="mono">V</span>{" "}
                     <span className="mono">24.3</span>
                   </div>
                 </footer>
