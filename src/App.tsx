@@ -25,9 +25,7 @@ import {
  * ✅ IMPORTANT CHANGE:
  * - /s and /s/:hash are FULL-PAGE routes (NOT wrapped by AppChrome)
  * - /stream, /feed, /p~:token, /p are FULL-PAGE routes (NOT wrapped by AppChrome)
- *
- * ✅ Deep links retained:
- * - /explorer remains inside AppChrome (hidden but supported)
+ * - ✅ /explorer is now FULL-PAGE (NOT wrapped by AppChrome)
  */
 
 import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
@@ -36,7 +34,7 @@ import KaiVohModal from "./components/KaiVoh/KaiVohModal";
 // ✅ Kai Pulse NOW (canonical Kai-Klok utility)
 import { momentFromUTC } from "./utils/kai_pulse";
 
-// Keep routes reachable even if not shown in nav
+// Full-page pages
 import SigilExplorer from "./components/SigilExplorer";
 import SigilFeedPage from "./pages/SigilFeedPage";
 import SigilPage from "./pages/SigilPage/SigilPage";
@@ -122,10 +120,6 @@ function AppChrome(): React.JSX.Element {
     const p = location.pathname;
     if (p === "/") return "Verifier";
     if (p.startsWith("/voh")) return "KaiVoh";
-
-    // Hidden but supported routes inside Chrome
-    if (p.startsWith("/explorer")) return "Explorer";
-
     return "Sovereign Gate";
   }, [location.pathname]);
 
@@ -303,6 +297,9 @@ export default function App(): React.JSX.Element {
         <Route path="p~:token" element={<SigilFeedPage />} />
         <Route path="p" element={<PShort />} />
 
+        {/* ✅ FULL-PAGE Explorer route (NO AppChrome wrapper) */}
+        <Route path="explorer" element={<SigilExplorer />} />
+
         {/* Everything else stays inside the Sovereign Gate chrome */}
         <Route element={<AppChrome />}>
           {/* Root → VerifierStamper */}
@@ -310,9 +307,6 @@ export default function App(): React.JSX.Element {
 
           {/* KaiVoh Portal (modal route) */}
           <Route path="voh" element={<KaiVohRoute />} />
-
-          {/* Hidden but supported routes (not shown in nav) */}
-          <Route path="explorer" element={<SigilExplorer />} />
 
           {/* Fallback */}
           <Route path="*" element={<NotFound />} />
