@@ -1,6 +1,3 @@
-Perfect, that makes it easy.
-Here’s a Vite-accurate README.md you can drop straight into the verify.kai repo:
-
 # ΦNet Sovereign Gate — `verify.kai`
 
 > **verify.kai** is the primary entry into the ΦNet Sovereign Gate:  
