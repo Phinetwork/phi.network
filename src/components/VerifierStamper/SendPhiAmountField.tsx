@@ -170,7 +170,7 @@ const SendPhiAmountField: React.FC<Props> = ({
 
           {/* Side column: converted amount ON TOP of the unit selector */}
           <div className="phi-unit-column">
-            {/* Live conversion readout */}
+            {/* Live conversion readout (e.g., "≈ Φ 0.1234" or "$ 12.34") */}
             <div
               className="phi-conv-right convert-readout"
               aria-live="polite"
