@@ -111,7 +111,7 @@ function AppChrome(): React.JSX.Element {
   const navItems = useMemo<NavItem[]>(
     () => [
       { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
-      { to: "/voh", label: "KaiVoh", desc: "Sovereign Broadcast OS" },
+      { to: "/voh", label: "KaiVoh", desc: "Sovereign Emission OS" },
     ],
     [],
   );
@@ -129,17 +129,14 @@ function AppChrome(): React.JSX.Element {
 
   return (
     <div className="app-shell" data-ui="atlantean-banking" style={shellStyle}>
-      {/* A11y */}
       <a className="skip-link" href="#app-content">
         Skip to content
       </a>
 
-      {/* Atlantean background layers */}
       <div className="app-bg-orbit" aria-hidden="true" />
       <div className="app-bg-grid" aria-hidden="true" />
       <div className="app-bg-glow" aria-hidden="true" />
 
-      {/* Top Bar */}
       <header
         className="app-topbar"
         role="banner"
@@ -159,7 +156,6 @@ function AppChrome(): React.JSX.Element {
           </div>
         </div>
 
-        {/* LIVE — orb pulses every 5.236s, text shows Kai Pulse NOW */}
         <a
           className="topbar-live"
           href="https://kaiklok.com"
@@ -182,7 +178,6 @@ function AppChrome(): React.JSX.Element {
         </a>
       </header>
 
-      {/* Stage */}
       <main
         className="app-stage"
         id="app-content"
@@ -192,7 +187,6 @@ function AppChrome(): React.JSX.Element {
         <div className="app-frame" role="region" aria-label="Secure frame">
           <div className="app-frame-inner">
             <div className="app-workspace">
-              {/* Navigation */}
               <nav className="app-nav" aria-label="Primary navigation">
                 <div className="nav-head">
                   <div className="nav-head__title">Atrium</div>
@@ -218,25 +212,22 @@ function AppChrome(): React.JSX.Element {
                   ))}
                 </div>
 
-<div className="nav-foot" aria-label="Sovereign declarations">
-  <div className="nav-foot__line">
-    <span className="mono">Φ</span> Kairos Notes are legal tender —
-    Proof of Breath™, Kai Pulse–sealed, & openly auditable (offline)
-    (Σ → SHA-256(Σ) → Φ).
-  </div>
+                <div className="nav-foot" aria-label="Sovereign declarations">
+                  <div className="nav-foot__line">
+                    <span className="mono">Φ</span> Kairos Notes are legal tender
+                    — Proof of Breath™, Kai Pulse–sealed, & openly auditable
+                    (offline) (Σ → SHA-256(Σ) → Φ).
+                  </div>
 
-  <div className="nav-foot__line">
-    Sigil-Glyphs are zero-knowledge–proven origin ΦKey seals that issue & mature value.
-    Derivative glyphs are exhaled notes from that origin —
-    lineage-aware outflow, transferable, & redeemable by re-inhale.
-  </div>
-</div>
-
-
-
+                  <div className="nav-foot__line">
+                    Sigil-Glyphs are zero-knowledge–proven origin ΦKey seals that
+                    issue & mature value. Derivative glyphs are exhaled notes
+                    from that origin — lineage-aware outflow, transferable, &
+                    redeemable by re-inhale.
+                  </div>
+                </div>
               </nav>
 
-              {/* Content */}
               <section className="app-panel" aria-label="Sovereign Gate panel">
                 <div className="panel-head">
                   <div className="panel-head__title">{pageTitle}</div>
@@ -246,8 +237,11 @@ function AppChrome(): React.JSX.Element {
                   </div>
                 </div>
 
-                <div className="panel-body">
-                  <Outlet />
+                {/* ✅ CENTERED + NO SCROLL (Verifier sits perfectly inside the panel body) */}
+                <div className="panel-body panel-body--locked">
+                  <div className="panel-center" role="presentation">
+                    <Outlet />
+                  </div>
                 </div>
 
                 <footer className="panel-foot" aria-label="Footer">
@@ -306,13 +300,8 @@ export default function App(): React.JSX.Element {
 
         {/* Everything else stays inside the Sovereign Gate chrome */}
         <Route element={<AppChrome />}>
-          {/* Root → VerifierStamper */}
           <Route index element={<VerifierStamper />} />
-
-          {/* KaiVoh Portal (modal route) */}
           <Route path="voh" element={<KaiVohRoute />} />
-
-          {/* Fallback */}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

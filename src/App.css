@@ -102,6 +102,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden; /* app-like: prevent document scroll */
+  overscroll-behavior: none;
 }
 
 img,
@@ -464,56 +465,62 @@ a:hover {
   text-transform: uppercase;
 }
 
-/* Status pills */
-.pill {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.5rem 0.65rem;
+/* LIVE indicator (top right) */
+.topbar-live {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(10, 20, 48, 0.55);
-  border: 1px solid rgba(170, 241, 255, 0.18);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-  backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid rgba(0, 255, 160, 0.22);
+  background: rgba(10, 14, 24, 0.45);
+  backdrop-filter: blur(10px);
 }
 
-.pill__label {
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(245, 247, 255, 0.7);
+.topbar-live:focus-visible {
+  box-shadow: var(--ring);
 }
 
-.pill__value {
-  font-size: 0.78rem;
+.live-orb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(0, 255, 160, 0.95);
+  box-shadow: 0 0 10px rgba(0, 255, 160, 0.75),
+    0 0 26px rgba(0, 255, 160, 0.35);
+  animation: liveOrbPulse var(--breath-s, 5.236s) ease-in-out infinite;
+}
+
+@keyframes liveOrbPulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    filter: brightness(0.95);
+    box-shadow: 0 0 10px rgba(0, 255, 160, 0.65),
+      0 0 26px rgba(0, 255, 160, 0.3);
+  }
+  50% {
+    transform: scale(1.22);
+    filter: brightness(1.25);
+    box-shadow: 0 0 14px rgba(0, 255, 160, 0.95),
+      0 0 42px rgba(0, 255, 160, 0.55);
+  }
+}
+
+.live-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.live-title {
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
 }
 
-.pill--good {
-  border-color: rgba(38, 255, 196, 0.35);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(38, 255, 196, 0.12) inset,
-    0 0 28px rgba(38, 255, 196, 0.1);
-}
-
-.pill--warn {
-  border-color: rgba(255, 217, 121, 0.38);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 217, 121, 0.1) inset,
-    0 0 28px rgba(255, 217, 121, 0.1);
-}
-
-.pill--bad {
-  border-color: rgba(255, 77, 141, 0.38);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 77, 141, 0.1) inset,
-    0 0 28px rgba(255, 77, 141, 0.1);
-}
-
-.pill--neutral {
-  border-color: rgba(170, 241, 255, 0.18);
+.live-meta {
+  opacity: 0.9;
+  font-size: 12px;
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -523,14 +530,14 @@ a:hover {
 .app-stage {
   position: relative;
   z-index: 1;
-  flex: 1; /* take remaining height under topbar */
-  min-height: 0; /* allow children to handle overflow */
+  flex: 1;
+  min-height: 0;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: clamp(1.25rem, 3vw, 3rem);
-  overflow: hidden; /* no outer scroll; only inner panels scroll */
+  overflow: hidden;
 }
 
 /* Outer “vault frame” */
@@ -538,7 +545,7 @@ a:hover {
   position: relative;
   width: 100%;
   max-width: 1180px;
-  height: 100%; /* fill stage */
+  height: 100%;
   border-radius: var(--radius-xl);
   background: radial-gradient(
       circle at top left,
@@ -563,7 +570,6 @@ a:hover {
   backdrop-filter: blur(var(--blur-strong)) saturate(150%);
 }
 
-/* Inner chrome lines */
 .app-frame::before,
 .app-frame::after {
   content: "";
@@ -590,7 +596,6 @@ a:hover {
   opacity: 0.32;
 }
 
-/* Inner container: holds nav + content */
 .app-frame-inner {
   position: relative;
   z-index: 1;
@@ -613,15 +618,14 @@ a:hover {
     ),
     linear-gradient(160deg, var(--frame-inner-bg), rgba(1, 4, 16, 0.98));
   overflow: hidden;
-  height: 100%; /* fill frame */
+  height: 100%;
 }
 
-/* Workspace grid */
 .app-workspace {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 1.1rem;
-  height: 100%; /* full-height grid */
+  height: 100%;
   min-height: 0;
 }
 
@@ -676,9 +680,7 @@ a:hover {
   padding: 0.75rem;
   display: grid;
   gap: 0.55rem;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(170, 241, 255, 0.24) transparent;
+  overflow: hidden; /* ✅ no scrolling in nav rail */
 }
 
 .nav-item {
@@ -746,7 +748,11 @@ a:hover {
   margin-top: auto;
   padding: 0.9rem 1.05rem 1.05rem;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, rgba(10, 20, 48, 0), rgba(10, 20, 48, 0.22));
+  background: linear-gradient(
+    180deg,
+    rgba(10, 20, 48, 0),
+    rgba(10, 20, 48, 0.22)
+  );
 }
 
 .nav-foot__line {
@@ -824,12 +830,37 @@ a:hover {
   text-transform: uppercase;
 }
 
+/* ✅ LOCKED PANEL BODY (no scroll) + perfect centering */
 .panel-body {
-  padding: 1.05rem 1.25rem 1.25rem;
-  overflow: auto; /* internal scroll only */
+  flex: 1 1 auto;
   min-height: 0;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(170, 241, 255, 0.24) transparent;
+  padding: 1.05rem 1.25rem 1.25rem;
+  overflow: hidden; /* ✅ no scroll inside the panel body */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-body--locked {
+  overscroll-behavior: none;
+}
+
+.panel-center {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-center > * {
+  width: 100%;
+  max-width: 920px; /* ✅ “perfectly centered in the box” */
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Footer: subtle, official, quiet */
@@ -839,7 +870,11 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(180deg, rgba(10, 20, 48, 0), rgba(10, 20, 48, 0.22));
+  background: linear-gradient(
+    180deg,
+    rgba(10, 20, 48, 0),
+    rgba(10, 20, 48, 0.22)
+  );
   color: rgba(245, 247, 255, 0.62);
   font-size: 0.78rem;
 }
@@ -924,116 +959,6 @@ a:hover {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   9) Scrollbars (WebKit)
-   ─────────────────────────────────────────────────────────────── */
-
-.nav-list::-webkit-scrollbar,
-.panel-body::-webkit-scrollbar {
-  width: 10px;
-}
-
-.nav-list::-webkit-scrollbar-track,
-.panel-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.nav-list::-webkit-scrollbar-thumb,
-.panel-body::-webkit-scrollbar-thumb {
-  background: rgba(170, 241, 255, 0.18);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  border-radius: 999px;
-}
-
-.nav-list::-webkit-scrollbar-thumb:hover,
-.panel-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(170, 241, 255, 0.28);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-/* ────────────────────────────────────────────────────────────────
-   10) Optional legacy .card
-   ─────────────────────────────────────────────────────────────── */
-
-.card {
-  border-radius: var(--radius-md);
-  background: radial-gradient(
-      circle at top left,
-      rgba(51, 246, 255, 0.12),
-      transparent 60%
-    ),
-    linear-gradient(145deg, rgba(4, 12, 36, 0.96), rgba(5, 15, 40, 0.94));
-  border: 1px solid rgba(170, 241, 255, 0.3);
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.75);
-  padding: 1.25rem 1.15rem;
-  color: var(--text-main);
-}
-
-.read-the-docs {
-  color: var(--text-subtle);
-  font-size: 0.9rem;
-}
-
-/* LIVE indicator (top right) */
-.topbar-live {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 255, 160, 0.22);
-  background: rgba(10, 14, 24, 0.45);
-  backdrop-filter: blur(10px);
-}
-
-.topbar-live:focus-visible {
-  box-shadow: var(--ring);
-}
-
-.live-orb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: rgba(0, 255, 160, 0.95);
-  box-shadow: 0 0 10px rgba(0, 255, 160, 0.75),
-    0 0 26px rgba(0, 255, 160, 0.35);
-  animation: liveOrbPulse var(--breath-s, 5.236s) ease-in-out infinite;
-}
-
-@keyframes liveOrbPulse {
-  0%,
-  100% {
-    transform: scale(0.92);
-    filter: brightness(0.95);
-    box-shadow: 0 0 10px rgba(0, 255, 160, 0.65),
-      0 0 26px rgba(0, 255, 160, 0.3);
-  }
-  50% {
-    transform: scale(1.22);
-    filter: brightness(1.25);
-    box-shadow: 0 0 14px rgba(0, 255, 160, 0.95),
-      0 0 42px rgba(0, 255, 160, 0.55);
-  }
-}
-
-.live-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.05;
-}
-
-.live-title {
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-
-.live-meta {
-  opacity: 0.9;
-  font-size: 12px;
-}
-
-/* ────────────────────────────────────────────────────────────────
    11) Responsive — mobile becomes “mission control”
    ─────────────────────────────────────────────────────────────── */
 @media (max-width: 980px) {
@@ -1049,7 +974,6 @@ a:hover {
     padding: 1rem;
   }
 
-  /* Mobile layout: Nav row (auto) + Panel row (fills remaining space) */
   .app-workspace {
     grid-template-columns: 1fr;
     grid-template-rows: auto minmax(0, 1fr);
@@ -1063,22 +987,24 @@ a:hover {
     height: auto;
   }
 
-  /* ✅ NO SCROLL: Verifier + KaiVoh are just two tiles */
   .nav-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.55rem;
-
-    overflow: visible;               /* no internal scrolling */
+    overflow: visible;
     padding: 0.75rem;
-    padding-bottom: calc(0.95rem + var(--safe-bottom)); /* ✅ extra bottom space so tiles aren't clipped */
+    padding-bottom: calc(0.95rem + var(--safe-bottom));
   }
 
   .nav-item {
-    white-space: normal; /* allow wrapping instead of forcing horizontal scroll */
+    white-space: normal;
+  }
+
+  /* keep center behavior on mobile too */
+  .panel-center > * {
+    max-width: 100%;
   }
 }
-
 
 @media (max-width: 650px) {
   :root {
@@ -1097,15 +1023,11 @@ a:hover {
   .brand__subtitle {
     display: none;
   }
-
-  .topbar-right .pill__label {
-    display: none;
-  }
 }
 
 /* ────────────────────────────────────────────────────────────────
    12) FULL-PAGE routes (SigilPage + SigilFeedPage): scrollable
-   - Home (inside AppChrome) stays locked to internal panel scroll rules.
+   - Home (inside AppChrome) stays locked.
    - For FULL-PAGE pages, wrap your page root with class="fullpage-scroll".
    ─────────────────────────────────────────────────────────────── */
 
@@ -1115,9 +1037,16 @@ a:hover {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   padding: clamp(1rem, 2.6vw, 2rem);
-  background:
-    radial-gradient(circle at 10% -10%, rgba(0, 255, 196, 0.14) 0, transparent 55%),
-    radial-gradient(circle at 90% 110%, rgba(155, 91, 255, 0.18) 0, transparent 60%),
+  background: radial-gradient(
+      circle at 10% -10%,
+      rgba(0, 255, 196, 0.14) 0,
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 90% 110%,
+      rgba(155, 91, 255, 0.18) 0,
+      transparent 60%
+    ),
     linear-gradient(145deg, var(--bg-0), var(--bg-1), var(--bg-2));
   color: var(--text-main);
 }
@@ -1127,7 +1056,6 @@ a:hover {
   margin: 0 auto;
 }
 
-/* Optional: keep scrollbars consistent on full-page routes */
 .fullpage-scroll::-webkit-scrollbar {
   width: 10px;
 }
