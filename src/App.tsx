@@ -220,8 +220,8 @@ function AppChrome(): React.JSX.Element {
 
 <div className="nav-foot" aria-label="Sovereign declarations">
   <div className="nav-foot__line">
-    <span className="mono">Φ</span> Kairos Notes are legal tender—
-    Proof of Breath™, Kai Pulse–sealed, & publicly verifiable — even offline
+    <span className="mono">Φ</span> Kairos Notes are legal tender —
+    Proof of Breath™, Kai Pulse–sealed, & openly auditable (even offline)
     (Σ → SHA-256(Σ) → Φ).
   </div>
 
@@ -231,6 +231,7 @@ function AppChrome(): React.JSX.Element {
     lineage-aware outflow, transferable, & redeemable by re-inhale.
   </div>
 </div>
+
 
 
               </nav>
