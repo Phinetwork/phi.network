@@ -225,7 +225,7 @@ function AppChrome(): React.JSX.Element {
                     in Proof of Breath™ and sealed by Kai Pulse.
                   </div>
                   <div className="nav-foot__line">
-                    Sigil-Glyphs are origin assets: the first seal that mints and
+                    Sigil-Glyphs are origin assets: the first seal that yields and
                     exhales value. Derivative glyphs are exhaled yield from the
                     origin — redeemable by verifikation.
                   </div>
