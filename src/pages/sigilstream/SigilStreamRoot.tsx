@@ -26,6 +26,9 @@ import "./styles/sigilstream.css";
 /* Toasts */
 import { ToastsProvider, useToasts } from "./data/toast/Toasts";
 
+/* ✅ Auth provider (required for useSigilAuth + SigilLogin) */
+import { SigilAuthProvider } from "../../components/KaiVoh/SigilAuthProvider";
+
 /* Data: seeds + storage */
 import { loadLinksJson } from "./data/seed";
 import { LS_KEY, parseStringArray, prependUniqueToStorage } from "./data/storage";
@@ -62,15 +65,17 @@ import { registerSigilUrl } from "../../utils/sigilRegistry";
 type Source = { url: string };
 
 export function SigilStreamRoot(): React.JSX.Element {
-  // Provider at the top-level so children may push toasts.
+  // Providers at top-level so children may use toasts + sigil auth context.
   return (
     <ToastsProvider>
-      <SigilStreamInner />
+      <SigilAuthProvider>
+        <SigilStreamInner />
+      </SigilAuthProvider>
     </ToastsProvider>
   );
 }
 
-/** Inner component that consumes Toasts context */
+/** Inner component that consumes Toasts + SigilAuth context */
 function SigilStreamInner(): React.JSX.Element {
   const toasts = useToasts();
 
@@ -122,10 +127,8 @@ function SigilStreamInner(): React.JSX.Element {
         const seen = new Set(prev.map((s) => s.url));
         const fresh = adds.filter((u) => !seen.has(u));
         if (fresh.length) {
-          // Persist fresh first, then merge.
           prependUniqueToStorage(fresh);
 
-          // Also bridge new links to Explorer.
           for (const u of fresh) {
             registerSigilUrl(u);
           }
@@ -215,7 +218,8 @@ function SigilStreamInner(): React.JSX.Element {
     [composerMeta],
   );
   const composerKaiSig = useMemo(
-    () => (composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined),
+    () =>
+      composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined,
     [composerMeta],
   );
 
@@ -233,7 +237,6 @@ function SigilStreamInner(): React.JSX.Element {
   };
 
   /** ---------- Render ---------- */
-  // Prepare readonly Sigil URL preview block (function returns a node).
   const sigilBlock =
     verifiedThisSession && (composerMeta || composerSvgText)
       ? SigilActionUrl({ meta: composerMeta, svgText: composerSvgText || "" })
@@ -254,10 +257,8 @@ function SigilStreamInner(): React.JSX.Element {
           Memory Stream
         </h1>
 
-        {/* μpulse-true Kai status */}
         <KaiStatus />
 
-        {/* Payload banner / error / instructions */}
         {payload ? (
           <PayloadBanner
             payload={payload}
@@ -281,7 +282,6 @@ function SigilStreamInner(): React.JSX.Element {
           </p>
         )}
 
-        {/* Inhale */}
         {!payload && (
           <section
             className="sf-inhaler"
@@ -292,13 +292,10 @@ function SigilStreamInner(): React.JSX.Element {
           </section>
         )}
 
-        {/* Identity chips */}
         <IdentityBar phiKey={composerPhiKey} kaiSignature={composerKaiSig} />
 
-        {/* Sigil action URL preview (readonly UI) */}
         {sigilBlock && sigilBlock.node}
 
-        {/* Reply composer (gated by ΦKey) */}
         {payload && (
           <section className="sf-reply" aria-labelledby="reply-title">
             <h2 id="reply-title" className="sf-reply-title">
@@ -325,7 +322,6 @@ function SigilStreamInner(): React.JSX.Element {
         )}
       </header>
 
-      {/* Stream list */}
       <section className="sf-list">
         {urls.length === 0 ? (
           <div className="sf-empty">

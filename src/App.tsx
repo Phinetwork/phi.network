@@ -21,10 +21,13 @@ import {
  * - Nav: ONLY Verifier + KaiVoh
  * - Top bar: LIVE + green orb pulsing every 5.236s + Kai Pulse NOW
  * - KaiVoh opens as a modal via /voh route
- * - Deep links retained (routes remain reachable): /stream, /feed, /p~:token, /explorer, /s, /p
  *
  * ✅ IMPORTANT CHANGE:
- * - /s and /s/:hash are now FULL-PAGE routes (NOT wrapped by AppChrome)
+ * - /s and /s/:hash are FULL-PAGE routes (NOT wrapped by AppChrome)
+ * - /stream, /feed, /p~:token, /p are FULL-PAGE routes (NOT wrapped by AppChrome)
+ *
+ * ✅ Deep links retained:
+ * - /explorer remains inside AppChrome (hidden but supported)
  */
 
 import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
@@ -53,7 +56,7 @@ type AppShellStyle = CSSProperties & {
   ["--breath-s"]?: string;
 };
 
-function KaiVohRoute() {
+function KaiVohRoute(): React.JSX.Element {
   const navigate = useNavigate();
   const [open, setOpen] = useState<boolean>(true);
 
@@ -72,10 +75,10 @@ function KaiVohRoute() {
   );
 }
 
-function AppChrome() {
+function AppChrome(): React.JSX.Element {
   const location = useLocation();
 
-  // φ-exact breath (seconds): 3 + √5  → ~5.236067977...
+  // φ-exact breath (seconds): 3 + √5
   const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
   const BREATH_MS = useMemo(() => BREATH_S * 1000, [BREATH_S]);
 
@@ -83,10 +86,10 @@ function AppChrome() {
     () => ({
       "--breath-s": `${BREATH_S}s`,
     }),
-    [BREATH_S]
+    [BREATH_S],
   );
 
-  // ✅ Kai Pulse NOW (replaces the 0..5236 ms-within-breath counter UI)
+  // ✅ Kai Pulse NOW
   const kaiPulseNow = useCallback((): number => {
     return momentFromUTC(new Date()).pulse;
   }, []);
@@ -96,7 +99,7 @@ function AppChrome() {
   useEffect(() => {
     const id = window.setInterval(() => {
       setPulseNow(kaiPulseNow());
-    }, 250); // smooth UI without being heavy
+    }, 250);
     return () => window.clearInterval(id);
   }, [kaiPulseNow]);
 
@@ -112,7 +115,7 @@ function AppChrome() {
       { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
       { to: "/voh", label: "KaiVoh", desc: "Sovereign Broadcast OS" },
     ],
-    []
+    [],
   );
 
   const pageTitle = useMemo<string>(() => {
@@ -120,12 +123,8 @@ function AppChrome() {
     if (p === "/") return "Verifier";
     if (p.startsWith("/voh")) return "KaiVoh";
 
-    // Hidden routes (not in nav, but still supported)
+    // Hidden but supported routes inside Chrome
     if (p.startsWith("/explorer")) return "Explorer";
-    if (p.startsWith("/stream")) return "Stream";
-    if (p.startsWith("/feed")) return "Stream";
-    if (p.startsWith("/p~")) return "Stream";
-    if (p === "/p") return "Stream";
 
     return "Sovereign Gate";
   }, [location.pathname]);
@@ -155,7 +154,6 @@ function AppChrome() {
         <div className="topbar-left">
           <div className="brand" aria-label="ΦNet Sovereign Gate">
             <div className="brand__mark" aria-hidden="true">
-              {/* Φ logo from /public/phi.svg */}
               <img src="/phi.svg" alt="" className="brand__mark-img" />
             </div>
             <div className="brand__text">
@@ -167,20 +165,18 @@ function AppChrome() {
           </div>
         </div>
 
-        {/* ✅ LIVE — orb pulses every 5.236s, text shows Kai Pulse NOW */}
+        {/* LIVE — orb pulses every 5.236s, text shows Kai Pulse NOW */}
         <a
           className="topbar-live"
           href="https://kaiklok.com"
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`LIVE. Kai Pulse now ${pulseNow}. Breath length ${BREATH_S.toFixed(
-            3
+            3,
           )} seconds. Open KaiKlok.com.`}
           title={`LIVE • NOW PULSE ${pulseNowStr} • Breath ${BREATH_S.toFixed(
-            6
-          )}s (${Math.round(
-            BREATH_MS
-          )}ms) • View full Kairos Time at KaiKlok.com`}
+            6,
+          )}s (${Math.round(BREATH_MS)}ms) • View full Kairos Time at KaiKlok.com`}
         >
           <span className="live-orb" aria-hidden="true" />
           <div className="live-text">
@@ -274,7 +270,7 @@ function AppChrome() {
   );
 }
 
-function NotFound() {
+function NotFound(): React.JSX.Element {
   return (
     <div className="notfound" role="region" aria-label="Not found">
       <div className="notfound__code">404</div>
@@ -291,13 +287,21 @@ function NotFound() {
   );
 }
 
-export default function App() {
+export default function App(): React.JSX.Element {
   return (
     <BrowserRouter>
       <Routes>
         {/* ✅ FULL-PAGE Sigil routes (NO AppChrome wrapper) */}
         <Route path="s" element={<SigilPage />} />
         <Route path="s/:hash" element={<SigilPage />} />
+
+        {/* ✅ FULL-PAGE Stream routes (NO AppChrome wrapper) */}
+        <Route path="stream" element={<SigilFeedPage />} />
+        <Route path="stream/p/:token" element={<SigilFeedPage />} />
+        <Route path="feed" element={<SigilFeedPage />} />
+        <Route path="feed/p/:token" element={<SigilFeedPage />} />
+        <Route path="p~:token" element={<SigilFeedPage />} />
+        <Route path="p" element={<PShort />} />
 
         {/* Everything else stays inside the Sovereign Gate chrome */}
         <Route element={<AppChrome />}>
@@ -309,14 +313,6 @@ export default function App() {
 
           {/* Hidden but supported routes (not shown in nav) */}
           <Route path="explorer" element={<SigilExplorer />} />
-
-          {/* Canonical stream + aliases */}
-          <Route path="stream" element={<SigilFeedPage />} />
-          <Route path="stream/p/:token" element={<SigilFeedPage />} />
-          <Route path="feed" element={<SigilFeedPage />} />
-          <Route path="feed/p/:token" element={<SigilFeedPage />} />
-          <Route path="p~:token" element={<SigilFeedPage />} />
-          <Route path="p" element={<PShort />} />
 
           {/* Fallback */}
           <Route path="*" element={<NotFound />} />
