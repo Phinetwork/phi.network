@@ -221,13 +221,13 @@ function AppChrome(): React.JSX.Element {
                 <div className="nav-foot" aria-label="Sovereign declarations">
                   <div className="nav-foot__line">
                     <span className="mono">Φ</span> Kairos Notes are sovereign
-                    value instruments — spendable signals of real worth, ankored
-                    in Proof of Breath™ and sealed by Kai Pulse.
+                    value instruments — spendable signals of real worth, bound
+                    to Proof of Breath™ and sealed by Kai Pulse.
                   </div>
                   <div className="nav-foot__line">
                     Sigil-Glyphs are origin assets: the first seal that yields and
                     exhales value. Derivative glyphs are exhaled yield from the
-                    origin — redeemable by verifikation.
+                    origin — redeemable by breath.
                   </div>
                 </div>
               </nav>
