@@ -50,7 +50,6 @@ const SendPhiAmountField: React.FC<Props> = ({
 }) => {
   const isChild = canonicalContext === "derivative"; // send-sigil (uploaded) view
 
-  // Hooks MUST be unconditionally called in the same order:
   const [toast, setToast] = useState<string | null>(null);
   const [focused, setFocused] = useState<boolean>(false);
 
@@ -74,9 +73,13 @@ const SendPhiAmountField: React.FC<Props> = ({
   };
 
   const unitPattern = useMemo(
-    () => (amountMode === "USD" ? "\\d*(?:\\.\\d{0,2})?" : "\\d*(?:\\.\\d{0,4})?"),
+    () =>
+      amountMode === "USD"
+        ? "\\d*(?:\\.\\d{0,2})?"
+        : "\\d*(?:\\.\\d{0,4})?",
     [amountMode]
   );
+
   const unitGlyph = amountMode === "USD" ? "$" : "Φ";
   const ariaLabel =
     amountMode === "USD" ? "Dollar amount to exhale" : "Phi amount to exhale";
@@ -93,27 +96,30 @@ const SendPhiAmountField: React.FC<Props> = ({
   /** Gentle preflight on Enter (Φ is source of truth) */
   const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key !== "Enter") return;
+
     if (amountMode !== "PHI") {
       showError("Enter a Φ amount or switch to Φ to exhale.");
       return;
     }
+
     const raw = (phiInput || "").trim();
     if (raw === "" || raw === ".") {
       showError("No Φ entered — specify an amount to exhale.");
       return;
     }
+
     const want = Number((raw.startsWith(".") ? "0" : "") + raw);
     if (!Number.isFinite(want) || want <= 0) {
       showError("Invalid Φ amount — enter a number greater than 0.");
       return;
     }
+
     const rem = Number(String(remainingPhiDisplay4).replace(/[^\d.]/g, ""));
     if (Number.isFinite(rem) && want > rem + 1e-9) {
       showError(`Exceeds remaining — Rem: Φ ${remainingPhiDisplay4}`);
     }
   };
 
-  // If this is a send sigil (child), the amount field is hidden (only Inhale in footer).
   if (isChild) {
     return (
       <>
@@ -124,8 +130,11 @@ const SendPhiAmountField: React.FC<Props> = ({
 
   return (
     <>
-      <div className="phi-send-field" data-state={focused ? "focus" : "idle"}>
-        {/* Label stack */}
+      <div
+        className="phi-send-field"
+        data-state={focused ? "focus" : "idle"}
+      >
+        {/* label up top */}
         <div className="phi-send-label">
           <span className="label-main">Exhale Amount</span>
           <span className="label-sub">
@@ -134,47 +143,45 @@ const SendPhiAmountField: React.FC<Props> = ({
           </span>
         </div>
 
-        {/* Glass capsule input */}
-        <div className="phi-send-inputShell" aria-live="polite">
-          <span className="phi-prefix" aria-hidden="true">
-            {unitGlyph}
-          </span>
+        {/* ONE INNER ROW: input + toggle + conversion */}
+        <div className="phi-send-row">
+          {/* Glass capsule input */}
+          <div className="phi-send-inputShell" aria-live="polite">
+            <span className="phi-prefix" aria-hidden="true">
+              {unitGlyph}
+            </span>
 
-          <input
-            className="phi-send-input"
-            type="text"
-            inputMode="decimal"
-            pattern={unitPattern}
-            aria-label={ariaLabel}
-            placeholder={unitGlyph}
-            value={amountMode === "USD" ? usdInput : phiInput}
-            onChange={(e) => handleChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            aria-invalid={toast ? true : undefined}
-          />
+            <input
+              className="phi-send-input"
+              type="text"
+              inputMode="decimal"
+              pattern={unitPattern}
+              aria-label={ariaLabel}
+              placeholder={unitGlyph}
+              value={amountMode === "USD" ? usdInput : phiInput}
+              onChange={(e) => handleChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              aria-invalid={toast ? true : undefined}
+            />
 
-          {/* Unit switch */}
+            <i aria-hidden="true" className="phi-input-glow" />
+          </div>
+
+          {/* Unit switch — same row */}
           <div
             role="tablist"
             aria-label="Amount unit"
-            className="seg"
-            style={{
-              display: "inline-grid",
-              gridTemplateColumns: "1fr 1fr",
-              borderRadius: 999,
-              border: "1px solid var(--border, rgba(255,255,255,.18))",
-              overflow: "hidden",
-              flex: "0 0 auto",
-            }}
+            className="phi-mode-toggle seg"
           >
             <button
               role="tab"
               aria-selected={amountMode === "USD"}
-              className={amountMode === "USD" ? "active" : ""}
+              className={`phi-mode-btn ${
+                amountMode === "USD" ? "is-active" : ""
+              }`}
               onClick={() => setAmountMode("USD")}
-              style={{ padding: "6px 10px", fontSize: 12 }}
               title="Enter in dollars"
             >
               $
@@ -182,39 +189,26 @@ const SendPhiAmountField: React.FC<Props> = ({
             <button
               role="tab"
               aria-selected={amountMode === "PHI"}
-              className={amountMode === "PHI" ? "active" : ""}
+              className={`phi-mode-btn ${
+                amountMode === "PHI" ? "is-active" : ""
+              }`}
               onClick={() => setAmountMode("PHI")}
-              style={{ padding: "6px 10px", fontSize: 12 }}
               title="Enter in Φ"
             >
               Φ
             </button>
           </div>
 
-          {/* Breathing glow underbar */}
-          <i aria-hidden="true" className="phi-input-glow" />
-        </div>
-
-        {/* Live conversion + remaining (responsive, ellipsized) */}
-        <div
-          className="convert-readout"
-          aria-live="polite"
-          style={{
-            fontSize: 12,
-            opacity: 0.9,
-            minWidth: 0,
-            maxWidth: "100%",
-            textAlign: "left",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {convDisplayRight}
+          {/* Live conversion readout — same row */}
+          <div
+            className="phi-conv-right convert-readout"
+            aria-live="polite"
+          >
+            {convDisplayRight}
+          </div>
         </div>
       </div>
 
-      {/* Official, sleek, non-blocking error toast */}
       <ErrorToast msg={toast} />
     </>
   );

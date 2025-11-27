@@ -15,6 +15,11 @@ type Props = {
   remainingPhiDisplay4: string;      // e.g., "1.2345"
   canonicalContext: "parent" | "derivative" | null;
   phiFormatter: (s: string) => string;
+
+  // optional actions for the buttons that sit next to the input
+  onSendClick?: () => void;
+  onAttachClick?: () => void;
+  isSendDisabled?: boolean;
 };
 
 const SendPhiAmountField: React.FC<Props> = ({
@@ -28,16 +33,29 @@ const SendPhiAmountField: React.FC<Props> = ({
   remainingPhiDisplay4,
   canonicalContext,
   phiFormatter,
+  onSendClick,
+  onAttachClick,
+  isSendDisabled,
 }) => {
+  const handlePhiChange = (raw: string) => {
+    setPhiInput(phiFormatter(raw));
+  };
+
+  const handleUsdChange = (raw: string) => {
+    setUsdInput(raw.replace(/[^\d.]/g, ""));
+  };
+
   return (
     <div className="phi-send-field" aria-live="polite">
-      {/* Row layout that adapts and goes full-width */}
-      <div className="phi-send-row">
-        {/* Mode toggle */}
+      {/* ───────── Top row: mode toggle + input + send / attach ───────── */}
+      <div className="phi-send-mainRow">
+        {/* Mode toggle (segment) */}
         <div className="phi-mode-toggle" role="group" aria-label="Amount mode">
           <button
             type="button"
-            className={`phi-mode-btn ${amountMode === "PHI" ? "is-active" : ""}`}
+            className={`phi-mode-btn ${
+              amountMode === "PHI" ? "is-active" : ""
+            }`}
             onClick={() => setAmountMode("PHI")}
             title="Send Φ amount"
           >
@@ -45,7 +63,9 @@ const SendPhiAmountField: React.FC<Props> = ({
           </button>
           <button
             type="button"
-            className={`phi-mode-btn ${amountMode === "USD" ? "is-active" : ""}`}
+            className={`phi-mode-btn ${
+              amountMode === "USD" ? "is-active" : ""
+            }`}
             onClick={() => setAmountMode("USD")}
             title="Send USD amount (converted)"
           >
@@ -53,7 +73,7 @@ const SendPhiAmountField: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* Input capsule */}
+        {/* Amount input capsule */}
         <div className="phi-send-inputShell">
           <span className="phi-prefix" aria-hidden="true">
             {amountMode === "PHI" ? "Φ" : "$"}
@@ -67,7 +87,7 @@ const SendPhiAmountField: React.FC<Props> = ({
               placeholder="Φ amount"
               title="Φ amount to exhale"
               value={phiInput}
-              onChange={(e) => setPhiInput(phiFormatter(e.target.value))}
+              onChange={(e) => handlePhiChange(e.target.value)}
             />
           ) : (
             <input
@@ -77,14 +97,38 @@ const SendPhiAmountField: React.FC<Props> = ({
               placeholder="USD amount"
               title="USD amount to exhale"
               value={usdInput}
-              onChange={(e) => setUsdInput(e.target.value.replace(/[^\d.]/g, ""))}
+              onChange={(e) => handleUsdChange(e.target.value)}
             />
           )}
 
           <div className="phi-input-glow" aria-hidden="true" />
         </div>
 
-        {/* Conversion readout */}
+        {/* Actions: send + attach (stay on same line as input) */}
+        <div className="phi-send-actions" aria-label="Send controls">
+          <button
+            type="button"
+            className="phi-action-btn phi-action-send"
+            onClick={onSendClick}
+            disabled={isSendDisabled}
+            title="Send Φ"
+          >
+            {/* can be styled as icon in CSS */}
+            ➤
+          </button>
+          <button
+            type="button"
+            className="phi-action-btn phi-action-attach"
+            onClick={onAttachClick}
+            title="Attach note or file"
+          >
+            📎
+          </button>
+        </div>
+      </div>
+
+      {/* ───────── Second row: conversion + remaining balance ───────── */}
+      <div className="phi-send-metaRow">
         <div
           className="phi-conv-right"
           aria-label="Converted display"
@@ -93,7 +137,6 @@ const SendPhiAmountField: React.FC<Props> = ({
           {convDisplayRight}
         </div>
 
-        {/* Remaining */}
         <div
           className="phi-remaining"
           title={

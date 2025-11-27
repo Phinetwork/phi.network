@@ -9,27 +9,49 @@
 */
 
 .phi-send-field {
-  width: 100%;
+  /* stretch, but leave horizontal room for Send + Attach buttons */
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: calc(100% - 120px);  /* ~ space for two round buttons */
   min-width: 0;
+
   isolation: isolate;
   color: var(--ink);
 }
 
-/* label stack */
+/* ─────────────────────────────────────────────
+   Single row INSIDE the field:
+   label (above) + [input capsule] + [unit toggle] + [conversion]
+   ───────────────────────────────────────────── */
+
+.phi-send-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;      /* keep the internal row on one line */
+  width: 100%;
+  min-width: 0;
+}
+
+/* label stack (stays at top, not in the flex squeeze war) */
 .phi-send-label {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+
   line-height: 1.2;
   font-family: ui-sans-serif, system-ui, -apple-system, "Inter", "SF Pro Text", Roboto, Arial;
   text-shadow:
     0 0 6px color-mix(in srgb, var(--accent) 70%, transparent),
     0 0 1px rgb(255 255 255 / 0.8);
+
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .phi-send-label .label-main {
@@ -48,6 +70,9 @@
     0 0 1px rgb(0 0 0 / 0.8);
   white-space: nowrap;
   opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* input shell = glass capsule */
@@ -72,7 +97,7 @@
   padding: 10px 12px;
   min-height: 44px;
   min-width: 0;
-  width: 100%;
+  flex: 1 1 auto;            /* main flexible element that shrinks */
 }
 
 /* prefix "Φ" glyph */
@@ -136,6 +161,68 @@
   animation: phiInputBreath 5.236s ease-in-out infinite;
 }
 
+/* Unit toggle (same row) */
+.phi-mode-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(255,255,255,.18));
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+  box-shadow:
+    0 2px 10px rgba(0,0,0,0.35),
+    0 0 18px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.phi-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity .18s, transform .08s ease;
+}
+
+.phi-mode-btn.is-active {
+  opacity: 1;
+  background: color-mix(in srgb, var(--accent) 35%, rgba(0,0,0,0.6));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 0 12px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.phi-mode-btn:hover {
+  opacity: 1;
+}
+
+.phi-mode-btn:active {
+  transform: translateY(0.5px) scale(.97);
+}
+
+/* Live conversion on same row */
+.phi-conv-right,
+.convert-readout {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink);
+  max-width: 28%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* breathing aura under input line, same pulse period as footer */
 @keyframes phiInputBreath {
   0% {
@@ -177,7 +264,12 @@
   .phi-send-label .label-sub {
     font-size: 0.62rem;
   }
+
+  .phi-mode-toggle {
+    transform: scale(0.9);
+  }
 }
+
 /* ——— Official ephemeral error toast ——— */
 .phi-error-toast {
   position: fixed;
