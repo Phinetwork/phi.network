@@ -226,7 +226,7 @@ function AppChrome(): React.JSX.Element {
   </div>
 
   <div className="nav-foot__line">
-    Sigil-Glyphs are origin ΦKey seals that issue & mature value.
+    Sigil-Glyphs are zero-knowledge–proven origin ΦKey seals that issue & mature value.
     Derivative glyphs are exhaled notes from that origin —
     lineage-aware outflow, transferable, & redeemable by re-inhale.
   </div>
