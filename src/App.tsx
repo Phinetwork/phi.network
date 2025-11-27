@@ -111,7 +111,7 @@ function AppChrome(): React.JSX.Element {
   const navItems = useMemo<NavItem[]>(
     () => [
       { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
-      { to: "/voh", label: "KaiVoh", desc: "Sovereign Emission OS" },
+      { to: "/voh", label: "KaiVoh", desc: "Emission OS" },
     ],
     [],
   );
