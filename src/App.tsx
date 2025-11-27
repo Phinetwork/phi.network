@@ -226,13 +226,12 @@ function AppChrome(): React.JSX.Element {
 
                 <div className="nav-foot" aria-label="Sovereign declarations">
                   <div className="nav-foot__line">
-                    <span className="mono">Φ</span> Kairos Notes are legal tender within the realm of Kairos —
-sealed by Proof of Breath™, pulsed by the Kai-Signature™, and openly
-auditable even offline (Σ → SHA-256(Σ) → Φ).
+                    <span className="mono">Φ</span> Kairos Notes are legal tender in Kairos —
+sealed by Proof of Breath™, pulsed by Kai-Signature™, and openly auditable offline (Σ → SHA-256(Σ) → Φ).
                   </div>
 
                   <div className="nav-foot__line">
-                    Sigil-Glyphs are zero-knowledge–proven origin ΦKey seals that
+                  Sigil-Glyphs are zero-knowledge–proven origin ΦKey seals that
 summon, mint, and mature value.
 Derivative glyphs are exhaled notes of that origin —
 lineage-true outflow, transferable, and redeemable by re-inhale.
