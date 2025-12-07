@@ -1,6 +1,12 @@
 /* src/App.css
    ΦNet — Atlantean Banking Console Shell
    Official, sovereign, glass + audit-grade UI chrome
+
+   ✅ GUARANTEE (this file):
+   - The App stays "app-locked" (no document scroll).
+   - The MAIN panel body is ALWAYS internally scrollable *when content exceeds height*.
+   - When content fits, it stays perfectly centered with no scrolling.
+   - Bottom actions (PhiKey / PhiStream) remain reachable on all device sizes.
 */
 
 /* ────────────────────────────────────────────────────────────────
@@ -797,7 +803,7 @@ a:hover {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   7) Panel — LOCKED + PERFECT CENTER
+   7) Panel — CENTER WHEN POSSIBLE, SCROLL WHEN NECESSARY
    ─────────────────────────────────────────────────────────────── */
 
 .app-panel {
@@ -861,37 +867,88 @@ a:hover {
   text-transform: uppercase;
 }
 
-/* ✅ LOCKED PANEL BODY (no scroll) + perfect centering */
+/* ✅ PANEL BODY:
+   - Always scrollable if needed
+   - No document scroll; only this region scrolls
+   - Safe-area bottom padding so the last buttons are never behind iOS home bar
+*/
 .panel-body {
   flex: 1 1 auto;
   min-height: 0;
   padding: 1.05rem 1.25rem 1.25rem;
-  overflow: hidden; /* ✅ no scroll */
-  display: flex;
-  align-items: center;
-  justify-content: center;
+
+  /* ✅ the guarantee */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+
+  /* prevent scroll chaining + rubberband pulling the whole app */
+  overscroll-behavior: contain;
+
+  /* make scrolling feel stable */
+  scroll-padding-bottom: calc(1.25rem + var(--safe-bottom));
+
+  /* (optional) keep layout stable when scrollbar appears */
+  scrollbar-gutter: stable both-edges;
 }
 
+/* Keep "locked" semantics */
 .panel-body--locked {
-  overscroll-behavior: none;
+  overscroll-behavior: contain;
 }
 
+/* Compatibility: if JS toggles this class, it still works */
+.panel-body--scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ✅ CENTERING THAT DOES NOT BREAK SCROLL:
+   The trick is: center the child with auto margins.
+   - If the child fits: margins center it.
+   - If the child is taller: margins collapse to 0 and the panel scrolls naturally.
+*/
 .panel-center {
   width: 100%;
-  height: 100%;
   min-width: 0;
-  min-height: 0;
+  min-height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
+/* The Outlet root */
 .panel-center > * {
   width: 100%;
-  max-width: 920px; /* ✅ centered “sweet spot” */
-  max-height: 100%;
+  max-width: 920px; /* centered sweet spot */
   min-width: 0;
+
+  /* ✅ the magic */
+  margin: auto;
+
+  /* IMPORTANT: do NOT clamp height; let it grow so panel-body can scroll */
+  max-height: none;
   min-height: 0;
+}
+
+/* Optional nicer scrollbars (non-invasive) */
+.panel-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(170, 241, 255, 0.18) transparent;
+}
+.panel-body::-webkit-scrollbar {
+  width: 10px;
+}
+.panel-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.panel-body::-webkit-scrollbar-thumb {
+  background: rgba(170, 241, 255, 0.18);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+.panel-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(170, 241, 255, 0.28);
 }
 
 /* Footer */
@@ -1062,6 +1119,7 @@ a:hover {
   }
   .panel-body {
     padding: 0.85rem 1rem 1rem;
+    scroll-padding-bottom: calc(1rem + var(--safe-bottom));
   }
   .panel-foot {
     padding: calc(0.65rem + var(--safe-bottom)) 1rem 0.65rem;
@@ -1078,7 +1136,7 @@ a:hover {
 
 /* ────────────────────────────────────────────────────────────────
    12) FULL-PAGE routes (SigilPage + SigilFeedPage): scrollable
-   - Home (inside AppChrome) stays locked.
+   - Home (inside AppChrome) stays app-locked, panel scrolls internally.
    - For FULL-PAGE pages, wrap your page root with class="fullpage-scroll".
    ─────────────────────────────────────────────────────────────── */
 

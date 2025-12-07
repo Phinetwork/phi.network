@@ -1,8 +1,9 @@
 // src/App.tsx
-import {
+import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -15,18 +16,6 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-
-/**
- * ✅ Sovereign Gate Console (2-tab) setup:
- * - Nav: ONLY Verifier + KaiVoh
- * - Top bar: LIVE + green orb pulsing every 5.236s + Kai Pulse NOW
- * - KaiVoh opens as a modal via /voh route
- *
- * ✅ IMPORTANT CHANGE:
- * - /s and /s/:hash are FULL-PAGE routes (NOT wrapped by AppChrome)
- * - /stream, /feed, /p~:token, /p are FULL-PAGE routes (NOT wrapped by AppChrome)
- * - /explorer is FULL-PAGE (NOT wrapped by AppChrome)
- */
 
 import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
 import KaiVohModal from "./components/KaiVoh/KaiVohModal";
@@ -52,6 +41,7 @@ type NavItem = {
 // Strict: allow CSS custom vars without `any`
 type AppShellStyle = CSSProperties & {
   ["--breath-s"]?: string;
+  ["--vvh-px"]?: string;
 };
 
 function KaiVohRoute(): React.JSX.Element {
@@ -73,6 +63,48 @@ function KaiVohRoute(): React.JSX.Element {
   );
 }
 
+function useVisualViewportSize(): { width: number; height: number } {
+  const read = useCallback((): { width: number; height: number } => {
+    const vv = window.visualViewport;
+    if (vv) {
+      return {
+        width: Math.round(vv.width),
+        height: Math.round(vv.height),
+      };
+    }
+    return { width: window.innerWidth, height: window.innerHeight };
+  }, []);
+
+  const [size, setSize] = useState<{ width: number; height: number }>(() => {
+    if (typeof window === "undefined") return { width: 0, height: 0 };
+    return read();
+  });
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+
+    const onResize = (): void => {
+      setSize(read());
+    };
+
+    window.addEventListener("resize", onResize, { passive: true });
+    if (vv) {
+      vv.addEventListener("resize", onResize, { passive: true });
+      vv.addEventListener("scroll", onResize, { passive: true });
+    }
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (vv) {
+        vv.removeEventListener("resize", onResize);
+        vv.removeEventListener("scroll", onResize);
+      }
+    };
+  }, [read]);
+
+  return size;
+}
+
 function AppChrome(): React.JSX.Element {
   const location = useLocation();
 
@@ -80,11 +112,14 @@ function AppChrome(): React.JSX.Element {
   const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
   const BREATH_MS = useMemo(() => BREATH_S * 1000, [BREATH_S]);
 
+  const vvSize = useVisualViewportSize();
+
   const shellStyle = useMemo<AppShellStyle>(
     () => ({
       "--breath-s": `${BREATH_S}s`,
+      "--vvh-px": `${vvSize.height}px`,
     }),
-    [BREATH_S],
+    [BREATH_S, vvSize.height],
   );
 
   // ✅ Kai Pulse NOW
@@ -127,25 +162,146 @@ function AppChrome(): React.JSX.Element {
     document.title = `ΦNet • ${pageTitle}`;
   }, [pageTitle]);
 
-  // ✅ No-scroll + perfect centering inside the panel for Verifier/KaiVoh routes
-  const lockPanel = useMemo(() => {
+  // ✅ “Locked” routes want perfect centering (Verifier + KaiVoh)
+  const lockPanelByRoute = useMemo(() => {
     const p = location.pathname;
     return p === "/" || p.startsWith("/voh");
   }, [location.pathname]);
 
+  // ✅ Overflow detection (no setState synchronously inside effect bodies)
+  const panelBodyRef = useRef<HTMLDivElement | null>(null);
+  const panelCenterRef = useRef<HTMLDivElement | null>(null);
+
+  const [needsInternalScroll, setNeedsInternalScroll] = useState<boolean>(false);
+
+  // Coalesce measurements into a single RAF tick (prevents thrash & avoids effect-body setState)
+  const rafIdRef = useRef<number | null>(null);
+
+  const computeOverflow = useCallback((): boolean => {
+    const body = panelBodyRef.current;
+    const center = panelCenterRef.current;
+    if (!body || !center) return false;
+
+    const contentEl = center.firstElementChild as HTMLElement | null;
+
+    const contentHeight = contentEl
+      ? contentEl.scrollHeight
+      : center.scrollHeight;
+
+    const availableHeight = body.clientHeight;
+
+    return contentHeight > availableHeight + 6; // tolerance
+  }, []);
+
+  const scheduleMeasure = useCallback((): void => {
+    if (rafIdRef.current !== null) return;
+
+    rafIdRef.current = window.requestAnimationFrame(() => {
+      rafIdRef.current = null;
+
+      const next = computeOverflow();
+      setNeedsInternalScroll((prev) => (prev === next ? prev : next));
+    });
+  }, [computeOverflow]);
+
+  // On route change and viewport shifts: schedule a measure (no direct setState here)
+  useEffect(() => {
+    if (!lockPanelByRoute) return;
+
+    scheduleMeasure();
+
+    return () => {
+      // nothing
+    };
+  }, [lockPanelByRoute, location.pathname, scheduleMeasure]);
+
+  // Watch size changes (ResizeObserver + visualViewport + resize)
+  useEffect(() => {
+    const body = panelBodyRef.current;
+    const center = panelCenterRef.current;
+    if (!body || !center) return;
+
+    const contentEl = center.firstElementChild as HTMLElement | null;
+
+    const onAnyResize = (): void => {
+      scheduleMeasure();
+    };
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(onAnyResize);
+      ro.observe(body);
+      ro.observe(center);
+      if (contentEl) ro.observe(contentEl);
+    }
+
+    const vv = window.visualViewport;
+
+    window.addEventListener("resize", onAnyResize, { passive: true });
+    if (vv) {
+      vv.addEventListener("resize", onAnyResize, { passive: true });
+      vv.addEventListener("scroll", onAnyResize, { passive: true });
+    }
+
+    // Also schedule once after mount for safety (still not setState in effect body)
+    scheduleMeasure();
+
+    return () => {
+      window.removeEventListener("resize", onAnyResize);
+      if (vv) {
+        vv.removeEventListener("resize", onAnyResize);
+        vv.removeEventListener("scroll", onAnyResize);
+      }
+      if (ro) ro.disconnect();
+
+      if (rafIdRef.current !== null) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, [scheduleMeasure, vvSize.height, vvSize.width, location.pathname]);
+
+  const panelShouldScroll = lockPanelByRoute && needsInternalScroll;
+
+  const panelBodyInlineStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!panelShouldScroll) return undefined;
+
+    return {
+      overflowY: "auto",
+      overflowX: "hidden",
+      WebkitOverflowScrolling: "touch",
+      alignItems: "stretch",
+      justifyContent: "flex-start",
+      paddingBottom: "calc(1.25rem + var(--safe-bottom))",
+    };
+  }, [panelShouldScroll]);
+
+  const panelCenterInlineStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!panelShouldScroll) return undefined;
+
+    return {
+      height: "auto",
+      minHeight: "100%",
+      alignItems: "flex-start",
+      justifyContent: "flex-start",
+    };
+  }, [panelShouldScroll]);
+
   return (
-    <div className="app-shell" data-ui="atlantean-banking" style={shellStyle}>
-      {/* A11y */}
+    <div
+      className="app-shell"
+      data-ui="atlantean-banking"
+      data-panel-scroll={panelShouldScroll ? "1" : "0"}
+      style={shellStyle}
+    >
       <a className="skip-link" href="#app-content">
         Skip to content
       </a>
 
-      {/* Atlantean background layers */}
       <div className="app-bg-orbit" aria-hidden="true" />
       <div className="app-bg-grid" aria-hidden="true" />
       <div className="app-bg-glow" aria-hidden="true" />
 
-      {/* Top Bar */}
       <header
         className="app-topbar"
         role="banner"
@@ -165,7 +321,6 @@ function AppChrome(): React.JSX.Element {
           </div>
         </div>
 
-        {/* LIVE — orb pulses every 5.236s, text shows Kai Pulse NOW */}
         <a
           className="topbar-live"
           href="https://kaiklok.com"
@@ -188,7 +343,6 @@ function AppChrome(): React.JSX.Element {
         </a>
       </header>
 
-      {/* Stage */}
       <main
         className="app-stage"
         id="app-content"
@@ -198,7 +352,6 @@ function AppChrome(): React.JSX.Element {
         <div className="app-frame" role="region" aria-label="Secure frame">
           <div className="app-frame-inner">
             <div className="app-workspace">
-              {/* Navigation */}
               <nav className="app-nav" aria-label="Primary navigation">
                 <div className="nav-head">
                   <div className="nav-head__title">Atrium</div>
@@ -226,20 +379,20 @@ function AppChrome(): React.JSX.Element {
 
                 <div className="nav-foot" aria-label="Sovereign declarations">
                   <div className="nav-foot__line">
-                    <span className="mono">Φ</span> Kairos Notes are legal tender in Kairos —
-sealed by Proof of Breath™, pulsed by Kai-Signature™ and openly auditable offline (Σ → SHA-256(Σ) → Φ).
+                    <span className="mono">Φ</span> Kairos Notes are legal tender
+                    in Kairos — sealed by Proof of Breath™, pulsed by Kai-Signature™
+                    and openly auditable offline (Σ → SHA-256(Σ) → Φ).
                   </div>
 
                   <div className="nav-foot__line">
-                 Sigil-Glyphs are zero-knowledge–proven origin ΦKey seals that
-summon, mint, and mature value.
-Derivative glyphs are exhaled notes of that origin —
-lineage-true outflow, transferable, and redeemable by re-inhale.
+                    Sigil-Glyphs are zero-knowledge–proven origin ΦKey seals that
+                    summon, mint, and mature value. Derivative glyphs are exhaled
+                    notes of that origin — lineage-true outflow, transferable, and
+                    redeemable by re-inhale.
                   </div>
                 </div>
               </nav>
 
-              {/* Content */}
               <section className="app-panel" aria-label="Sovereign Gate panel">
                 <div className="panel-head">
                   <div className="panel-head__title">{pageTitle}</div>
@@ -249,11 +402,18 @@ lineage-true outflow, transferable, and redeemable by re-inhale.
                   </div>
                 </div>
 
-                {/* ✅ LOCKED + CENTERED: VerifierStamper is centered, no scroll */}
                 <div
-                  className={`panel-body ${lockPanel ? "panel-body--locked" : ""}`}
+                  ref={panelBodyRef}
+                  className={`panel-body ${
+                    lockPanelByRoute ? "panel-body--locked" : ""
+                  } ${panelShouldScroll ? "panel-body--scroll" : ""}`}
+                  style={panelBodyInlineStyle}
                 >
-                  <div className="panel-center">
+                  <div
+                    ref={panelCenterRef}
+                    className="panel-center"
+                    style={panelCenterInlineStyle}
+                  >
                     <Outlet />
                   </div>
                 </div>
@@ -314,13 +474,8 @@ export default function App(): React.JSX.Element {
 
         {/* Everything else stays inside the Sovereign Gate chrome */}
         <Route element={<AppChrome />}>
-          {/* Root → VerifierStamper */}
           <Route index element={<VerifierStamper />} />
-
-          {/* KaiVoh Portal (modal route) */}
           <Route path="voh" element={<KaiVohRoute />} />
-
-          {/* Fallback */}
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
