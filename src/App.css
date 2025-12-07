@@ -6,7 +6,8 @@
    - The App stays "app-locked" (no document scroll).
    - The MAIN panel body is ALWAYS internally scrollable *when content exceeds height*.
    - When content fits, it stays perfectly centered with no scrolling.
-   - Bottom actions (PhiKey / PhiStream) remain reachable on all device sizes.
+   - Bottom actions (PhiKey / PhiStream) remain reachable + CLICKABLE on all device sizes,
+     including iOS Safari + Android Chrome dynamic bars + safe-area home indicator.
 */
 
 /* ────────────────────────────────────────────────────────────────
@@ -78,6 +79,11 @@
 
   /* Safe area */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ✅ Extra “reach space” ONLY when panel scrolls:
+     ensures bottom CTA bars/buttons (PhiKey / PhiStream) can be scrolled above
+     the iOS home indicator + dynamic browser UI. */
+  --bottom-actions-reserve: 104px;
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -127,6 +133,7 @@ body {
   overflow: hidden; /* app-like: prevent document scroll */
   overscroll-behavior: none;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(51, 246, 255, 0.14);
 }
 
 img,
@@ -212,12 +219,20 @@ a:hover {
 
 .app-shell {
   position: fixed;
-  inset: 0;
+  left: 0;
+  top: 0;
+  width: 100%;
+
+  /* ✅ Critical: use VisualViewport height when provided by App.tsx (--vvh-px)
+     so bottom CTAs never land under dynamic browser bars.
+     Fallbacks: 100dvh → 100vh. */
+  height: var(--vvh-px, 100dvh);
+  max-height: var(--vvh-px, 100dvh);
+
   display: flex;
   flex-direction: column;
-  width: 100%;
-  height: 100%;
   overflow: hidden;
+
   background: radial-gradient(
       circle at 10% -10%,
       rgba(0, 255, 196, 0.18) 0,
@@ -235,17 +250,6 @@ a:hover {
     ),
     linear-gradient(145deg, var(--bg-0), var(--bg-1), var(--bg-2));
   color: var(--text-main);
-}
-
-@supports (height: 100dvh) {
-  .app-shell {
-    height: 100dvh;
-  }
-}
-@supports (min-height: 100svh) {
-  .app-shell {
-    min-height: 100svh;
-  }
 }
 
 /* Subtle holographic grid */
@@ -271,6 +275,7 @@ a:hover {
   background-size: 72px 72px;
   mix-blend-mode: screen;
   mask-image: radial-gradient(circle at center, black 0, transparent 80%);
+  z-index: 0;
 }
 
 /* Rotating halo ring */
@@ -298,6 +303,7 @@ a:hover {
   filter: blur(40px);
   opacity: 0.65;
   animation: orbit-spin 64s linear infinite;
+  z-index: 0;
 }
 
 @keyframes orbit-spin {
@@ -337,6 +343,7 @@ a:hover {
   mix-blend-mode: screen;
   animation: golden-breath var(--breath) ease-in-out infinite;
   transform-origin: 50% 30%;
+  z-index: 0;
 }
 
 @keyframes golden-breath {
@@ -870,12 +877,14 @@ a:hover {
 /* ✅ PANEL BODY:
    - Always scrollable if needed
    - No document scroll; only this region scrolls
-   - Safe-area bottom padding so the last buttons are never behind iOS home bar
+   - ✅ Always has safe-area bottom padding so the last CTAs stay clickable
 */
 .panel-body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 1.05rem 1.25rem 1.25rem;
+
+  /* ✅ ALWAYS include safe-bottom so bottom buttons never sit behind iOS home bar */
+  padding: 1.05rem 1.25rem calc(1.25rem + var(--safe-bottom));
 
   /* ✅ the guarantee */
   overflow-y: auto;
@@ -890,6 +899,20 @@ a:hover {
 
   /* (optional) keep layout stable when scrollbar appears */
   scrollbar-gutter: stable both-edges;
+
+  /* ✅ enables pseudo “reserve space” without affecting layout */
+  position: relative;
+}
+
+/* ✅ EXTRA SCROLL REACH ONLY WHEN PANEL IS IN SCROLL MODE
+   AppChrome sets data-panel-scroll on .app-shell.
+   This creates “breathing room” so bottom CTA rows (PhiKey / PhiStream) can be
+   scrolled fully above browser UI and remain CLICKABLE. */
+.app-shell[data-panel-scroll="1"] .panel-body::after {
+  content: "";
+  display: block;
+  height: var(--bottom-actions-reserve);
+  width: 100%;
 }
 
 /* Keep "locked" semantics */
@@ -1098,6 +1121,7 @@ a:hover {
 @media (max-width: 650px) {
   :root {
     --topbar-h: 72px;
+    --bottom-actions-reserve: 112px; /* a hair more reach on tiny devices */
   }
 
   .app-frame {
@@ -1118,7 +1142,7 @@ a:hover {
     padding: 0.9rem 1rem;
   }
   .panel-body {
-    padding: 0.85rem 1rem 1rem;
+    padding: 0.85rem 1rem calc(1rem + var(--safe-bottom));
     scroll-padding-bottom: calc(1rem + var(--safe-bottom));
   }
   .panel-foot {
@@ -1138,14 +1162,31 @@ a:hover {
    12) FULL-PAGE routes (SigilPage + SigilFeedPage): scrollable
    - Home (inside AppChrome) stays app-locked, panel scrolls internally.
    - For FULL-PAGE pages, wrap your page root with class="fullpage-scroll".
+   ✅ Also safe-area padded so bottom buttons (PhiKey / PhiStream CTAs) are clickable.
    ─────────────────────────────────────────────────────────────── */
 
 .fullpage-scroll {
   position: fixed;
-  inset: 0;
+  left: 0;
+  top: 0;
+  width: 100%;
+
+  /* Same visible-viewport protection when possible */
+  height: 100dvh;
+  max-height: 100dvh;
+
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+
+  /* ✅ safe bottom padding so last CTAs never sit under iOS home bar */
   padding: clamp(1rem, 2.6vw, 2rem);
+  padding-bottom: calc(clamp(1rem, 2.6vw, 2rem) + var(--safe-bottom));
+
+  /* ✅ helps scroll-to-bottom keep CTAs in view */
+  scroll-padding-bottom: calc(clamp(1rem, 2.6vw, 2rem) + var(--safe-bottom));
+
   background: radial-gradient(
       circle at 10% -10%,
       rgba(0, 255, 196, 0.14) 0,
@@ -1158,6 +1199,14 @@ a:hover {
     ),
     linear-gradient(145deg, var(--bg-0), var(--bg-1), var(--bg-2));
   color: var(--text-main);
+}
+
+/* If dvh unsupported, fall back */
+@supports not (height: 100dvh) {
+  .fullpage-scroll {
+    height: 100vh;
+    max-height: 100vh;
+  }
 }
 
 .fullpage-scroll > * {
