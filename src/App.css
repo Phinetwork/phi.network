@@ -1656,3 +1656,66 @@ a:hover {
 .fullpage-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(170, 241, 255, 0.28);
 }
+/* ───────────────────────────────────────────────────────────────
+   MOBILE VISIBILITY GUARANTEE — Sovereign Declarations trigger
+   Fix: on short/mobile viewports, nav content can overflow but the page can’t scroll,
+        so the trigger becomes unreachable. We float it + reserve space.
+   Paste LAST (last wins).
+──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 980px), (max-height: 720px) {
+  /* Ensure nothing “hides” it due to older rules */
+  .nav-foot {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    margin-top: 0 !important;
+
+    /* Float it so it can never fall below the viewport */
+    position: fixed !important;
+    left: 12px;
+    right: 12px;
+    bottom: calc(-65px + env(safe-area-inset-bottom, 0px));
+    z-index: 120; /* above workspace chrome */
+  }
+
+  /* Keep it centered and full-width within the mobile safe margins */
+  .nav-foot__toggle {
+    width: min(720px, 100%);
+    margin: 0 auto;
+  }
+
+  /* Reserve space so the floating trigger never covers UI */
+  .app-stage {
+    padding-bottom: calc(0.95rem + var(--safe-bottom, 0px) + 78px) !important;
+  }
+
+  /* If any ancestor clips overflow, neutralize it */
+  .app-nav,
+  .app-workspace,
+  .app-frame,
+  .app-frame-inner {
+    overflow: visible !important;
+  }
+}
+
+/* Extra-tight phones (very short height): shrink the trigger slightly */
+@media (max-width: 380px), (max-height: 640px) {
+  .nav-foot__toggle {
+    padding: 6px 9px !important;
+    border-radius: 13px !important;
+  }
+  .nav-foot__badge {
+    width: 26px !important;
+    height: 26px !important;
+  }
+  .nav-foot__summary {
+    font-size: 11px !important;
+    line-height: 1.08 !important;
+  }
+  .nav-foot__chev {
+    padding: 4px 7px !important;
+    font-size: 9.75px !important;
+  }
+}

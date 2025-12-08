@@ -1,25 +1,31 @@
 /* ────────────────────────────────────────────────────────────────
    SealMomentModal.tsx — popover shown after "Seal This Moment"
-   v3.0 — Explorer wiring: auto-register minted URL (no backend)
+   v3.1 — Explorer wiring: auto-register minted URL (no backend)
    - Tries window.__SIGIL__.registerSigilUrl(url)
+   - Optional: window.__SIGIL__.registerSend({ type, url, hash })
    - Falls back to localStorage("sigil:urls") + DOM event
    - De-dupes; SSR-safe; no prop changes
 ────────────────────────────────────────────────────────────────── */
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import type { FC, MouseEventHandler } from "react";
 
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import type { FC, MouseEventHandler } from "react";
 import { createPortal } from "react-dom";
 import "./SealMomentModal.css";
 
-/* ── Explorer integration types (safe globals) ─────────────── */
+/* ── Explorer integration types (safe globals)
+   IMPORTANT: This MUST match other declarations (eg. SealMomentModalTransfer.tsx)
+   to avoid TS2717 "Subsequent property declarations must have the same type".
+────────────────────────────────────────────────────────────────── */
 declare global {
   interface Window {
-    __SIGIL__?: {
-      /** Optional global hook the Explorer can provide */
-      registerSigilUrl?: (url: string) => void;
-      /** Optional global hook used elsewhere for sending */
-      registerSend?: (rec: unknown) => void;
-    };
+    __SIGIL__?:
+      | {
+          /** Optional global hook the Explorer can provide */
+          registerSigilUrl?: ((url: string) => void) | undefined;
+          /** Optional global hook for send/record integrations */
+          registerSend?: ((rec: unknown) => void) | undefined;
+        }
+      | undefined;
   }
 }
 
@@ -46,7 +52,6 @@ function registerLocally(url: string) {
       list.push(url);
       window.localStorage.setItem(LS_KEY, JSON.stringify(list));
     }
-    // Notify any listening Explorer instance to refresh
     window.dispatchEvent(
       new CustomEvent("sigil:url-registered", { detail: { url } })
     );
@@ -77,13 +82,11 @@ const SealMomentModal: FC<Props> = ({
     if (lastRegisteredRef.current === url) return;
     lastRegisteredRef.current = url;
 
-    // Try global Explorer hook (if page provides it), else local fallback
-    const usedGlobal =
+    const hasGlobal =
       typeof window !== "undefined" &&
-      window.__SIGIL__ &&
-      typeof window.__SIGIL__.registerSigilUrl === "function";
+      typeof window.__SIGIL__?.registerSigilUrl === "function";
 
-    if (usedGlobal) {
+    if (hasGlobal) {
       try {
         window.__SIGIL__!.registerSigilUrl!(url);
       } catch {
@@ -92,7 +95,24 @@ const SealMomentModal: FC<Props> = ({
     } else {
       registerLocally(url);
     }
-  }, [open, url]);
+
+    // Optional send hook (never required)
+    const canSend =
+      typeof window !== "undefined" &&
+      typeof window.__SIGIL__?.registerSend === "function";
+
+    if (canSend) {
+      try {
+        window.__SIGIL__!.registerSend!({
+          type: "sigil:mint",
+          url,
+          hash,
+        } satisfies { type: string; url: string; hash: string });
+      } catch {
+        // ignore
+      }
+    }
+  }, [open, url, hash]);
 
   /* share support — SSR-safe & no `any` */
   const canShare = useMemo(() => {
@@ -139,7 +159,8 @@ const SealMomentModal: FC<Props> = ({
   useEffect(() => {
     if (!open) return;
 
-    previouslyFocusedRef.current = (document.activeElement as HTMLElement) ?? null;
+    previouslyFocusedRef.current =
+      (document.activeElement as HTMLElement) ?? null;
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -158,7 +179,7 @@ const SealMomentModal: FC<Props> = ({
     return () => {
       document.body.style.overflow = prevOverflow;
       document.removeEventListener("keydown", onKey, true);
-      clearTimeout(t);
+      window.clearTimeout(t);
       previouslyFocusedRef.current?.focus?.();
     };
   }, [open, trapFocus]);
@@ -171,6 +192,8 @@ const SealMomentModal: FC<Props> = ({
 
   const copy = async (t: string, label: string) => {
     try {
+      if (typeof navigator === "undefined") throw new Error("no navigator");
+      if (!navigator.clipboard?.writeText) throw new Error("no clipboard");
       await navigator.clipboard.writeText(t);
       announce(`${label} copied to clipboard`);
     } catch {
@@ -203,14 +226,16 @@ const SealMomentModal: FC<Props> = ({
   /* SAFE handlers (no capture-phase swallowing) */
   const handleClose: MouseEventHandler<HTMLButtonElement> = (e) => {
     e.preventDefault();
-    e.stopPropagation(); // keep overlay from seeing this
+    e.stopPropagation();
     onClose?.();
   };
 
-  const handleDownloadZip: MouseEventHandler<HTMLButtonElement> = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onDownloadZip?.();
+  const handleOverlayPointerDown: React.PointerEventHandler<HTMLDivElement> = (
+    e
+  ) => {
+    // Only block background interactions when the user clicks the overlay itself,
+    // never when clicking inside the card (otherwise buttons can stop working).
+    if (e.target === e.currentTarget) e.preventDefault();
   };
 
   return open
@@ -222,9 +247,8 @@ const SealMomentModal: FC<Props> = ({
           aria-labelledby="seal-title"
           aria-describedby="seal-desc"
           data-state="open"
-          // Prevent clicks on the overlay from stealing focus or bubbling to the page
           onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.preventDefault()}
+          onPointerDown={handleOverlayPointerDown}
         >
           {/* Background veil blocks page interactions by z-index + pointer-events in CSS */}
           <div className="seal-veil" aria-hidden="true" />
@@ -233,7 +257,6 @@ const SealMomentModal: FC<Props> = ({
             ref={cardRef}
             className="seal-card"
             role="document"
-            // Keep events inside the card (bubble-phase only so children still get clicks)
             onClick={(e) => e.stopPropagation()}
           >
             {/* ornaments */}
@@ -258,7 +281,8 @@ const SealMomentModal: FC<Props> = ({
                 Moment Sealed
               </h3>
               <p id="seal-desc" className="seal-subtitle">
-                Your Kairos imprint is preserved. Proceed to the url below to Inhale Claimed Ownership.
+                Your Kairos imprint is preserved. Proceed to the URL below to Inhale
+                Claimed Ownership.
               </p>
             </header>
 
@@ -327,11 +351,11 @@ const SealMomentModal: FC<Props> = ({
             <div className="cta-row">
               <button
                 className="primary cta"
-                onClick={handleDownloadZip}
+                onClick={onDownloadZip}
                 type="button"
               >
-                <CopyGlyph />
-                <span>Download Sigil Pack</span>
+                <DownloadGlyph />
+                <span>Download ZIP</span>
               </button>
 
               <button className="secondary cta" onClick={share} type="button">
@@ -341,9 +365,9 @@ const SealMomentModal: FC<Props> = ({
             </div>
 
             <p className="fine">
-              This moment is now sealed in time.
-              Use the link above within the next 11 breaths to claim ownership &amp;
-              gain permanent access to this kairos moment.
+              This moment is now sealed in time. Use the link above within the next
+              11 breaths to claim ownership &amp; gain permanent access to this
+              Kairos moment.
             </p>
 
             {/* live region for copy/share feedback */}
@@ -432,6 +456,34 @@ const LinkGlyph = () => (
       stroke="currentColor"
       strokeWidth="2"
       fill="none"
+    />
+  </svg>
+);
+
+const DownloadGlyph = () => (
+  <svg viewBox="0 0 24 24" aria-hidden className="ico">
+    <path
+      d="M12 3v10"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <path
+      d="M8 11l4 4 4-4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+    <path
+      d="M5 21h14"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      fill="none"
+      opacity=".85"
     />
   </svg>
 );
