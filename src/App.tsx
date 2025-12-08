@@ -296,7 +296,7 @@ function AppChrome(): React.JSX.Element {
   const navItems = useMemo<NavItem[]>(
     () => [
       { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
-      { to: "/mint", label: "Mint Sigil", desc: "Breath-mint artifact" },
+      { to: "/mint", label: "Mint ΦKey", desc: "Breath-mint artifact" },
       { to: "/voh", label: "KaiVoh", desc: "Emission OS" },
       { to: "/explorer", label: "ΦStream", desc: "Live keystream" },
     ],

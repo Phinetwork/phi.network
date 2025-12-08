@@ -131,7 +131,7 @@ const SigilMomentRow: FC<Props> = ({
 
   return (
     <div className="sigil-scope" style={scopeStyle}>
-      <h3 className="sigil-title">Kairos Sigil-Glyph Sealer</h3>
+      <h3 className="sigil-title">Kairos Sigil-Glyph Inhaler</h3>
 
       <div className="sigil-ribbon" aria-hidden="true" />
 

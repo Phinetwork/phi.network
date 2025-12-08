@@ -5,18 +5,17 @@ import React, {
   useMemo,
   useRef,
   useEffect,
-  useState,
 } from "react";
 
 export interface Props {
   dateISO: string;
   onDateChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  secondsLeft?: number;          // live φ countdown (from SigilModal)
-  solarPercent: number;          // kept for API compatibility (unused here)
-  eternalPercent: number;        // 0..100 live Eternal day %
-  solarColor?: string;           // default #ffd600
-  eternalColor?: string;         // default #8beaff (fallback)
-  eternalArkLabel?: string;      // e.g. "Ignition Ark"
+  secondsLeft?: number; // live φ countdown (from SigilModal)
+  solarPercent: number; // kept for API compatibility (unused here)
+  eternalPercent: number; // 0..100 live Eternal day %
+  solarColor?: string; // default #ffd600
+  eternalColor?: string; // default #8beaff (fallback)
+  eternalArkLabel?: string; // e.g. "Ignition Ark"
 }
 
 const clampPct = (n: number) => Math.max(0, Math.min(100, n));
@@ -32,17 +31,16 @@ type WithVars = React.CSSProperties & {
 function pickEternalColor(labelRaw: string | undefined, fallback: string): string {
   const label = (labelRaw ?? "").toLowerCase().trim();
 
-  // High-priority (your request)
+  // High-priority
   if (/(reflekt|reflect|reflektion|reflection)/i.test(label)) return "#22c55e"; // green
-  if (/(purify|purification|purifikation)/i.test(label))     return "#3b82f6"; // blue
-  if (/dream/i.test(label))                                   return "#7c3aed"; // purple
+  if (/(purify|purification|purifikation)/i.test(label)) return "#3b82f6"; // blue
+  if (/dream/i.test(label)) return "#7c3aed"; // purple
 
   // Other arcs / legacy terms
-  if (/(ignite|ignition)/i.test(label))       return "#ff3b30"; // red
+  if (/(ignite|ignition)/i.test(label)) return "#ff3b30"; // red
   if (/(integrate|integration)/i.test(label)) return "#ff8a00"; // orange
-  if (/(solar\s*plexus)/i.test(label))        return "#ffd600"; // yellow
+  if (/(solar\s*plexus)/i.test(label)) return "#ffd600"; // yellow
 
-  // Fallback to provided color
   return fallback;
 }
 
@@ -56,7 +54,6 @@ const SigilMomentRow: FC<Props> = ({
 }) => {
   const eternalPct = useMemo(() => clampPct(eternalPercent), [eternalPercent]);
 
-  // Resolve the Eternal bar color using the prioritized mapper
   const resolvedEternalColor = useMemo(
     () => pickEternalColor(eternalArkLabel, eternalColor),
     [eternalArkLabel, eternalColor]
@@ -69,18 +66,36 @@ const SigilMomentRow: FC<Props> = ({
   };
 
   // Unitless 0..1 fill (CRITICAL so the bar fully matches %)
-  const eternalFillVars: WithVars = { "--fill": (eternalPct / 100).toFixed(6) };
+  const eternalFillVars: WithVars = useMemo(
+    () => ({
+      "--fill": (eternalPct / 100).toFixed(6),
+    }),
+    [eternalPct]
+  );
 
-  // ===== Pulse-boundary "explosion" =====
-  const [boom, setBoom] = useState(false);
+  // ===== Pulse-boundary "explosion" (NO React state; DOM class toggle only) =====
+  const fillRef = useRef<HTMLDivElement | null>(null);
   const prevSecs = useRef<number | undefined>(undefined);
+
+  // ✅ Browser timers are numbers
   const boomTimer = useRef<number | null>(null);
+  const boomRaf = useRef<number | null>(null);
+
+  // Cleanup only on unmount
+  useEffect(() => {
+    return () => {
+      if (boomTimer.current !== null) window.clearTimeout(boomTimer.current);
+      if (boomRaf.current !== null) window.cancelAnimationFrame(boomRaf.current);
+      if (fillRef.current) fillRef.current.classList.remove("is-boom");
+      boomTimer.current = null;
+      boomRaf.current = null;
+    };
+  }, []);
 
   useEffect(() => {
-    // Guard reduced-motion users
     const prefersReduced =
       typeof window !== "undefined" &&
-      window.matchMedia &&
+      typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (typeof secondsLeft !== "number" || prefersReduced) {
@@ -88,24 +103,35 @@ const SigilMomentRow: FC<Props> = ({
       return;
     }
 
+    const el = fillRef.current;
     const prev = prevSecs.current;
-    // Detect boundary: secondsLeft resets from ~0 back to ~5.236 (i.e., increases)
-    if (typeof prev === "number" && secondsLeft > prev) {
-      // Fire a short "burst" on the fill tip
-      setBoom(true);
-      if (boomTimer.current) window.clearTimeout(boomTimer.current);
-      boomTimer.current = window.setTimeout(() => setBoom(false), 420);
-    }
-    prevSecs.current = secondsLeft;
 
-    return () => {
-      if (boomTimer.current) window.clearTimeout(boomTimer.current);
-    };
+    if (el && typeof prev === "number") {
+      const jump = secondsLeft - prev;
+      const JUMP_THRESHOLD = 1.2; // seconds
+
+      if (jump > JUMP_THRESHOLD) {
+        el.classList.remove("is-boom");
+
+        if (boomRaf.current !== null) window.cancelAnimationFrame(boomRaf.current);
+        boomRaf.current = window.requestAnimationFrame(() => {
+          el.classList.add("is-boom");
+        });
+
+        if (boomTimer.current !== null) window.clearTimeout(boomTimer.current);
+        boomTimer.current = window.setTimeout(() => {
+          el.classList.remove("is-boom");
+          boomTimer.current = null;
+        }, 420);
+      }
+    }
+
+    prevSecs.current = secondsLeft;
   }, [secondsLeft]);
 
   return (
     <div className="sigil-scope" style={scopeStyle}>
-      <h3 className="sigil-title">Kairos Sigil-Glyph Sealer</h3>
+      <h3 className="sigil-title">Kairos Sigil-Glyph Inhaler</h3>
 
       <div className="sigil-ribbon" aria-hidden="true" />
 
@@ -141,17 +167,14 @@ const SigilMomentRow: FC<Props> = ({
             aria-label={`Eternal day ${eternalArkLabel || ""}`}
           >
             <div
-              className={
-                "sigil-bar__fill sigil-bar__fill--eternal" +
-                (boom ? " is-boom" : "")
-              }
+              ref={fillRef}
+              className="sigil-bar__fill sigil-bar__fill--eternal"
               style={eternalFillVars}
             />
           </div>
         </div>
       </div>
 
-      {/* Local, scoped styles: neon, breath, and boundary burst */}
       <style>{`
         .sigil-ribbon {
           height: 1px;
@@ -162,15 +185,6 @@ const SigilMomentRow: FC<Props> = ({
           animation-delay: var(--pulse-offset, 0ms);
           filter: drop-shadow(0 0 8px rgba(139,234,255,.12));
         }
-
-        .sigil-countdown {
-          margin-left: auto;
-          font-size: .9rem;
-          opacity: .92;
-          color: var(--ink, rgba(255,255,255,.92));
-          white-space: nowrap;
-        }
-        .sigil-countdown strong { font-variant-numeric: tabular-nums; }
 
         .sigil-bars { display: grid; gap: .6rem; margin-top: .65rem; }
 
@@ -192,12 +206,11 @@ const SigilMomentRow: FC<Props> = ({
         .sigil-bar__fill {
           position: absolute; inset: 0 auto 0 0; width: 100%;
           transform-origin: left center;
-          transform: scaleX(var(--fill, 0)); /* unitless 0..1 */
+          transform: scaleX(var(--fill, 0));
           transition: transform .45s cubic-bezier(.22,.61,.36,1);
           will-change: transform, filter;
         }
 
-        /* Neon Eternal bar: live Ark color, breathing glow synced to --pulse */
         .sigil-bar__fill--eternal {
           background:
             radial-gradient(120% 100% at 0% 50%, rgba(255,255,255,.18), transparent 60%) padding-box,
@@ -210,7 +223,6 @@ const SigilMomentRow: FC<Props> = ({
           animation-delay: var(--pulse-offset, 0ms);
         }
 
-        /* Spark node at the leading edge (stays at the right edge of the scaled fill) */
         .sigil-bar__fill--eternal::after {
           content: "";
           position: absolute;
@@ -228,7 +240,6 @@ const SigilMomentRow: FC<Props> = ({
           pointer-events: none;
         }
 
-        /* Boundary "explosion": flash + expanding spark ring from the leading edge */
         .sigil-bar__fill--eternal.is-boom {
           animation: barGlow var(--pulse) ease-in-out infinite, explodeFlash 420ms cubic-bezier(.18,.6,.2,1) 1;
           animation-delay: var(--pulse-offset, 0ms), 0ms;
@@ -236,6 +247,7 @@ const SigilMomentRow: FC<Props> = ({
             drop-shadow(0 0 22px color-mix(in oklab, var(--eternal-bar, #8beaff) 85%, transparent 15%))
             drop-shadow(0 0 36px color-mix(in oklab, var(--eternal-bar, #8beaff) 65%, transparent 35%));
         }
+
         .sigil-bar__fill--eternal.is-boom::before {
           content: "";
           position: absolute;
@@ -250,7 +262,6 @@ const SigilMomentRow: FC<Props> = ({
           animation: sparkBurst 420ms cubic-bezier(.18,.6,.2,1) 1;
         }
 
-        /* 5.236s breath glow (subtle neon breathing) */
         @keyframes barGlow {
           0%   { filter: drop-shadow(0 0 10px color-mix(in oklab, var(--eternal-bar, #8beaff) 45%, transparent))
                           drop-shadow(0 0 18px color-mix(in oklab, var(--eternal-bar, #8beaff) 25%, transparent)); }
@@ -260,7 +271,6 @@ const SigilMomentRow: FC<Props> = ({
                           drop-shadow(0 0 18px color-mix(in oklab, var(--eternal-bar, #8beaff) 25%, transparent)); }
         }
 
-        /* Explosion flash on boundary */
         @keyframes explodeFlash {
           0%   { box-shadow: inset 0 0 0 0 rgba(255,255,255,0); transform: scaleX(var(--fill)) scaleY(1); }
           14%  { box-shadow: inset 0 0 0 2px rgba(255,255,255,.25); transform: scaleX(var(--fill)) scaleY(1.18); }
@@ -268,7 +278,6 @@ const SigilMomentRow: FC<Props> = ({
           100% { box-shadow: inset 0 0 0 0 rgba(255,255,255,0); transform: scaleX(var(--fill)) scaleY(1); }
         }
 
-        /* Expanding spark ring from the tip */
         @keyframes sparkBurst {
           0%   { opacity: .98; transform: scale(1);   filter: blur(0);   }
           40%  { opacity: .85; transform: scale(2.6); filter: blur(.5px);}
@@ -281,14 +290,6 @@ const SigilMomentRow: FC<Props> = ({
           100% { background-position: 0% 0%; opacity: .8; }
         }
 
-        /* Mobile polish */
-        @media (max-width: 680px) {
-          .sigil-row { flex-wrap: wrap; gap: .6rem .75rem; }
-          .sigil-countdown { width: 100%; order: 2; }
-          .sigil-input { min-width: 14ch; flex: 1 1 auto; }
-        }
-
-        /* Motion safety */
         @media (prefers-reduced-motion: reduce) {
           .sigil-bar__fill--eternal,
           .sigil-ribbon { animation: none !important; }
