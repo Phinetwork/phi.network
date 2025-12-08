@@ -131,7 +131,7 @@ export default function SovereignDeclarations(): React.JSX.Element {
           </span>
 
           <span className="nav-foot__chev" aria-hidden="true">
-            <span className="nav-foot__chevLabel">Open</span>
+
             <span className="nav-foot__chevIcon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path
