@@ -99,6 +99,7 @@ import { recordSend, getSpentScaledFor, markConfirmedByLeaf } from "../../utils/
 /* Live chart popover (stay inside Verifier modal) */
 import LiveChart from "../valuation/chart/LiveChart";
 import type { ChartPoint } from "../valuation/series";
+import InhaleUploadIcon from "../InhaleUploadIcon";
 
 /* ─────────── Shared inline styles / tiny components to shrink markup ─────────── */
 const S = {
@@ -1883,17 +1884,19 @@ const VerifierStamperInner: React.FC = () => {
           </div>
 
           <div className="toolbar-actions" aria-label="Verifier actions">
-         <button
-  className="primary upload-phikey"
-  onClick={() => svgInput.current?.click()}
-  type="button"
->
-  <span className="phi-iconbox" aria-hidden="true">
-    <img className="phi-mark" src="/phi.svg" alt="" />
-  </span>
-  <span>ΦKey</span>
-</button>
+            <button
+              className="primary"
+              onClick={() => svgInput.current?.click()}
+              type="button"
+            >
+           <InhaleUploadIcon color="#37FFE4" />
 
+              <span className="phikey-label" aria-label="PhiKey">
+  <img className="phikey-mark" src="/phi.svg" alt="Φ" />
+  <span className="phikey-text">Key</span>
+</span>
+
+            </button>
           </div>
         </div>
       </div>

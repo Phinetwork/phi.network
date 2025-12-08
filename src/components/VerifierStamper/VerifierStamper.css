@@ -2108,4 +2108,29 @@ dialog.glass-modal.fullscreen[data-open="true"] {
   filter:
     drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent))
     drop-shadow(0 0 10px color-mix(in srgb, var(--accent-2) 35%, transparent));
+}.phikey-label{
+  display: inline-flex;
+  align-items: center;
+  gap: 0px;                 /* ✅ super tight */
+  min-width: 0;
+  line-height: 1;
 }
+
+.phikey-mark{
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  opacity: 0.95;
+  transform: translateY(0); /* ✅ no drift */
+  margin-right: -1px;       /* ✅ tighten the join (tweak -0.5px..-2px) */
+  filter:
+    drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent))
+    drop-shadow(0 0 10px color-mix(in srgb, var(--accent-2) 35%, transparent));
+}
+
+.phikey-text{
+  font-weight: 800;
+  letter-spacing: -0.01em;  /* ✅ pulls letters tighter */
+  line-height: 1;
+}
+.ico{ filter: drop-shadow(0 0 10px color-mix(in srgb, currentColor 35%, transparent)); }
