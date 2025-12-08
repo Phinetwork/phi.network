@@ -126,7 +126,7 @@ export default function SovereignDeclarations(): React.JSX.Element {
           </span>
 
           <span className="nav-foot__main">
-            <span className="nav-foot__kicker">SOVEREIGN DEKLARATIONS</span>
+            <span className="nav-foot__kicker">SOVEREIGN WRIT</span>
             <span className="nav-foot__summary">{triggerSummary}</span>
           </span>
 
