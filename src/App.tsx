@@ -668,6 +668,7 @@ export default function App(): React.JSX.Element {
         <Route path="feed" element={<SigilFeedPage />} />
         <Route path="feed/p/:token" element={<SigilFeedPage />} />
         <Route path="p~:token" element={<SigilFeedPage />} />
+        <Route path="p~token" element={<SigilFeedPage />} />
         <Route path="p" element={<PShort />} />
 
         {/* Everything else stays inside the Sovereign Gate chrome */}
