@@ -393,12 +393,11 @@ async function encodeTokenInWorker(payload: FeedPostPayload): Promise<EncodeWork
   return p;
 }
 
-/** ✅ Worker-first, deterministic fallback if worker is blocked/unavailable */
+/** ✅ Worker-first, deterministic fallback if worker is blocked/unavailable OR crashes */
 async function encodeTokenWorkerFirst(payload: FeedPostPayload): Promise<EncodeWorkerResponse> {
-  try {
-    return await encodeTokenInWorker(payload);
-  } catch {
-    const t0 = nowMs();
+  const t0 = nowMs();
+
+  const mainThread = (): EncodeWorkerResponse => {
     try {
       const out = encodeTokenWithBudgets(payload);
       return {
@@ -416,8 +415,25 @@ async function encodeTokenWorkerFirst(payload: FeedPostPayload): Promise<EncodeW
         ms: nowMs() - t0,
       };
     }
+  };
+
+  try {
+    const res = await encodeTokenInWorker(payload);
+
+    // ✅ KEY FIX: if worker returns a failure (including "crashed"), fall back
+    if (!res.ok) {
+      const fallback = mainThread();
+      // If fallback succeeds, prefer it. If it also fails, return worker error.
+      return fallback.ok ? fallback : res;
+    }
+
+    return res;
+  } catch {
+    // Worker unavailable/constructor throw/etc.
+    return mainThread();
   }
 }
+
 
 /* ───────────────────────── Component ───────────────────────── */
 
