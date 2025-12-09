@@ -3,21 +3,19 @@
 
 /**
  * KaiVoh — Stream Exhale Composer
- * v4.2 — Lineage-aware stream exhale + Story Recorder + Attach-anything
+ * v4.6 — FIX: non-hanging Exhale via Module Worker encode + stage diagnostics
+ *        - Moves encodeTokenWithBudgets off the main thread (prevents UI stalls)
+ *        - Adds hard timeouts + “where it stopped” stage reporting
+ *        - Keeps the SAME token format (still uses encodeTokenWithBudgets from feedPayload)
  *
  * Primary role:
  * - Exhale a /stream/p/<token> URL bound to the current verified Sigil.
  * - Attach documents, folders, tiny inline files, extra URLs, and recorded stories.
  * - Embed parentUrl/originUrl lineage + register the stream URL with Sigil Explorer.
  *
- * Features:
- * - Icon-only button to open the Story Recorder (no visible text label).
- * - Captured video added as `file-ref` (SHA-256) + inline PNG thumbnail.
- * - Extra URLs; file/folder upload; inline tiny files; token length guard; verified sigil binding.
- * - Each /stream/p/<token> exhale:
- *      • embeds parentUrl/originUrl into FeedPostPayload
- *      • registers the stream URL with the Sigil Explorer via sigilRegistry
- *      • (optional) notifies parent via onExhale callback.
+ * Notes:
+ * - Token encoding happens in a Web Worker to prevent “Exhale Stream URL” hanging.
+ * - If worker import fails (CSP/old browser), we fail fast with a precise reason.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -26,15 +24,22 @@ import "./styles/KaiVoh.css";
 
 import {
   ATTACHMENTS_VERSION,
+  TOKEN_SOFT_BUDGET,
+  TOKEN_HARD_LIMIT,
   type Attachments,
   type AttachmentItem,
   type FeedPostPayload,
+  type PostBody,
   makeAttachments,
   makeFileRefAttachment,
   makeInlineAttachment,
   makeUrlAttachment,
+  makeBasePayload,
+  makeTextBody,
+  makeCodeBody,
+  makeMarkdownBody,
+  makeHtmlBody,
   preparePayloadForLink,
-  encodeFeedPayload,
 } from "../../utils/feedPayload";
 
 import { momentFromUTC } from "../../utils/kai_pulse";
@@ -52,52 +57,19 @@ export interface KaiVohExhaleResult {
 }
 
 export interface KaiVohProps {
-  /** Optional initial caption text (e.g., prefilled from upstream composer). */
   initialCaption?: string;
-  /** Optional initial author handle (e.g., @KaiRexKlok). */
   initialAuthor?: string;
-  /**
-   * Optional callback fired whenever an Exhale succeeds.
-   * This lets KaiVohApp treat the exhale URL as the "composed" post for next steps.
-   */
   onExhale?: (result: KaiVohExhaleResult) => void;
 }
 
 /* ───────────────────────── Inline Icons (no visible text) ───────────────────────── */
 
 function IconCamRecord(): ReactElement {
-  // Rounded camera with lens + small REC dot (top-right)
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className="ico"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <rect
-        x="3"
-        y="6"
-        width="14"
-        height="12"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
-      <circle
-        cx="10"
-        cy="12"
-        r="3"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
-      <path
-        d="M17 9l4-2v10l-4-2z"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
+    <svg viewBox="0 0 24 24" className="ico" aria-hidden="true" focusable="false">
+      <rect x="3" y="6" width="14" height="12" rx="3" stroke="currentColor" strokeWidth="2" fill="none" />
+      <circle cx="10" cy="12" r="3" stroke="currentColor" strokeWidth="2" fill="none" />
+      <path d="M17 9l4-2v10l-4-2z" stroke="currentColor" strokeWidth="2" fill="none" />
       <circle cx="18.5" cy="5.5" r="2.5" fill="currentColor" />
     </svg>
   );
@@ -105,18 +77,8 @@ function IconCamRecord(): ReactElement {
 
 function IconTrash(): ReactElement {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className="ico"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d="M3 6h18M9 6V4h6v2M7 6l1 14h8l1-14"
-        stroke="currentColor"
-        strokeWidth="2"
-        fill="none"
-      />
+    <svg viewBox="0 0 24 24" className="ico" aria-hidden="true" focusable="false">
+      <path d="M3 6h18M9 6V4h6v2M7 6l1 14h8l1-14" stroke="currentColor" strokeWidth="2" fill="none" />
       <path d="M10 10v6M14 10v6" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
@@ -125,8 +87,6 @@ function IconTrash(): ReactElement {
 /* ───────────────────────── Constants ───────────────────────── */
 
 const MAX_INLINE_BYTES = 6_000 as const; // per-file inline cap
-const MAX_SUGGESTED_TOKEN_LEN = 7_000 as const; // warning threshold
-
 const KB = 1024;
 const MB = 1024 * KB;
 
@@ -151,7 +111,7 @@ const isHttpUrl = (s: unknown): s is string => {
   }
 };
 
-/** Any supported stream link form? (#t=, ?p=, /stream|feed/p/) — no /p~ */
+/** Any supported stream link form? (#t=, ?p=, /stream|feed/p/, /p~) */
 function isLikelySigilUrl(u: string): boolean {
   try {
     const url = new URL(u, globalThis.location?.origin ?? "https://example.org");
@@ -159,25 +119,44 @@ function isLikelySigilUrl(u: string): boolean {
     const hasQuery = new URLSearchParams(url.search).has("p");
     const p = url.pathname;
     const hasPath = /^\/(?:stream|feed)\/p\/[^/]+$/.test(p);
-    return hasHash || hasQuery || hasPath;
+    const hasTilde = /^\/p~[^/?#]+$/.test(p);
+    return hasHash || hasQuery || hasPath || hasTilde;
   } catch {
     return false;
   }
 }
 
-/** base64url from ArrayBuffer */
-function base64urlFromBytes(buf: ArrayBuffer): string {
+/**
+ * base64url (byte-safe, no btoa/atob)
+ * Prevents “giant string” stalls and works for any ArrayBuffer size.
+ */
+function base64UrlEncodeBytes(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) {
-    bin += String.fromCharCode(bytes[i]);
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const outParts: string[] = [];
+  const n = bytes.length;
+
+  let i = 0;
+  for (; i + 2 < n; i += 3) {
+    const x = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+    outParts.push(
+      alphabet[(x >>> 18) & 63] +
+        alphabet[(x >>> 12) & 63] +
+        alphabet[(x >>> 6) & 63] +
+        alphabet[x & 63],
+    );
   }
-  const b64 =
-    typeof globalThis.btoa === "function"
-      ? globalThis.btoa(bin)
-      : // Fallback for environments without btoa (rare for "use client")
-        Buffer.from(bin, "binary").toString("base64");
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+
+  const rem = n - i;
+  if (rem === 1) {
+    const x = bytes[i] << 16;
+    outParts.push(alphabet[(x >>> 18) & 63] + alphabet[(x >>> 12) & 63] + "==");
+  } else if (rem === 2) {
+    const x = (bytes[i] << 16) | (bytes[i + 1] << 8);
+    outParts.push(alphabet[(x >>> 18) & 63] + alphabet[(x >>> 12) & 63] + alphabet[(x >>> 6) & 63] + "=");
+  }
+
+  return outParts.join("").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 /** Read string/number from object or nested meta, safely */
@@ -257,7 +236,7 @@ function extractSigilActionUrlFromSvgText(
 
     for (const a of Array.from(doc.getElementsByTagName("a"))) {
       const href = a.getAttribute("href") || a.getAttribute("xlink:href");
-      if (isHttpUrl(href)) return href!;
+      if (isHttpUrl(href)) return href;
     }
   } catch {
     /* ignore */
@@ -273,17 +252,14 @@ async function cachePutAndUrl(
 ): Promise<string | undefined> {
   const cacheName = opts.cacheName ?? "sigil-attachments-v1";
   const pathPrefix = (opts.pathPrefix ?? "/att/").replace(/\/+$/, "") + "/";
+
   try {
-    if (!("caches" in globalThis) || typeof caches.open !== "function") {
-      return undefined;
-    }
+    if (!("caches" in globalThis) || typeof caches.open !== "function") return undefined;
     const cache = await caches.open(cacheName);
     const url = `${pathPrefix}${sha256}`;
     await cache.put(
       new Request(url, { method: "GET" }),
-      new Response(blob, {
-        headers: { "Content-Type": blob.type || "application/octet-stream" },
-      }),
+      new Response(blob, { headers: { "Content-Type": blob.type || "application/octet-stream" } }),
     );
     return url;
   } catch {
@@ -300,6 +276,145 @@ function formatMs(ms: number): string {
   return `${mm}:${ss}`;
 }
 
+function firstLine(s: string): string {
+  const n = s.indexOf("\n");
+  return n >= 0 ? s.slice(0, n) : s;
+}
+
+function trunc(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(0, max - 1))}…`;
+}
+
+type BodyKind = "text" | "code" | "md" | "html";
+type HtmlMode = "code" | "sanitized";
+type UrlItem = Extract<AttachmentItem, { kind: "url" }>;
+
+/* ───────────────────────── Non-hanging encode (Module Worker) ───────────────────────── */
+
+type EncodeWorkerRequest = {
+  id: string;
+  payload: FeedPostPayload;
+};
+
+type EncodeWorkerResponse =
+  | { id: string; ok: true; token: string; withinHard: boolean; ms: number }
+  | { id: string; ok: false; error: string; ms: number };
+
+type EncodeDiag = {
+  stage: string;
+  totalMs: number;
+  prepareMs?: number;
+  encodeMs?: number;
+  tokenLen?: number;
+  items?: number;
+  inlinedBytes?: number;
+  totalBytes?: number;
+  note?: string;
+};
+
+const nowMs = (): number => (typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now());
+
+const nextPaint = async (): Promise<void> => {
+  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+};
+
+const withTimeout = async <T,>(p: Promise<T>, ms: number, label: string): Promise<T> => {
+  let t: number | null = null;
+  const timeoutP = new Promise<never>((_, rej) => {
+    t = window.setTimeout(() => rej(new Error(`${label} timed out`)), ms);
+  });
+  try {
+    return await Promise.race([p, timeoutP]);
+  } finally {
+    if (t !== null) window.clearTimeout(t);
+  }
+};
+
+const makeId = (): string => {
+  const c: Crypto | undefined = typeof crypto !== "undefined" ? crypto : undefined;
+  if (c && "randomUUID" in c && typeof c.randomUUID === "function") return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+};
+
+// Singleton worker plumbing (module-scope; not React state)
+let _encodeWorker: Worker | null = null;
+let _encodeWorkerUrl: string | null = null;
+const _pending = new Map<string, (res: EncodeWorkerResponse) => void>();
+
+function getEncodeWorker(): Worker {
+  if (_encodeWorker) return _encodeWorker;
+  if (typeof window === "undefined") throw new Error("encode worker unavailable (no window)");
+  if (typeof Worker === "undefined") throw new Error("encode worker unavailable (Worker not supported)");
+
+  // IMPORTANT: resolve the module URL in real code (so bundler rewrites it correctly)
+  const feedPayloadModUrl = new URL("../../utils/feedPayload", import.meta.url).href;
+
+  const workerSrc = `
+    const FEED_PAYLOAD_URL = ${JSON.stringify(feedPayloadModUrl)};
+    const now = () => (self.performance && self.performance.now ? self.performance.now() : Date.now());
+
+    self.onmessage = async (ev) => {
+      const t0 = now();
+      const data = ev.data || {};
+      const id = data.id;
+      try {
+        const mod = await import(FEED_PAYLOAD_URL);
+        if (!mod || typeof mod.encodeTokenWithBudgets !== "function") {
+          throw new Error("encodeTokenWithBudgets export missing from utils/feedPayload");
+        }
+        const out = await mod.encodeTokenWithBudgets(data.payload);
+        self.postMessage({ id, ok: true, token: out.token, withinHard: out.withinHard, ms: now() - t0 });
+      } catch (e) {
+        const msg = e && e.message ? String(e.message) : String(e);
+        self.postMessage({ id, ok: false, error: msg, ms: now() - t0 });
+      }
+    };
+  `;
+
+  const blob = new Blob([workerSrc], { type: "text/javascript" });
+  const url = URL.createObjectURL(blob);
+  _encodeWorkerUrl = url;
+  _encodeWorker = new Worker(url, { type: "module", name: "kaiVohEncodeWorker" });
+
+  _encodeWorker.onmessage = (ev: MessageEvent<EncodeWorkerResponse>) => {
+    const msg = ev.data;
+    const cb = _pending.get(msg.id);
+    if (!cb) return;
+    _pending.delete(msg.id);
+    cb(msg);
+  };
+
+  _encodeWorker.onerror = () => {
+    // If the worker dies, fail all inflight and reset.
+    for (const [, cb] of _pending) cb({ id: makeId(), ok: false, error: "encode worker crashed", ms: 0 });
+    _pending.clear();
+    try {
+      _encodeWorker?.terminate();
+    } catch {
+      /* ignore */
+    }
+    _encodeWorker = null;
+    if (_encodeWorkerUrl) {
+      URL.revokeObjectURL(_encodeWorkerUrl);
+      _encodeWorkerUrl = null;
+    }
+  };
+
+  return _encodeWorker;
+}
+
+async function encodeTokenInWorker(payload: FeedPostPayload): Promise<EncodeWorkerResponse> {
+  const worker = getEncodeWorker();
+  const id = makeId();
+  const p = new Promise<EncodeWorkerResponse>((resolve) => {
+    _pending.set(id, resolve);
+    const req: EncodeWorkerRequest = { id, payload };
+    worker.postMessage(req);
+  });
+  return p;
+}
+
 /* ───────────────────────── Component ───────────────────────── */
 
 export default function KaiVoh({
@@ -310,19 +425,19 @@ export default function KaiVoh({
   const { auth } = useSigilAuth();
   const sigilMeta = auth.meta;
 
-  // Composer text
   const [caption, setCaption] = useState<string>(initialCaption);
   const [author, setAuthor] = useState<string>(initialAuthor);
 
-  // Identity (locked when verified)
+  const [bodyKind, setBodyKind] = useState<BodyKind>("text");
+  const [codeLang, setCodeLang] = useState<string>("tsx");
+  const [htmlMode, setHtmlMode] = useState<HtmlMode>("code");
+
   const [phiKey, setPhiKey] = useState<string>("");
   const [kaiSignature, setKaiSignature] = useState<string>("");
 
-  // Extras: URLs (as AttachmentItem "url")
   const [extraUrlField, setExtraUrlField] = useState<string>("");
-  const [extraUrls, setExtraUrls] = useState<AttachmentItem[]>([]);
+  const [extraUrls, setExtraUrls] = useState<UrlItem[]>([]);
 
-  // Files/folders
   const [files, setFiles] = useState<File[]>([]);
   const [attachments, setAttachments] = useState<Attachments>({
     version: ATTACHMENTS_VERSION,
@@ -330,33 +445,39 @@ export default function KaiVoh({
     inlinedBytes: 0,
     items: [],
   });
+  const attachmentsRef = useRef<Attachments>(attachments);
 
-  // Story recorder modal + preview
   const [storyOpen, setStoryOpen] = useState<boolean>(false);
-  const [storyPreview, setStoryPreview] = useState<{
-    url: string;
-    durationMs: number;
-  } | null>(null);
+  const [storyPreview, setStoryPreview] = useState<{ url: string; durationMs: number } | null>(null);
 
-  // UX state
   const [busy, setBusy] = useState<boolean>(false);
+  const [stage, setStage] = useState<string>(""); // ✅ tells you where it is stuck
+  const [diag, setDiag] = useState<EncodeDiag | null>(null); // ✅ “why” + timings
+
   const [err, setErr] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [generatedUrl, setGeneratedUrl] = useState<string>("");
   const [tokenLength, setTokenLength] = useState<number>(0);
+  const [urlMode, setUrlMode] = useState<"path" | "hash">("path");
 
   const dropRef = useRef<HTMLDivElement | null>(null);
   const hasVerifiedSigil = Boolean(sigilMeta);
 
-  // Keep local state aligned if parent passes new defaults (rare, but safe)
-  useEffect(() => {
-    setCaption(initialCaption);
-  }, [initialCaption]);
+  useEffect(() => setCaption(initialCaption), [initialCaption]);
+  useEffect(() => setAuthor(initialAuthor), [initialAuthor]);
 
   useEffect(() => {
-    setAuthor(initialAuthor);
-  }, [initialAuthor]);
+    attachmentsRef.current = attachments;
+  }, [attachments]);
+
+  // Clean up story URL if component unmounts
+  useEffect(() => {
+    return () => {
+      if (storyPreview) URL.revokeObjectURL(storyPreview.url);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Preferred sigil action URL from meta/SVG; fall back to origin */
   const sigilActionUrl = useMemo(() => {
@@ -374,10 +495,7 @@ export default function KaiVoh({
 
     if (metaFirst) return metaFirst;
 
-    const extracted = extractSigilActionUrlFromSvgText(
-      auth.svgText,
-      sigilMeta as unknown as Record<string, unknown>,
-    );
+    const extracted = extractSigilActionUrlFromSvgText(auth.svgText, (sigilMeta ?? {}) as Record<string, unknown>);
     return extracted || (globalThis.location?.origin ?? "https://kaiklok.com");
   }, [sigilMeta, auth.svgText]);
 
@@ -407,34 +525,45 @@ export default function KaiVoh({
 
   /* ───────────── File/Folder ingest ───────────── */
 
-  const readFilesToAttachments = async (
-    fileList: File[],
-  ): Promise<Attachments> => {
-    const items = attachments.items.slice();
+  function fileNameWithPath(f: File): string {
+    const maybe = f as File & { webkitRelativePath?: string };
+    const rel = typeof maybe.webkitRelativePath === "string" ? maybe.webkitRelativePath : "";
+    return rel.trim() ? rel : f.name;
+  }
+
+  async function sha256FileHex(f: File): Promise<string> {
+    const buf = await f.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buf);
+    const v = new Uint8Array(digest);
+    let out = "";
+    for (let i = 0; i < v.length; i++) out += v[i].toString(16).padStart(2, "0");
+    return out;
+  }
+
+  const readFilesToAttachments = async (fileList: File[]): Promise<Attachments> => {
+    const baseItems = attachmentsRef.current.items.slice();
+    const items = baseItems;
 
     for (const f of fileList) {
+      const displayName = fileNameWithPath(f);
+
       if (f.size <= MAX_INLINE_BYTES) {
-        // Inline tiny file
         const buf = await f.arrayBuffer();
         items.push(
           makeInlineAttachment({
-            name: f.name,
+            name: displayName,
             type: f.type || "application/octet-stream",
             size: f.size,
-            data_b64url: base64urlFromBytes(buf),
+            data_b64url: base64UrlEncodeBytes(buf),
           }),
         );
       } else {
-        // Large: cache → file-ref with url
         const sha = await sha256FileHex(f);
-        const url = await cachePutAndUrl(sha, f, {
-          cacheName: "sigil-attachments-v1",
-          pathPrefix: "/att/",
-        });
+        const url = await cachePutAndUrl(sha, f, { cacheName: "sigil-attachments-v1", pathPrefix: "/att/" });
         items.push(
           makeFileRefAttachment({
             sha256: sha,
-            name: f.name,
+            name: displayName,
             type: f.type || "application/octet-stream",
             size: f.size,
             url,
@@ -445,17 +574,6 @@ export default function KaiVoh({
 
     return makeAttachments(items);
   };
-
-  async function sha256FileHex(f: File): Promise<string> {
-    const buf = await f.arrayBuffer();
-    const digest = await crypto.subtle.digest("SHA-256", buf);
-    const v = new Uint8Array(digest);
-    let out = "";
-    for (let i = 0; i < v.length; i++) {
-      out += v[i].toString(16).padStart(2, "0");
-    }
-    return out;
-  }
 
   const onPickFiles = async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
     if (!e.target.files) return;
@@ -480,12 +598,9 @@ export default function KaiVoh({
 
   const clearFiles = (): void => {
     setFiles([]);
-    setAttachments({
-      version: ATTACHMENTS_VERSION,
-      totalBytes: 0,
-      inlinedBytes: 0,
-      items: [],
-    });
+    const empty: Attachments = { version: ATTACHMENTS_VERSION, totalBytes: 0, inlinedBytes: 0, items: [] };
+    setAttachments(empty);
+    attachmentsRef.current = empty;
   };
 
   /* ───────────── Story capture wiring ───────────── */
@@ -493,16 +608,11 @@ export default function KaiVoh({
   function estimateBase64DataSize(dataUrl: string): number {
     const [, data] = dataUrl.split(",", 2);
     if (!data) return 0;
-    // base64 length → bytes ≈ (len * 3)/4
     return Math.ceil((data.length * 3) / 4);
   }
 
   async function handleStoryCaptured(s: CapturedStory): Promise<void> {
-    // Cache main video and attach as file-ref with url
-    const videoUrl = await cachePutAndUrl(s.sha256, s.file, {
-      cacheName: "sigil-attachments-v1",
-      pathPrefix: "/att/",
-    });
+    const videoUrl = await cachePutAndUrl(s.sha256, s.file, { cacheName: "sigil-attachments-v1", pathPrefix: "/att/" });
 
     const videoRef = makeFileRefAttachment({
       sha256: s.sha256,
@@ -512,11 +622,11 @@ export default function KaiVoh({
       url: videoUrl,
     });
 
-    // Inline tiny PNG thumb
     const b64 = (s.thumbnailDataUrl.split(",", 2)[1] ?? "")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
       .replace(/=+$/g, "");
+
     const thumbInline = makeInlineAttachment({
       name: s.file.name.replace(/\.(webm|mp4)$/i, "") + "_thumb.png",
       type: "image/png",
@@ -524,35 +634,65 @@ export default function KaiVoh({
       data_b64url: b64,
     });
 
-    const next = makeAttachments([...attachments.items, videoRef, thumbInline]);
+    const next = makeAttachments([...attachmentsRef.current.items, videoRef, thumbInline]);
     setAttachments(next);
 
-    setStoryPreview({
-      url: URL.createObjectURL(s.file),
-      durationMs: s.durationMs,
-    });
+    if (storyPreview) URL.revokeObjectURL(storyPreview.url);
+    setStoryPreview({ url: URL.createObjectURL(s.file), durationMs: s.durationMs });
     setStoryOpen(false);
   }
+
+  /* ───────────── Payload body (v2) ───────────── */
+
+  const effectiveBodyText = caption.trim();
+
+  const postBody: PostBody | undefined = useMemo(() => {
+    if (!effectiveBodyText) return undefined;
+
+    if (bodyKind === "text") return makeTextBody(effectiveBodyText);
+    if (bodyKind === "md") return makeMarkdownBody(effectiveBodyText);
+    if (bodyKind === "html") return makeHtmlBody(effectiveBodyText, htmlMode);
+
+    const lang = codeLang.trim();
+    return makeCodeBody(effectiveBodyText, lang ? lang : undefined);
+  }, [effectiveBodyText, bodyKind, codeLang, htmlMode]);
+
+  const derivedCaption = useMemo((): string | undefined => {
+    if (!effectiveBodyText) return undefined;
+
+    const one = firstLine(effectiveBodyText).trim();
+    if (!one) return undefined;
+
+    if (bodyKind === "code") {
+      const lang = codeLang.trim();
+      const hint = lang ? `code:${lang}` : "code";
+      return trunc(`${hint} — ${one}`, 220);
+    }
+    if (bodyKind === "md") return trunc(`md — ${one}`, 220);
+    if (bodyKind === "html") return trunc(`html — ${one}`, 220);
+    return trunc(one, 220);
+  }, [effectiveBodyText, bodyKind, codeLang]);
 
   /* ───────────── Generate payload/link (with lineage + registry) ───────────── */
 
   const onGenerate = async (): Promise<void> => {
+    if (busy) return;
+
     setErr(null);
     setWarn(null);
     setCopied(false);
     setGeneratedUrl("");
     setTokenLength(0);
+    setUrlMode("path");
+    setDiag(null);
 
     const rawUrl = (sigilActionUrl || "").trim();
     const looksSigil = isLikelySigilUrl(rawUrl);
 
     if (!looksSigil) {
-      setWarn(
-        "Sigil verifikation URL not detected; using fallback. Link generation will still work.",
-      );
+      setWarn("Sigil verifikation URL not detected; using fallback. Link generation will still work.");
     }
 
-    // Pulse seal
     let pulse: number;
     try {
       pulse = momentFromUTC(new Date()).pulse;
@@ -561,64 +701,110 @@ export default function KaiVoh({
       return;
     }
 
+    const t0 = nowMs();
+
     try {
       setBusy(true);
+      setStage("paint");
+      // Ensure “Exhaling…” paints before heavy work
+      await nextPaint();
+      await nextPaint();
 
-      // Merge attachments (files + extra URLs)
-      const mergedItems: AttachmentItem[] = [
-        ...attachments.items,
-        ...extraUrls,
-      ];
-      const mergedAttachments =
-        mergedItems.length > 0 ? makeAttachments(mergedItems) : undefined;
+      setStage("assemble");
 
-      // Lineage: parent = sigilActionUrl (when it looks like a sigil/stream);
-      // origin = deepest ancestor if resolvable, else parent.
+      const mergedItems: AttachmentItem[] = [...attachmentsRef.current.items, ...extraUrls];
+      const mergedAttachments = mergedItems.length > 0 ? makeAttachments(mergedItems) : undefined;
+
       const parentUrl = looksSigil ? rawUrl : undefined;
-      const originUrl = parentUrl
-        ? getOriginUrl(parentUrl) ?? parentUrl
-        : undefined;
+      const originUrl = parentUrl ? getOriginUrl(parentUrl) ?? parentUrl : undefined;
 
-      const basePayload: FeedPostPayload = {
-        v: 1,
+      const sigilId =
+        readStringProp(sigilMeta, "sigilId") ||
+        readStringProp(sigilMeta, "sigilID") ||
+        readStringProp(sigilMeta, "glyphId") ||
+        undefined;
+
+      const basePayload: FeedPostPayload = makeBasePayload({
         url: rawUrl,
         pulse,
-        caption: caption.trim() ? caption.trim() : undefined,
+        caption: derivedCaption,
+        body: postBody,
         author: author.trim() ? author.trim() : undefined,
         source: "manual",
+        sigilId,
         phiKey: hasVerifiedSigil && phiKey ? phiKey : undefined,
-        kaiSignature:
-          hasVerifiedSigil && kaiSignature ? kaiSignature : undefined,
+        kaiSignature: hasVerifiedSigil && kaiSignature ? kaiSignature : undefined,
         ts: Date.now(),
         attachments: mergedAttachments,
-        // lineage fields (optional in FeedPostPayload)
         parentUrl,
         originUrl,
-      };
-
-      // Prepare (materialize inlines → file-refs in CacheStorage, prune thumbnails)
-      const prepared = await preparePayloadForLink(basePayload, {
-        cacheName: "sigil-attachments-v1",
-        pathPrefix: "/att/",
       });
 
-      // Encode once → use for both diagnostics and final URL
-      const token = encodeFeedPayload(prepared);
+      setStage("prepare");
+      const tPrep0 = nowMs();
+
+      // If this hangs, you’ll see stage=prepare and the timeout error.
+      const prepared = await withTimeout(
+        preparePayloadForLink(basePayload, { cacheName: "sigil-attachments-v1", pathPrefix: "/att/" }),
+        20_000,
+        "preparePayloadForLink",
+      );
+
+      const prepareMs = nowMs() - tPrep0;
+
+      setStage("encode(worker)");
+      const tEnc0 = nowMs();
+
+      // ✅ Non-blocking encode (worker). If it fails, you get the exact error.
+      const enc = await withTimeout(encodeTokenInWorker(prepared), 30_000, "encodeTokenWithBudgets(worker)");
+
+      const encodeMs = nowMs() - tEnc0;
+
+      if (!enc.ok) {
+        setDiag({
+          stage: "encode(worker)",
+          totalMs: nowMs() - t0,
+          prepareMs,
+          encodeMs: enc.ms,
+          items: mergedItems.length,
+          inlinedBytes: mergedAttachments?.inlinedBytes,
+          totalBytes: mergedAttachments?.totalBytes,
+          note: enc.error,
+        });
+
+        // Common causes: CSP blocks blob/module workers, or feedPayload depends on window-only APIs.
+        setErr(
+          `Token encode failed in worker: ${enc.error}. ` +
+            `If you have a strict CSP, allow "worker-src blob:" (or host a real worker module file).`,
+        );
+        return;
+      }
+
+      const { token, withinHard } = enc;
+
       setTokenLength(token.length);
-      if (token.length > MAX_SUGGESTED_TOKEN_LEN) {
+
+      const origin = globalThis.location?.origin ?? "https://kaiklok.com";
+      const shareUrl = withinHard
+        ? `${origin}/stream/p/${encodeURIComponent(token)}`
+        : `${origin}/stream#t=${token}`;
+
+      setUrlMode(withinHard ? "path" : "hash");
+
+      if (token.length > TOKEN_HARD_LIMIT) {
         setWarn(
-          `Large token (${token.length.toLocaleString()} chars). Consider trimming inlined files or relying on external URLs.`,
+          `Token exceeds hard path limit (${token.length.toLocaleString()} > ${TOKEN_HARD_LIMIT.toLocaleString()}). Using hash URL to avoid request-line limits.`,
+        );
+      } else if (token.length > TOKEN_SOFT_BUDGET) {
+        setWarn(
+          `Token is large (${token.length.toLocaleString()} chars). Prefer trimming inlined files or relying on external URLs.`,
         );
       }
 
-      // Canonical share URL: /stream/p/<token>
-      const origin = globalThis.location?.origin ?? "https://kaiklok.com";
-      const shareUrl = `${origin}/stream/p/${encodeURIComponent(token)}`;
-
-      // Register with Explorer (lineage-aware stream child)
+      setStage("register");
       registerSigilUrl(shareUrl);
 
-      // Copy to clipboard
+      setStage("clipboard");
       try {
         await navigator.clipboard.writeText(shareUrl);
         setCopied(true);
@@ -628,23 +814,28 @@ export default function KaiVoh({
 
       setGeneratedUrl(shareUrl);
 
-      // Notify parent if they want to treat this as the composed/exhaled post
-      if (onExhale) {
-        onExhale({
-          shareUrl,
-          token,
-          payload: prepared,
-        });
-      }
+      setDiag({
+        stage: "done",
+        totalMs: nowMs() - t0,
+        prepareMs,
+        encodeMs,
+        tokenLen: token.length,
+        items: mergedItems.length,
+        inlinedBytes: mergedAttachments?.inlinedBytes,
+        totalBytes: mergedAttachments?.totalBytes,
+      });
+
+      if (onExhale) onExhale({ shareUrl, token, payload: prepared });
     } catch (e: unknown) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : typeof e === "string"
-          ? e
-          : "Failed to generate link.";
+      const msg = e instanceof Error ? e.message : typeof e === "string" ? e : "Failed to generate link.";
       setErr(msg);
+      setDiag({
+        stage: stage || "unknown",
+        totalMs: nowMs() - t0,
+        note: msg,
+      });
     } finally {
+      setStage("");
       setBusy(false);
     }
   };
@@ -652,6 +843,9 @@ export default function KaiVoh({
   const onReset = (): void => {
     setCaption(initialCaption || "");
     setAuthor(initialAuthor || "");
+    setBodyKind("text");
+    setCodeLang("tsx");
+    setHtmlMode("code");
     setExtraUrlField("");
     setExtraUrls([]);
     clearFiles();
@@ -660,6 +854,9 @@ export default function KaiVoh({
     setCopied(false);
     setGeneratedUrl("");
     setTokenLength(0);
+    setUrlMode("path");
+    setStage("");
+    setDiag(null);
     if (storyPreview) {
       URL.revokeObjectURL(storyPreview.url);
       setStoryPreview(null);
@@ -695,12 +892,7 @@ export default function KaiVoh({
       <div className="composer">
         <label className="composer-label">Sigil Verifikation URL</label>
         <div className="composer-input-row">
-          <input
-            className="composer-input locked"
-            type="url"
-            value={sigilActionUrl}
-            readOnly
-          />
+          <input className="composer-input locked" type="url" value={sigilActionUrl} readOnly />
           <button
             type="button"
             className="composer-aux"
@@ -713,28 +905,26 @@ export default function KaiVoh({
                 /* ignore */
               }
             }}
-            title="Kopy sigil verifikation  URL"
+            title="Kopy sigil verifikation URL"
           >
             {copied ? "Kopied ✓" : "Kopy"}
           </button>
         </div>
         {!isLikelySigilUrl(sigilActionUrl) && (
           <div className="composer-hint warn">
-            No canonical stream token detected in the URL. Fallback will still
-            produce a valid post.
+            No canonical stream token detected in the URL. Fallback will still produce a valid post.
           </div>
         )}
       </div>
     );
   }, [sigilActionUrl, copied]);
 
-  /* ───────────── UI sections ───────────── */
+  /* ───────────── Attachments panel ───────────── */
 
   const attachmentsPanel = (
     <div className="attachments">
       <h3 className="attachments-title">Attachments</h3>
 
-      {/* Story Recorder trigger (ICON-ONLY) */}
       <div className="composer">
         <label className="composer-label">Record a memory</label>
         <div className="story-actions">
@@ -750,15 +940,8 @@ export default function KaiVoh({
 
           {storyPreview && (
             <div className="story-preview">
-              <video
-                src={storyPreview.url}
-                playsInline
-                controls
-                className="story-preview-video"
-              />
-              <div className="story-preview-meta mono">
-                {formatMs(storyPreview.durationMs)}
-              </div>
+              <video src={storyPreview.url} playsInline controls className="story-preview-video" />
+              <div className="story-preview-meta mono">{formatMs(storyPreview.durationMs)}</div>
               <button
                 type="button"
                 className="pill danger icon-only"
@@ -776,7 +959,6 @@ export default function KaiVoh({
         </div>
       </div>
 
-      {/* Extra URL adder */}
       <div className="composer">
         <label className="composer-label">Add any URL</label>
         <div className="composer-input-row">
@@ -790,41 +972,25 @@ export default function KaiVoh({
             autoCorrect="off"
             spellCheck={false}
           />
-          <button
-            type="button"
-            className="composer-aux"
-            onClick={addExtraUrl}
-            title="Add URL"
-          >
+          <button type="button" className="composer-aux" onClick={addExtraUrl} title="Add URL">
             Add
           </button>
         </div>
 
         {extraUrls.length > 0 && (
           <ul className="url-list">
-            {extraUrls.map((it, i) => {
-              const url = (
-                it as Extract<AttachmentItem, { kind: "url" }>
-              ).url;
-              return (
-                <li key={`${url}-${i}`} className="url-item">
-                  <span className="mono">{short(url, 28, 16)}</span>
-                  <button
-                    type="button"
-                    className="pill danger"
-                    onClick={() => removeExtraUrl(i)}
-                    title="Remove URL"
-                  >
-                    ✕
-                  </button>
-                </li>
-              );
-            })}
+            {extraUrls.map((it, i) => (
+              <li key={`${it.url}-${i}`} className="url-item">
+                <span className="mono">{short(it.url, 28, 16)}</span>
+                <button type="button" className="pill danger" onClick={() => removeExtraUrl(i)} title="Remove URL">
+                  ✕
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </div>
 
-      {/* File / Folder input */}
       <div
         ref={dropRef}
         className="dropzone"
@@ -834,21 +1000,13 @@ export default function KaiVoh({
       >
         <div className="dropzone-inner">
           <div className="dz-title">Seal documents or folders</div>
-          <div className="dz-sub">
-            Tiny files get inlined; large files become cache-backed refs.
-          </div>
+          <div className="dz-sub">Tiny files get inlined; large files become cache-backed refs.</div>
           <div className="dz-actions">
             <label className="pill">
-              <input
-                type="file"
-                multiple
-                onChange={onPickFiles}
-                className="visually-hidden"
-              />
+              <input type="file" multiple onChange={onPickFiles} className="visually-hidden" />
               Inhale files…
             </label>
 
-            {/* Directory picker (webkitdirectory) */}
             <label className="pill">
               <input
                 type="file"
@@ -862,11 +1020,7 @@ export default function KaiVoh({
             </label>
 
             {files.length > 0 && (
-              <button
-                type="button"
-                className="pill subtle"
-                onClick={clearFiles}
-              >
+              <button type="button" className="pill subtle" onClick={clearFiles}>
                 Reset
               </button>
             )}
@@ -874,16 +1028,14 @@ export default function KaiVoh({
         </div>
       </div>
 
-      {/* File list / summary */}
       {attachments.items.length > 0 && (
         <div className="file-summary">
           <div className="composer-hint">
             Items: <strong>{attachments.items.length}</strong> • Files total:{" "}
-            <strong>{prettyBytes(attachments.totalBytes ?? 0)}</strong> •
-            Inlined:{" "}
-            <strong>{prettyBytes(attachments.inlinedBytes ?? 0)}</strong> (≤{" "}
-            {prettyBytes(MAX_INLINE_BYTES)} each)
+            <strong>{prettyBytes(attachments.totalBytes ?? 0)}</strong> • Inlined:{" "}
+            <strong>{prettyBytes(attachments.inlinedBytes ?? 0)}</strong> (≤ {prettyBytes(MAX_INLINE_BYTES)} each)
           </div>
+
           <ul className="file-list">
             {attachments.items.map((it, idx) => {
               if (it.kind === "url") {
@@ -896,18 +1048,16 @@ export default function KaiVoh({
                   </li>
                 );
               }
+
               const base = it.name ?? `file-${idx}`;
               const isInline = it.kind === "file-inline";
-              const mime = (it as { type?: string }).type
-                ? (it as { type?: string }).type
-                : "application/octet-stream";
-              const size = (it as { size?: number }).size ?? 0;
+              const mime = "type" in it && typeof it.type === "string" ? it.type : "application/octet-stream";
+              const size = "size" in it && typeof it.size === "number" ? it.size : 0;
+
               return (
                 <li key={`${base}-${idx}`} className="file-item">
                   <div className="file-row">
-                    <span className="badge">
-                      {isInline ? "inline" : "file"}
-                    </span>
+                    <span className="badge">{isInline ? "inline" : "file"}</span>
                     <span className="mono">{base}</span>
                     <span className="dim">
                       {mime} • {prettyBytes(size)}
@@ -917,11 +1067,11 @@ export default function KaiVoh({
               );
             })}
           </ul>
+
           {attachments.items.some((i) => i.kind === "file-ref") && (
             <div className="composer-hint warn">
-              Large files are cached and referenced by SHA-256. You can also
-              host publicly (Drive/S3/IPFS) and attach the public URL above.
-              The manifest preserves names/paths.
+              Large files are cached and referenced by SHA-256. You can also host publicly (Drive/S3/IPFS) and attach the
+              public URL above.
             </div>
           )}
         </div>
@@ -931,6 +1081,16 @@ export default function KaiVoh({
 
   /* ───────────── Render ───────────── */
 
+  const textareaRows = bodyKind === "code" ? 10 : 3;
+  const textareaPlaceholder =
+    bodyKind === "code"
+      ? "Paste your code…"
+      : bodyKind === "md"
+        ? "Write markdown…"
+        : bodyKind === "html"
+          ? "Write HTML… (default renders as escaped code unless sanitized by the stream UI)"
+          : "What Resonants About This Moment…";
+
   return (
     <div className="social-connector-container">
       <h2 className="social-connector-title">KaiVoh</h2>
@@ -938,31 +1098,96 @@ export default function KaiVoh({
         Exhale a sealed <strong>Memory Stream</strong>.
       </p>
 
-      {/* Identity */}
       {identityBanner}
-
-      {/* URL preview */}
       {urlPreview}
 
-      {/* Optional text */}
+      <div className="composer">
+        <label className="composer-label">Body Format</label>
+        <div className="story-actions">
+          <button
+            type="button"
+            className={`pill ${bodyKind === "text" ? "prim" : "subtle"}`}
+            onClick={() => setBodyKind("text")}
+            title="Text"
+          >
+            Text
+          </button>
+          <button
+            type="button"
+            className={`pill ${bodyKind === "code" ? "prim" : "subtle"}`}
+            onClick={() => setBodyKind("code")}
+            title="Code"
+          >
+            Code
+          </button>
+          <button
+            type="button"
+            className={`pill ${bodyKind === "md" ? "prim" : "subtle"}`}
+            onClick={() => setBodyKind("md")}
+            title="Markdown"
+          >
+            MD
+          </button>
+          <button
+            type="button"
+            className={`pill ${bodyKind === "html" ? "prim" : "subtle"}`}
+            onClick={() => setBodyKind("html")}
+            title="HTML"
+          >
+            HTML
+          </button>
+
+          {bodyKind === "code" && (
+            <input
+              className="composer-input"
+              style={{ maxWidth: 160 }}
+              value={codeLang}
+              onChange={bind(setCodeLang)}
+              placeholder="lang (tsx)"
+              aria-label="Code language"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          )}
+
+          {bodyKind === "html" && (
+            <button
+              type="button"
+              className={`pill ${htmlMode === "code" ? "prim" : "subtle"}`}
+              onClick={() => setHtmlMode((m) => (m === "code" ? "sanitized" : "code"))}
+              title="HTML mode (stream decides how to render)"
+            >
+              mode:{htmlMode}
+            </button>
+          )}
+        </div>
+
+        <div className="composer-hint">
+          v2 posts include <span className="mono">body.kind</span> so the stream can render code as code (escaped) instead
+          of treating everything as plain text.
+        </div>
+      </div>
+
       <div className="composer two">
         <div className="field">
           <label htmlFor="caption" className="composer-label">
-            Memory <span className="muted">(Message)</span>
+            Memory <span className="muted">(Body)</span>
           </label>
           <textarea
             id="caption"
-            className="composer-textarea"
-            rows={3}
-            placeholder="What Resonants About This Moment…"
+            className={`composer-textarea${bodyKind === "code" ? " mono" : ""}`}
+            rows={textareaRows}
+            placeholder={textareaPlaceholder}
             value={caption}
             onChange={bind(setCaption)}
+            spellCheck={bodyKind === "code" ? false : true}
           />
         </div>
+
         <div className="field">
           <label htmlFor="author" className="composer-label">
-            Author Handle{" "}
-            <span className="muted">(optional, e.g., @KaiRexKlok)</span>
+            Author Handle <span className="muted">(optional, e.g., @KaiRexKlok)</span>
           </label>
           <input
             id="author"
@@ -977,29 +1202,40 @@ export default function KaiVoh({
         </div>
       </div>
 
-      {/* Attachments panel */}
       {attachmentsPanel}
 
       {err && <div className="composer-error">{err}</div>}
       {warn && !err && <div className="composer-warn">{warn}</div>}
 
-      {/* Actions */}
+      {/* ✅ Stage + diag visibility so you always know “where it hung” */}
+      {(busy || diag) && (
+        <div className="composer-hint mono" aria-live="polite">
+          {busy && stage ? `stage: ${stage}` : null}
+          {diag ? (
+            <>
+              {busy && stage ? " • " : null}
+              {`total ${Math.round(diag.totalMs)}ms`}
+              {typeof diag.prepareMs === "number" ? ` • prepare ${Math.round(diag.prepareMs)}ms` : ""}
+              {typeof diag.encodeMs === "number" ? ` • encode ${Math.round(diag.encodeMs)}ms` : ""}
+              {typeof diag.tokenLen === "number" ? ` • token ${diag.tokenLen.toLocaleString()}` : ""}
+              {typeof diag.items === "number" ? ` • items ${diag.items}` : ""}
+              {typeof diag.inlinedBytes === "number" ? ` • inlined ${prettyBytes(diag.inlinedBytes)}` : ""}
+              {typeof diag.totalBytes === "number" ? ` • bytes ${prettyBytes(diag.totalBytes)}` : ""}
+              {diag.note ? ` • note: ${diag.note}` : ""}
+            </>
+          ) : null}
+        </div>
+      )}
+
       <div className="composer-actions">
-        <button
-          type="button"
-          onClick={onGenerate}
-          className="composer-submit"
-          disabled={busy}
-          title="Exhale Stream URL"
-        >
-          {busy ? "Exhaling…" : "Exhale Stream URL"}
+        <button type="button" onClick={onGenerate} className="composer-submit" disabled={busy} title="Exhale Stream URL">
+          {busy ? `Exhaling…${stage ? ` (${stage})` : ""}` : "Exhale Stream URL"}
         </button>
         <button type="button" className="composer-reset" onClick={onReset}>
           Reset
         </button>
       </div>
 
-      {/* Result */}
       {generatedUrl && (
         <div className="composer-result">
           <label htmlFor="gen-url" className="composer-label">
@@ -1028,26 +1264,18 @@ export default function KaiVoh({
             >
               {copied ? "Kopied ✓" : "Kopy"}
             </button>
-            <a
-              className="composer-open"
-              href={generatedUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <a className="composer-open" href={generatedUrl} target="_blank" rel="noopener noreferrer">
               Open in new tab →
             </a>
           </div>
           <p className="composer-hint">
-            Token length:{" "}
-            <strong>{tokenLength.toLocaleString()}</strong> chars
-            {tokenLength > MAX_SUGGESTED_TOKEN_LEN
-              ? " — consider trimming inlined files or using external URLs."
-              : ""}
+            Token length: <strong>{tokenLength.toLocaleString()}</strong> chars • URL mode:{" "}
+            <strong>{urlMode === "path" ? "path" : "hash"}</strong> • soft {TOKEN_SOFT_BUDGET.toLocaleString()} • hard{" "}
+            {TOKEN_HARD_LIMIT.toLocaleString()}
           </p>
         </div>
       )}
 
-      {/* Modal */}
       <StoryRecorder
         isOpen={storyOpen}
         onClose={() => setStoryOpen(false)}

@@ -1,7 +1,7 @@
+
 // src/session/SigilSession.tsx
 import React, {
     createContext,
-    useContext,
     useMemo,
     useState,
     useCallback,
@@ -31,7 +31,7 @@ import React, {
     logout: () => {},
   });
   
-  export const useSigilSession = (): CtxShape => useContext(Ctx);
+
   
   function isFiniteNum(n: unknown): n is number {
     return typeof n === "number" && Number.isFinite(n);

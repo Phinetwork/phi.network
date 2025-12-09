@@ -126,13 +126,10 @@ function ExplorerPopover(props: {
     };
   }, [open, onClose, isClient]);
 
-  // ✅ FIX: hooks must never be conditional.
-  // Compute style every render, but return `undefined` when not mounted.
+  // ✅ hooks never conditional; compute every render, noop when closed
   const overlayStyle = useMemo<CSSProperties | undefined>(() => {
     if (!open || !isClient) return undefined;
 
-    // Use VisualViewport px to avoid iOS dynamic bars stealing scroll space.
-    // If vvSize is 0 (SSR), CSS handles fallback.
     const h = vvSize.height;
     const w = vvSize.width;
 
@@ -142,8 +139,6 @@ function ExplorerPopover(props: {
     };
   }, [open, isClient, vvSize.height, vvSize.width]);
 
-  // Backdrop click-to-close is intentionally disabled for fullscreen (no “outside” area).
-  // Close via ✕ or Esc.
   if (!open || !isClient) return null;
 
   return createPortal(
@@ -155,7 +150,6 @@ function ExplorerPopover(props: {
       aria-label="PhiStream Explorer"
     >
       <div className="explorer-pop__panel" role="document">
-        {/* ✅ NO HEADER TEXT. Only a floating close control. */}
         <button
           type="button"
           className="explorer-pop__close"
@@ -166,7 +160,6 @@ function ExplorerPopover(props: {
           <span aria-hidden="true">✕</span>
         </button>
 
-        {/* ✅ Full-bleed body: the modular explorer owns the entire surface */}
         <div className="explorer-pop__body">{children}</div>
 
         <div className="sr-only" aria-live="polite">
@@ -442,7 +435,6 @@ function AppChrome(): React.JSX.Element {
     const list = navListRef.current;
     if (!list) return;
 
-    // only do this when the mobile layout is active
     if (!window.matchMedia("(max-width: 980px)").matches) return;
 
     const active = list.querySelector<HTMLElement>(".nav-item--active");
@@ -496,8 +488,12 @@ function AppChrome(): React.JSX.Element {
           href="https://kaiklok.com"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`LIVE. Kai Pulse now ${pulseNow}. Breath length ${BREATH_S.toFixed(3)} seconds. Open KaiKlok.com.`}
-          title={`LIVE • NOW PULSE ${pulseNowStr} • Breath ${BREATH_S.toFixed(6)}s (${Math.round(
+          aria-label={`LIVE. Kai Pulse now ${pulseNow}. Breath length ${BREATH_S.toFixed(
+            3,
+          )} seconds. Open KaiKlok.com.`}
+          title={`LIVE • NOW PULSE ${pulseNowStr} • Breath ${BREATH_S.toFixed(
+            6,
+          )}s (${Math.round(
             BREATH_MS,
           )}ms) • View full Kairos Time at KaiKlok.com`}
         >
@@ -511,7 +507,12 @@ function AppChrome(): React.JSX.Element {
         </a>
       </header>
 
-      <main className="app-stage" id="app-content" role="main" aria-label="Sovereign Value Workspace">
+      <main
+        className="app-stage"
+        id="app-content"
+        role="main"
+        aria-label="Sovereign Value Workspace"
+      >
         <div className="app-frame" role="region" aria-label="Secure frame">
           <div className="app-frame-inner">
             <div className="app-workspace">
@@ -544,16 +545,25 @@ function AppChrome(): React.JSX.Element {
               <nav className="app-nav" aria-label="Primary navigation">
                 <div className="nav-head">
                   <div className="nav-head__title">Atrium</div>
-                  <div className="nav-head__sub">Breath-Sealed Identity · Kairos-ZK Proof</div>
+                  <div className="nav-head__sub">
+                    Breath-Sealed Identity · Kairos-ZK Proof
+                  </div>
                 </div>
 
-                <div ref={navListRef} className="nav-list" role="list" aria-label="Atrium navigation tiles">
+                <div
+                  ref={navListRef}
+                  className="nav-list"
+                  role="list"
+                  aria-label="Atrium navigation tiles"
+                >
                   {navItems.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
                       end={item.end}
-                      className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}
+                      className={({ isActive }) =>
+                        `nav-item ${isActive ? "nav-item--active" : ""}`
+                      }
                       aria-label={`${item.label}: ${item.desc}`}
                     >
                       <div className="nav-item__label">{item.label}</div>
@@ -576,12 +586,16 @@ function AppChrome(): React.JSX.Element {
 
                 <div
                   ref={panelBodyRef}
-                  className={`panel-body ${lockPanelByRoute ? "panel-body--locked" : ""} ${
-                    panelShouldScroll ? "panel-body--scroll" : ""
-                  }`}
+                  className={`panel-body ${
+                    lockPanelByRoute ? "panel-body--locked" : ""
+                  } ${panelShouldScroll ? "panel-body--scroll" : ""}`}
                   style={panelBodyInlineStyle}
                 >
-                  <div ref={panelCenterRef} className="panel-center" style={panelCenterInlineStyle}>
+                  <div
+                    ref={panelCenterRef}
+                    className="panel-center"
+                    style={panelCenterInlineStyle}
+                  >
                     <Outlet />
                   </div>
                 </div>
@@ -591,7 +605,8 @@ function AppChrome(): React.JSX.Element {
                     <span className="mono">ΦNet</span> • Sovereign Gate
                   </div>
                   <div className="panel-foot__right">
-                    <span className="mono">V</span> <span className="mono">24.3</span>
+                    <span className="mono">V</span>{" "}
+                    <span className="mono">24.3</span>
                   </div>
                 </footer>
               </section>
@@ -609,7 +624,8 @@ function NotFound(): React.JSX.Element {
       <div className="notfound__code">404</div>
       <div className="notfound__title">Route not found</div>
       <div className="notfound__hint">
-        Use the Sovereign Gate navigation to return to Verifier, Mint Sigil, KaiVoh, or PhiStream.
+        Use the Sovereign Gate navigation to return to Verifier, Mint Sigil,
+        KaiVoh, or PhiStream.
       </div>
       <div className="notfound__actions">
         <NavLink className="notfound__cta" to="/">

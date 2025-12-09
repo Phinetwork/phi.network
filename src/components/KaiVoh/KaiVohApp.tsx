@@ -21,7 +21,9 @@ import "./styles/KaiVohApp.css";
 
 /* UI flow */
 import SigilLogin from "./SigilLogin";
-import { SessionProvider, useSession } from "./SessionManager";
+import { SessionProvider } from "../session/SessionProvider";
+import { useSession } from "../session/useSession";
+
 import KaiVoh from "./KaiVoh"; // KaiVoh = connect + stream tools
 import PostComposer from "./PostComposer";
 import type { ComposedPost } from "./PostComposer";
@@ -41,7 +43,7 @@ import { derivePhiKeyFromSig } from "../VerifierStamper/sigilUtils";
 import { fetchKaiOrLocal, epochMsFromPulse } from "../../utils/kai_pulse";
 
 /* Types */
-import type { PostEntry, SessionData } from "./SessionManager";
+import type { PostEntry, SessionData } from "../session/sessionTypes";
 
 /* -------------------------------------------------------------------------- */
 /*                               Helper Types                                 */

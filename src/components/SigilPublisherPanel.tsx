@@ -7,7 +7,7 @@ import React, {
     useRef,
     useState,
   } from "react";
-  import { useSigilSession } from "../session/SigilSession";
+import { useSigilSession } from "./session/useSigilSession";
   import { getKaiNow } from "../kai/KaiNow";
   import { withCapsuleInUrl, type Capsule } from "../utils/sigilCapsule";
   import { sha256Hex } from "../utils/hash";
