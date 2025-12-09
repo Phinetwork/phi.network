@@ -154,7 +154,7 @@ function SigilActionUrlNode({ value, isCanonical }: { value: string; isCanonical
         </label>
 
         <span className={`sf-actionurl__pill ${isCanonical ? "is-ok" : "is-warn"}`}>
-          {isCanonical ? "SEALED" : "EXTERNAL"}
+          {isCanonical ? "SIGNED" : "EXTERNAL"}
         </span>
       </div>
 
