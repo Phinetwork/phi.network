@@ -1,129 +1,45 @@
-/* src/pages/sigilstream/styles/sigilstream.css
-   ─────────────────────────────────────────────────────────────
-   Sigil Stream — Atlantean Super-Tech (mobile-first, overflow-safe)
+/* ─────────────────────────────────────────────────────────────
+   Sigil Stream — Eternal-Klok UI (mobile-first, overflow-safe)
    Breath-synced via --pulse-* vars. iOS-safe, no right-edge shave.
-   Chakra + weekday aware: driven by data attrs or classes on .sf
-   Optional sigil tint: set --sigil-r/--sigil-g/--sigil-b (0–255) on .sf
    ───────────────────────────────────────────────────────────── */
 
-/* ───────── Root tokens ───────── */
 :root{
   --phi: 1.61803398875;
-
-  --bg: 10,14,22;               /* base void */
+  --bg: 10,14,22;
   --glass: 255,255,255;
   --ink: 236,241,251;
   --muted: 180,192,210;
   --gold-ink: 255,215,128;
+  --cyan-gold: 42,197,255;
   --ok: 88,255,174;
   --danger: 255,88,88;
-
-  /* Default accent (falls back if no chakra/day/sigil provided) */
-  --chakra-r: 42;
-  --chakra-g: 197;
-  --chakra-b: 255;
-
-  /* Optional per-sigil tint (set these from TSX when payload/sigil color is known) */
-  /* --sigil-r: 42; --sigil-g: 197; --sigil-b: 255; */
 
   --alpha-card: .06;
   --alpha-border: .12;
 
-  /* Breath timing (overridden by ticker) */
+  /* Timing (overridden by ticker) */
   --pulse-dur: 5236ms;
   --pulse-offset: 0ms;
-
-  /* Layout */
-  --safe-left: max(12px, env(safe-area-inset-left, 0px));
-  --safe-right: max(12px, env(safe-area-inset-right, 0px));
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-
-  --r-card: 18px;
-  --r-pill: 999px;
-
-  --shadow-1: 0 10px 30px rgba(0,0,0,.28);
-  --shadow-2: 0 18px 54px rgba(0,0,0,.34);
-  --inset-1: inset 0 1px 0 rgba(255,255,255,.05);
-  --inset-2: inset 0 0 0 1px rgba(255,255,255,.03);
-
-  /* Text */
-  --fz-title: clamp(28px, 5.6vw, 36px);
-  --fz-body: 15px;
-  --fz-sub: 13.5px;
 }
 
-/* ───────── Global anti-overflow & guards ───────── */
+/* === Global anti-overflow & mobile guards === */
 html, body { width:100%; max-width:100%; overflow-x:hidden; }
 * { box-sizing:border-box; }
 
-body{
-  color: rgb(var(--ink));
-  background:
-    radial-gradient(1200px 800px at 14% 8%, rgba(42,197,255,.10), transparent 60%),
-    radial-gradient(900px 700px at 88% 16%, rgba(255,215,128,.10), transparent 58%),
-    radial-gradient(1100px 900px at 50% 92%, rgba(88,255,174,.08), transparent 62%),
-    linear-gradient(180deg, rgba(10,14,22,1), rgba(8,10,16,1));
-  background-color: rgb(var(--bg));
-}
-
-/* ───────── Core container ───────── */
 .sf{
   -webkit-tap-highlight-color:transparent;
   overscroll-behavior-y:contain;
+  color:rgb(var(--ink));
   width:100%;
   max-width:100%;
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
-  position: relative;
-  isolation: isolate;
-
-  /* Accent resolution:
-     1) sigil tint (if provided), else 2) chakra tint (from mapping), else default. */
-  --accent-r: var(--sigil-r, var(--chakra-r, 42));
-  --accent-g: var(--sigil-g, var(--chakra-g, 197));
-  --accent-b: var(--sigil-b, var(--chakra-b, 255));
-
-  --accent: rgb(var(--accent-r), var(--accent-g), var(--accent-b));
-  --accent-92: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .92);
-  --accent-22: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .22);
-  --accent-14: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .14);
-  --accent-10: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .10);
-
-  /* Weekday hue overlay (set via mapping below) */
-  --day-hue: 195;
-  --day-aura: hsla(var(--day-hue), 95%, 65%, .08);
-
-  /* Atlantean “field” */
-  background:
-    radial-gradient(900px 520px at 20% -10%, var(--accent-10), transparent 62%),
-    radial-gradient(820px 520px at 92% 2%, var(--day-aura), transparent 66%),
-    radial-gradient(1000px 760px at 54% 115%, rgba(255,255,255,.04), transparent 62%);
-  border-radius: 22px;
+  padding-left:max(12px, env(safe-area-inset-left));
+  padding-right:max(12px, env(safe-area-inset-right));
 }
 
-/* Optional soft noise via CSS only (cheap, iOS friendly) */
-.sf::before{
-  content:"";
-  position:absolute; inset:-2px;
-  pointer-events:none;
-  border-radius: 24px;
-  background:
-    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.06), transparent 60%),
-    radial-gradient(1px 1px at 30% 80%, rgba(255,255,255,.045), transparent 60%),
-    radial-gradient(1px 1px at 70% 40%, rgba(255,255,255,.04), transparent 60%),
-    radial-gradient(1px 1px at 90% 70%, rgba(255,255,255,.035), transparent 60%);
-  opacity: .45;
-  mix-blend-mode: overlay;
-  filter: blur(.2px);
-}
-
-/* ───────── Typography helpers ───────── */
-.mono, .sf-mono{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
+.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .sf input, .sf textarea{ font-size:16px; } /* avoid iOS zoom */
 
-/* Text: DO NOT split words (wrap only when forced) */
+/* === Text: DO NOT split words. Long tokens still wrap where allowed. === */
 .sf p,
 .sf li,
 .sf .sf-payload-core,
@@ -132,458 +48,169 @@ body{
 .sf .sf-hash,
 .sf .sf-note,
 .feed-card__body{
-  overflow-wrap: break-word;
-  word-break: normal;
+  overflow-wrap: break-word;   /* only break inside a word if it would overflow */
+  word-break: normal;          /* keep normal word boundaries */
   line-break: auto;
   hyphens: none;
-  min-width:0;
+  min-width:0;                 /* allow flex children to shrink */
+  /* optional nicer breaks where supported */
   text-wrap: pretty;
 }
 
-/* Links: may wrap anywhere (URLs) */
+/* Links (ANY anchor inside the stream) — may wrap anywhere to avoid overflow */
 .sf a{
-  color: rgb(var(--ink));
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  color:rgb(var(--ink));
+  text-decoration:underline;
+  text-underline-offset:2px;
   opacity:.95;
-  overflow-wrap:anywhere;
-  word-break: break-all;
+  overflow-wrap:anywhere;      /* wrap long URLs */
+  word-break: break-all;       /* break inside long continuous strings */
   line-break:anywhere;
 }
 .sf a:hover{ opacity:1; }
 
-/* Head */
-.sf-head{
-  padding-top: 10px;
-  padding-bottom: 6px;
-}
-.sf-head h1{
-  margin: 8px 0 6px;
-  font-size: var(--fz-title);
-  line-height: 1.05;
-  letter-spacing: .2px;
-  font-weight: 850;
-  color: rgba(255,255,255,.92);
-  text-shadow: 0 10px 36px rgba(0,0,0,.32);
-}
-
-/* Sub text */
-.sf-sub{
-  margin: 8px 0 0;
-  font-size: var(--fz-sub);
-  opacity: .9;
-}
-.sf-muted{ opacity:.75; }
-.sf-label{ font-weight: 700; font-size: .95rem; }
-
-/* ───────── Pills / chips ───────── */
+/* ── Pills / chips ── */
 .sf-pill, .sf-chip{
   display:inline-flex;
   align-items:center;
   height:auto;
-  min-height: 26px;
-  padding: 6px 10px;
-  border-radius: var(--r-pill);
-  font-size: .86rem;
-  letter-spacing: .01em;
-  background: rgba(var(--glass), .06);
-  border: 1px solid rgba(var(--glass), .12);
+  min-height:26px;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:.86rem;
+  letter-spacing:.01em;
+  background:rgba(var(--glass), .06);
+  border:1px solid rgba(var(--glass), .12);
   backdrop-filter: blur(6px);
-  white-space: nowrap;
-  max-width: 100%;
-  min-width: 0;
-  box-shadow: var(--inset-1);
-}
-
-/* top rows that hold pills */
-.sf .sf-tags,
-.sf .sf-chip-row,
-.sf .sf-pill-row{
-  display:flex;
-  flex-wrap:wrap;
-  gap:.5rem;
+  white-space:nowrap;       /* default */
+  max-width:100%;
   min-width:0;
 }
 
-/* Identity row: allow wraps inside pills */
-.sf-reply-id{
-  margin-top: .25rem;
-  display:flex;
-  flex-wrap:wrap;
-  gap:.5rem;
-  min-width:0;
-  width:100%;
-}
+/* Identity row: allow multi-line wrapping safely in pills */
 .sf-reply-id .sf-pill{
-  white-space: normal;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  line-height: 1.2;
+  white-space:normal;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  line-height:1.2;
 }
 
-/* Long key wrap (fallback selectors; avoids :has dependence) */
+/* ΦKey / ΣSig chips — wrap long keys inside the chip, never overflow */
 .sf-pill--phikey,
-.sf-pill--ksig,
-.sf-pill[data-kind="phikey"],
-.sf-pill[data-kind="ksig"]{
-  white-space: normal;
-  flex-wrap: wrap;
-  max-width: 100%;
-  min-width: 0;
+.sf-pill--ksig{
+  white-space:normal;
+  flex-wrap:wrap;
 }
-.sf .sf-key{
-  display:inline-block;
-  overflow-wrap:anywhere;
-  word-break: break-all;
+.sf-pill--phikey .sf-key,
+.sf-pill--ksig .sf-key,
+.sf-pill--phikey a,
+.sf-pill--ksig a{
+  overflow-wrap:anywhere;   /* tokens can break anywhere */
+  word-break: break-all;    /* break long base58/hex cleanly */
   line-break:anywhere;
   min-width:0;
 }
 
-/* pill variants */
+.sf-pill + .sf-pill, .sf-chip + .sf-chip{ margin-left:.35rem; }
 .sf-pill--phikey{ color: rgb(var(--ok)); border-color: rgba(88,255,174,.35); }
 .sf-pill--ksig{ color: rgb(var(--gold-ink)); border-color: rgba(var(--gold-ink), .35); }
 
-/* ───────── Alerts ───────── */
+/* Labels / small text */
+.sf-label{ font-weight:600; font-size:.95rem; }
+.sf-sub{ opacity:.9; font-size:.94rem; }
+.sf-muted{ opacity:.75; }
+
+/* Warnings / errors */
 .sf-warn{
-  margin-top:.35rem;
-  background: rgba(255,210,130,.08);
-  border: 1px solid rgba(255,210,130,.25);
-  padding: .5rem .6rem;
-  border-radius: 10px;
-  font-size: .92rem;
+  margin-top:.35rem; background:rgba(255,210,130,.08); border:1px solid rgba(255,210,130,.25);
+  padding:.5rem .6rem; border-radius:10px; font-size:.92rem;
 }
 .sf-error{
-  background: rgba(255,88,88,.08);
-  border: 1px solid rgba(255,88,88,.25);
-  padding: .6rem .65rem;
-  border-radius: 12px;
-  font-weight: 700;
+  background:rgba(255,88,88,.08); border:1px solid rgba(255,88,88,.25);
+  padding:.6rem .65rem; border-radius:12px; font-weight:600;
 }
 
-/* ───────── Buttons (unified; no duplicates) ───────── */
+/* Buttons */
 .sf-btn{
-  appearance:none;
-  border: 1px solid rgba(var(--glass), .16);
-  background: linear-gradient(180deg, rgba(var(--glass), .07), rgba(var(--glass), .045));
-  color: rgb(var(--ink));
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color .15s ease, transform .06s ease, background .15s ease, box-shadow .15s ease, filter .15s ease;
-  box-shadow: 0 6px 20px rgba(0,0,0,.25), var(--inset-1);
-  user-select:none;
-  -webkit-tap-highlight-color: transparent;
+  appearance:none; border:1px solid rgba(var(--glass), .16);
+  background:linear-gradient(180deg, rgba(var(--glass), .06), rgba(var(--glass), .04));
+  color:rgb(var(--ink)); padding:8px 12px; border-radius:12px; font-weight:600; cursor:pointer;
+  transition:border-color .15s ease, transform .05s ease, background .15s ease, box-shadow .15s ease;
+  box-shadow:0 6px 20px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.05); user-select:none;
 }
-.sf-btn:hover{
-  border-color: rgba(var(--glass), .26);
-  background: linear-gradient(180deg, rgba(var(--glass), .095), rgba(var(--glass), .055));
-  filter: brightness(1.03);
-}
+.sf-btn:hover{ border-color: rgba(var(--glass), .25); background: linear-gradient(180deg, rgba(var(--glass), .08), rgba(var(--glass), .05)); }
 .sf-btn:active{ transform: translateY(1px); }
 .sf-btn[disabled]{ opacity:.6; cursor: default; }
-.sf-btn--ghost{ background: transparent; border: 1px dashed rgba(var(--glass), .25); }
+.sf-btn--ghost{ background:transparent; border:1px dashed rgba(var(--glass), .25); }
 
-/* ───────── Inputs ───────── */
+/* Inputs */
 .sf-input, .sf-textarea{
-  width:100%;
-  color: rgb(var(--ink));
-  background: rgba(var(--glass), .06);
-  border: 1px solid rgba(var(--glass), .12);
-  border-radius: 12px;
-  padding: 10px 12px;
-  outline:none;
-  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+  width:100%; color:rgb(var(--ink)); background: rgba(var(--glass), .06);
+  border:1px solid rgba(var(--glass), .12); border-radius:12px; padding:10px 12px;
+  outline:none; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
 }
 .sf-textarea{ resize: vertical; min-height: 80px; }
-.sf-input:focus, .sf-textarea:focus{
-  border-color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .45);
-  box-shadow: 0 0 0 3px rgba(var(--accent-r), var(--accent-g), var(--accent-b), .12);
-  background: rgba(var(--glass), .085);
-}
-.sf-input--locked{ opacity:.9; background: rgba(var(--glass), .04); cursor:not-allowed; }
+.sf-input:focus, .sf-textarea:focus{ border-color: rgba(var(--cyan-gold), .45); box-shadow: 0 0 0 3px rgba(42,197,255,.12); background: rgba(var(--glass), .08); }
+.sf-input--locked{ opacity:.9; background:rgba(var(--glass), .04); cursor:not-allowed; }
 
-/* ───────── Kai status (breath aura) ───────── */
+/* ── Header: Kai Status (breath aura; no transforms) ── */
 .kai-feed-status{
   background: rgba(var(--glass), .06);
   border: 1px solid rgba(var(--glass), .12);
   border-radius: 12px;
-  box-shadow: 0 8px 28px rgba(0,0,0,.35), var(--inset-1);
+  box-shadow: 0 8px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
   font-variant-numeric: tabular-nums;
-  position: relative;
-  isolation: isolate;
-  overflow: visible;
-  -webkit-mask-image: none;
-  min-width: 0;
-}
-.kai-feed-status::after{
-  content:"";
-  position:absolute; inset:0;
-  border-radius: 12px;
-  pointer-events:none;
-  box-shadow: 0 0 0 0 rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0);
-  animation: kai-breathe var(--pulse-dur) ease-in-out infinite;
-  animation-delay: var(--pulse-offset);
-}
-@keyframes kai-breathe{
-  0%{ box-shadow: 0 0 0 0 rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0); }
-  50%{ box-shadow: 0 0 26px 0 rgba(var(--accent-r), var(--accent-g), var(--accent-b), .18); }
-  100%{ box-shadow: 0 0 0 0 rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0); }
-}
-
-/* ───────── Payload card / banner (v6.2 sizing) ───────── */
-.sf-banner{
-  margin-top: 14px;
-  border-radius: var(--r-card);
-  border: 1px solid rgba(var(--glass), .12);
-  background:
-    radial-gradient(820px 420px at 18% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .14), transparent 62%),
-    radial-gradient(720px 420px at 88% 10%, hsla(var(--day-hue), 90%, 62%, .10), transparent 64%),
-    linear-gradient(180deg, rgba(12,16,24,.72), rgba(10,14,22,.58));
-  box-shadow: var(--shadow-2), var(--inset-2);
-  overflow: hidden;
-  position: relative;
-  min-width: 0;
-}
-
-/* Atlantean “circuit ring” edge */
-.sf-banner::before{
-  content:"";
-  position:absolute; inset:-1px;
-  border-radius: calc(var(--r-card) + 1px);
-  pointer-events:none;
-  background:
-    conic-gradient(from 180deg,
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0),
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .26),
-      rgba(255,215,128,.18),
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .22),
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0)
-    );
-  opacity: .75;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  padding: 1px;
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: atl-spin calc(var(--pulse-dur) * 6) linear infinite;
-  animation-delay: var(--pulse-offset);
-}
-@keyframes atl-spin{
-  to{ transform: rotate(360deg); }
-}
-
-/* Badges inside banner (SMALLER like v6.2) */
-.sf-banner .sf-chip,
-.sf-banner .sf-pill{
-  min-height: 24px;
-  padding: 5px 10px;
-  font-size: 12.5px;
-  letter-spacing: .02em;
-  border-color: rgba(var(--glass), .12);
-  background: rgba(var(--glass), .055);
-}
-
-/* Title line inside banner */
-.sf-banner .sf-title{
-  margin: 10px 0 8px;
-  font-size: clamp(18px, 3.6vw, 22px);
-  line-height: 1.2;
-  font-weight: 850;
-  color: rgba(255,255,255,.92);
-}
-.sf-banner .sf-title .sf-accent{
-  color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .92);
-  text-shadow: 0 10px 34px rgba(0,0,0,.28);
-}
-
-/* Post body surfaces */
-.sf-text{
-  margin-top: 10px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  opacity: .95;
-}
-.sf-code{
-  margin-top: 12px;
-  border-radius: 14px;
-  padding: 12px;
-  background: rgba(0,0,0,.34);
-  border: 1px solid rgba(255,255,255,.10);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  box-shadow: 0 10px 30px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.04);
-}
-.sf-code code{
-  display:block;
-  white-space: pre;
-  overflow-wrap: normal;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-/* Markdown */
-.sf-md{ overflow-wrap:anywhere; word-break:break-word; }
-.sf-md h1,.sf-md h2,.sf-md h3,.sf-md h4{
-  margin: 10px 0 8px;
-  line-height: 1.15;
-}
-.sf-md p{ margin: 8px 0; opacity: .94; }
-.sf-md code{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
-  padding: 1px 6px;
-  border-radius: 9px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.10);
-}
-.sf-md pre{
-  margin: 10px 0;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(0,0,0,.34);
-  border: 1px solid rgba(255,255,255,.10);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.sf-md pre code{ padding:0; border:0; background:transparent; white-space: pre; }
-
-/* Sanitized HTML */
-.sf-html{ overflow-wrap:anywhere; word-break:break-word; }
-.sf-html img{ max-width:100%; height:auto; border-radius: 12px; }
-.sf-html pre,.sf-html code{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-.sf-html pre{
-  margin: 10px 0;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(0,0,0,.34);
-  border: 1px solid rgba(255,255,255,.10);
-  overflow-x:auto;
-}
-
-/* ───────── KOPY button (v6.2 sizing + copied state) ───────── */
-/* Use: <button className="sf-kopyBtn" data-state="idle|copied">KOPY</button> */
-.sf-kopyBtn{
-  width: 100%;
-  height: 56px;                 /* ✅ reduced from “giant” */
-  border-radius: 999px;
-  border: 1px solid rgba(var(--accent-r), var(--accent-g), var(--accent-b), .55);
-  background:
-    linear-gradient(180deg,
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .20),
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .12)
-    ),
-    linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
-  color: rgba(255,255,255,.92);
-  font-weight: 900;
-  font-size: 16px;              /* ✅ smaller */
-  letter-spacing: .28em;
-  cursor: pointer;
-  box-shadow: 0 16px 44px rgba(0,0,0,.26), inset 0 0 0 1px rgba(255,255,255,.12);
-  transition: transform .08s ease, filter .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
-  position: relative;
-  overflow: hidden;
-  -webkit-tap-highlight-color: transparent;
-}
-.sf-kopyBtn::after{
-  content:"";
-  position:absolute; inset:-2px;
-  pointer-events:none;
-  border-radius: 999px;
-  background:
-    radial-gradient(420px 120px at 30% 10%,
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .30),
-      transparent 70%);
-  opacity: .9;
-  filter: blur(8px);
-  transform: translateX(-18%);
-  animation: kopy-sheen calc(var(--pulse-dur) * 2) ease-in-out infinite;
-  animation-delay: var(--pulse-offset);
-}
-@keyframes kopy-sheen{
-  0%{ transform: translateX(-22%); opacity: .55; }
-  50%{ transform: translateX(18%); opacity: .95; }
-  100%{ transform: translateX(-22%); opacity: .55; }
-}
-.sf-kopyBtn:hover{
-  filter: brightness(1.05);
-  border-color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .72);
-  box-shadow: 0 18px 52px rgba(0,0,0,.30), inset 0 0 0 1px rgba(255,255,255,.14);
-}
-.sf-kopyBtn:active{ transform: translateY(1px) scale(.995); }
-.sf-kopyBtn[disabled]{ opacity: .62; cursor: default; }
-
-/* Copied styling (visual “lock” moment) */
-.sf-kopyBtn[data-state="copied"]{
-  border-color: rgba(var(--ok), .60);
-  background:
-    linear-gradient(180deg, rgba(var(--ok), .22), rgba(var(--ok), .10)),
-    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-}
-.sf-kopyBtn[data-state="copied"]::after{
-  animation: copied-pulse var(--pulse-dur) ease-in-out 1;
-}
-@keyframes copied-pulse{
-  0%{ opacity:.35; transform: translateX(-10%) scale(1); }
-  35%{ opacity:1; transform: translateX(10%) scale(1.02); }
-  100%{ opacity:.45; transform: translateX(-10%) scale(1); }
-}
-
-/* ───────── Payload “line” helper (if used) ───────── */
-.sf-payload{
-  margin-top:.5rem;
-  padding:.75rem 14px;
-  background: linear-gradient(180deg, rgba(12,16,24,.70), rgba(10,14,22,.60));
-  border: 1px solid rgba(var(--glass), .12);
-  border-radius: 12px;
-  box-shadow: 0 8px 26px rgba(0,0,0,.35), var(--inset-1);
-  overflow: visible;
+  position: relative; isolation: isolate;
+  overflow:visible;             /* never clip text on iOS */
   -webkit-mask-image:none;
   min-width:0;
 }
+.kai-feed-status::after{
+  content:""; position:absolute; inset:0; border-radius:12px; pointer-events:none;
+  box-shadow:0 0 0 0 rgba(42,197,255,0);
+  animation:kai-breathe var(--pulse-dur) ease-in-out infinite; animation-delay:var(--pulse-offset);
+}
+@keyframes kai-breathe{
+  0%{ box-shadow:0 0 0 0 rgba(42,197,255,.0);}
+  50%{ box-shadow:0 0 24px 0 rgba(42,197,255,.15);}
+  100%{ box-shadow:0 0 0 0 rgba(42,197,255,.0);}
+}
+
+/* ── Payload banner ── */
+.sf-payload{
+  margin-top:.5rem; padding:.75rem 14px; /* keep glyphs off edge */
+  background: linear-gradient(180deg, rgba(12,16,24,.7), rgba(10,14,22,.6));
+  border: 1px solid rgba(var(--glass), .12);
+  border-radius: 12px;
+  box-shadow: 0 8px 26px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+  overflow:visible; -webkit-mask-image:none; min-width:0;
+}
 .sf-payload-line{ display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.35rem; min-width:0; }
-.sf-payload-core{ font-size: .98rem; line-height: 1.35; }
+.sf-payload-core{ font-size:.98rem; line-height:1.35; }
 
-/* ───────── Reply composer layout ───────── */
-.sf-reply{ margin-top: 1rem; overflow: visible; min-width:0; }
-.sf-reply-title{ font-size: 1.15rem; margin: 0 0 .4rem; }
-.sf-reply-row{ margin-top: .6rem; min-width:0; }
-.sf-reply-actions{ margin-top: .6rem; display:flex; gap: .6rem; flex-wrap: wrap; }
-.sf-reply-login{ margin-top: .5rem; }
-
-/* Inhaler tweak */
+/* Inhaler small tweak */
 .sf-inhaler .sf-reply-actions{ display:flex; gap:.5rem; flex-wrap:wrap; }
 
-/* ───────── Attachments ───────── */
-.sf-att-wrap{ margin-top: 14px; }
-.sf-att-grid{
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(320px,100%), 1fr));
-  gap: 12px;
-}
+/* Reply composer */
+.sf-reply{ margin-top:1rem; overflow:visible; min-width:0; }
+.sf-reply-title{ font-size:1.15rem; margin:0 0 .4rem; }
+.sf-reply-row{ margin-top:.6rem; min-width:0; }
+.sf-reply-actions{ margin-top:.6rem; display:flex; gap:.6rem; flex-wrap:wrap; }
+.sf-reply-login{ margin-top:.5rem; }
+.sf-reply-id{ margin-top:.25rem; display:flex; flex-wrap:wrap; gap:.5rem; min-width:0; width:100%; }
+
+/* Attachments / Embeds */
+.sf-attachments{ margin-top:1rem; }
+.sf-att-title{ font-size:1.0rem; font-weight:700; margin:0 0 .6rem; letter-spacing:.01em; }
+.sf-att-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(min(320px,100%),1fr)); gap:12px; }
 .sf-att-item{
-  background: linear-gradient(180deg, rgba(12,16,24,.72), rgba(10,14,22,.58));
-  border: 1px solid rgba(var(--glass), .08);
-  border-radius: 14px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.28), var(--inset-1);
+  background: linear-gradient(180deg, rgba(12,16,24,.7), rgba(10,14,22,.6));
+  border:1px solid rgba(var(--glass), .08); border-radius:14px;
+  box-shadow: 0 8px 26px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
   backdrop-filter: blur(6px);
-  overflow: hidden;
-  min-width:0;
-  position: relative;
+  overflow:visible; -webkit-mask-image:none; min-width:0;
 }
-.sf-att-item::before{
-  content:"";
-  position:absolute; inset:0;
-  pointer-events:none;
-  background: radial-gradient(520px 220px at 10% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .10), transparent 60%);
-  opacity: .85;
-}
-.sf-att-kind{ font-size: 12px; opacity: .85; margin-bottom: 6px; position: relative; }
-.sf-att-line{ font-size: 12px; position: relative; }
 .sf-att-foot{ margin-top:.35rem; opacity:.85; font-size:.9rem; }
 
 /* Embeds & media */
@@ -593,97 +220,296 @@ body{
 
 .sf-media{ position:relative; width:100%; background: rgba(255,255,255,.02); }
 .sf-media--image{ display:grid; place-items:center; }
-.sf-media--image img{ width:100%; height:auto; display:block; border-radius: 12px; }
+.sf-media--image img{ width:100%; height:auto; display:block; }
 .sf-media--video video{ width:100%; height:auto; display:block; border-radius:12px; background:#000; }
-.sf-media--audio{ padding:10px; }
-.sf-media--audio audio{ width:100%; }
+.sf-media--audio{ padding:10px; } .sf-media--audio audio{ width:100%; }
 
 /* Files */
 .sf-file, .sf-fileref{ padding:10px 12px; }
 .sf-file-head, .sf-file-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
-.sf-file-name{ font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.sf-file-size{ opacity:.85; font-feature-settings:"tnum"; }
+.sf-file-name{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sf-file-size{ opacity:.85; font-feature-settings: "tnum"; }
 .sf-file-pre{
-  margin: 8px 0;
-  max-height: 240px;
-  overflow:auto;
-  background: rgba(255,255,255,.04);
-  border: 1px dashed rgba(255,255,255,.12);
-  border-radius: 10px;
-  padding: 10px;
-  line-height: 1.25;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: .88rem;
-  white-space: pre-wrap;
-  word-break: break-word;
+  margin:8px 0; max-height:240px; overflow:auto; background: rgba(255,255,255,.04);
+  border:1px dashed rgba(255,255,255,.12); border-radius:10px; padding:10px; line-height:1.25;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:.88rem;
+  white-space: pre-wrap; word-break: break-word;
 }
-.sf-file-meta{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  padding:6px 8px;
-  opacity:.9;
-  min-width:0;
-}
+.sf-file-meta{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 8px; opacity:.9; min-width:0; }
 .sf-file-dl{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  margin:6px 0 0;
-  padding:6px 10px;
-  border-radius:10px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.12);
-  text-decoration:none;
-  color:inherit;
+  display:inline-flex; align-items:center; gap:6px; margin:6px 0 0; padding:6px 10px; border-radius:10px;
+  background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); text-decoration:none; color:inherit;
 }
 .sf-file-type{ opacity:.85; }
-.sf-hash{ user-select: all; font-size: .85rem; }
-.sf-note{ margin-top: 6px; opacity:.8; font-size: .9rem; }
+.sf-hash{ user-select:all; font-size:.85rem; }
+.sf-note{ margin-top:6px; opacity:.8; font-size:.9rem; }
 
-/* ───────── Stream list ───────── */
-.sf-list{ margin: 1rem 0; display:grid; gap: .75rem; }
+/* Stream list */
+.sf-list{ margin:1rem 0; display:grid; gap:.75rem; }
 .sf-empty{
-  padding: .85rem .95rem;
-  border: 1px dashed rgba(var(--glass), .16);
-  border-radius: 12px;
-  opacity: .9;
-  background: rgba(255,255,255,.02);
+  padding:.85rem .95rem; border:1px dashed rgba(var(--glass), .16);
+  border-radius:12px; opacity:.9;
 }
 
-/* Accessibility */
+/* Accessibility tweaks */
 .sf [role="button"]{ cursor:pointer; }
 .sf [aria-busy="true"]{ cursor:progress; }
 .sf [aria-disabled="true"]{ opacity:.6; cursor:default; }
 
 /* Media must never exceed container width */
-.sf img, .sf video, .sf svg, .sf canvas, .sf iframe { display:block; max-width:100%; height:auto; }
+.sf img, .sf video, .sf svg, .sf canvas, .sf iframe {
+  display:block; max-width:100%; height:auto;
+}
+/* === FIX: header ΦKey pill must wrap; row must allow shrink === */
 
-/* ───────── Chakra mapping (data attribute OR class hooks) ───────── */
-/* Set ONE of these on `.sf`: data-chakra="Root" ... "Crown" */
-.sf[data-chakra="Root"], .sf.chakra-root{   --chakra-r: 255; --chakra-g: 88;  --chakra-b: 88;  }
-.sf[data-chakra="Sacral"], .sf.chakra-sacral{ --chakra-r: 255; --chakra-g: 146; --chakra-b: 88;  }
-.sf[data-chakra="Solar"], .sf.chakra-solar{ --chakra-r: 255; --chakra-g: 215; --chakra-b: 128; }
-.sf[data-chakra="Heart"], .sf.chakra-heart{ --chakra-r: 88;  --chakra-g: 255; --chakra-b: 174; }
-.sf[data-chakra="Throat"], .sf.chakra-throat{ --chakra-r: 42;  --chakra-g: 197; --chakra-b: 255; }
-.sf[data-chakra="Third Eye"], .sf.chakra-third-eye{ --chakra-r: 164; --chakra-g: 126; --chakra-b: 255; }
-.sf[data-chakra="Crown"], .sf.chakra-crown{ --chakra-r: 238; --chakra-g: 241; --chakra-b: 251; }
+/* 1) Whatever wraps your top pills (tags) should wrap lines and shrink safely */
+.sf .sf-tags,
+.sf .sf-chip-row,
+.sf .sf-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  min-width: 0;        /* critical for flex children on iOS */
+}
 
-/* ───────── Weekday mapping (data attribute OR class hooks) ───────── */
-/* Set ONE of these on `.sf`: data-weekday="Solhara"... */
-.sf[data-weekday="Solhara"], .sf.day-solhara{ --day-hue: 48; }   /* Sun / gold */
-.sf[data-weekday="Aquaris"], .sf.day-aquaris{ --day-hue: 198; }  /* aqua */
-.sf[data-weekday="Flamora"], .sf.day-flamora{ --day-hue: 18; }   /* flame */
-.sf[data-weekday="Verdari"], .sf.day-verdari{ --day-hue: 128; }  /* verdant */
-.sf[data-weekday="Sonari"],  .sf.day-sonari{  --day-hue: 270; }  /* sonic violet */
-.sf[data-weekday="Kaelith"], .sf.day-kaelith{ --day-hue: 205; }  /* deep sky */
+/* 2) Any pill that contains a key should wrap internally and never run off */
+.sf .sf-pill:has(.sf-key),
+.sf .sf-pill--phikey,
+.sf .sf-pill[data-kind="phikey"] {
+  white-space: normal;   /* override the default nowrap */
+  flex-wrap: wrap;
+  align-items: flex-start;
+  max-width: 100%;
+  min-width: 0;
+}
 
-/* ───────── Reduced motion ───────── */
-@media (prefers-reduced-motion: reduce){
-  .kai-feed-status::after,
-  .sf-banner::before,
-  .sf-kopyBtn::after{
-    animation: none !important;
+/* 3) The actual key text (long base58/hex) can break anywhere safely */
+.sf .sf-key {
+  display: inline-block;
+  overflow-wrap: anywhere;
+  word-break: break-all;   /* enables breaks inside long tokens */
+  line-break: anywhere;
+  min-width: 0;
+}
+/* src/pages/sigilstream/styles/sigilstream.css
+   ✅ Paste this at the VERY END (adds missing HTML/MD/CODE rendering + v6.2-style banner actions)
+*/
+
+/* Mono helper (non-invasive) */
+.sf-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* ---------- Payload action banner (copy UX) ---------- */
+.sf-banner {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(10, 18, 20, 0.72), rgba(10, 18, 20, 0.45));
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.sf-banner__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sf-banner__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.sf-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, filter 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sf-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+  filter: brightness(1.03);
+}
+
+.sf-btn:active {
+  transform: translateY(1px);
+}
+
+.sf-btn--ghost {
+  background: transparent;
+}
+
+.sf-banner__grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 860px) {
+  .sf-banner__grid {
+    grid-template-columns: 1fr 1fr;
   }
+}
+
+.sf-kv {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.sf-k {
+  font-size: 11px;
+  opacity: 0.72;
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sf-v {
+  font-size: 12px;
+  opacity: 0.92;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.sf-link {
+  color: rgba(155, 255, 235, 0.92);
+  text-decoration: none;
+}
+
+.sf-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Post rendering ---------- */
+.sf-post {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.sf-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Code blocks */
+.sf-code {
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sf-code code {
+  display: block;
+  white-space: pre;
+  overflow-wrap: normal;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Markdown surface */
+.sf-md {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.sf-md h1,
+.sf-md h2,
+.sf-md h3,
+.sf-md h4 {
+  margin: 10px 0 8px;
+  line-height: 1.15;
+}
+
+.sf-md p {
+  margin: 8px 0;
+  opacity: 0.94;
+}
+
+.sf-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.sf-md pre {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sf-md pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+/* Sanitized HTML surface */
+.sf-html {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.sf-html img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+.sf-html pre,
+.sf-html code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.sf-html pre {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  overflow-x: auto;
+}
+
+/* Attachments minor helpers (safe additions) */
+.sf-att-kind {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.sf-att-line {
+  font-size: 12px;
 }

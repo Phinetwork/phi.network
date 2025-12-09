@@ -360,6 +360,7 @@ export function normalizeLegacyPayload(p1: FeedPostPayloadLegacy): FeedPostPaylo
 }
 
 export function decodeFeedPayload(token: string): FeedPostPayload | null {
+  
   try {
     if (!token || token.length > 1_000_000) return null; // defensive: refuse absurd inputs
     const bytes = fromBase64Url(token);
@@ -511,71 +512,71 @@ export async function materializeInlineToCache(
   const cacheName = opts.cacheName ?? "sigil-attachments-v1";
   const pathPrefix = (opts.pathPrefix ?? "/att/").replace(/\/+$/, "") + "/";
 
-  if (!p.attachments || p.attachments.items.length === 0) {
-    return pruneThumbnails(p);
-  }
+  const pruned = pruneThumbnails(p);
+  if (!pruned.attachments || pruned.attachments.items.length === 0) return pruned;
 
   const hasCaches =
     typeof globalThis.caches !== "undefined" &&
     typeof globalThis.caches.open === "function";
 
+  // ✅ Never silently drop attachments
+  if (!hasCaches) return pruned;
+
+  let cache: Cache | null = null;
+  try {
+    cache = await globalThis.caches.open(cacheName);
+  } catch {
+    cache = null;
+  }
+
   const outItems: AttachmentItem[] = [];
-  for (const it of p.attachments.items) {
+
+  for (const it of pruned.attachments.items) {
     if (it.kind !== "file-inline") {
       outItems.push(it);
       continue;
     }
 
-    if (!hasCaches) {
-      // If we can't persist safely, drop inline payloads to protect link size.
+    // If cache open failed, keep inline (don’t drop)
+    if (!cache) {
+      outItems.push(it);
       continue;
     }
 
-    // Decode
-    const bytes = bytesFromBase64Url(it.data_b64url).buffer;
-    const sha = await sha256Hex(bytes);
-    const blob = mimeToBlob(bytes, it.type);
-    const url = `${pathPrefix}${sha}`;
+    try {
+      const u8 = bytesFromBase64Url(it.data_b64url);
+      const sha = await sha256Hex(u8.buffer);
+      const blob = mimeToBlob(u8.buffer, it.type);
+      const url = `${pathPrefix}${sha}`;
 
-    // Put into CacheStorage
-    const cache = await globalThis.caches.open(cacheName);
-    await cache.put(
-      new Request(url, { method: "GET" }),
-      new Response(blob, {
-        headers: it.type ? { "Content-Type": it.type } : undefined,
-      }),
-    );
+      await cache.put(
+        new Request(url, { method: "GET" }),
+        new Response(blob, {
+          headers: it.type ? { "Content-Type": it.type } : undefined,
+        }),
+      );
 
-    // Convert to file-ref (no thumbnail)
-    const ref: AttachmentFileRef = {
-      kind: "file-ref",
-      name: it.name,
-      type: it.type,
-      size: it.size,
-      sha256: sha,
-      url,
-    };
-    outItems.push(ref);
+      const ref: AttachmentFileRef = {
+        kind: "file-ref",
+        name: it.name,
+        type: it.type,
+        size: it.size,
+        sha256: sha,
+        url,
+      };
+      outItems.push(ref);
+    } catch {
+      // ✅ Keep inline on failure
+      outItems.push(it);
+    }
   }
 
-  const nextAttachments: Attachments = {
-    version: ATTACHMENTS_VERSION,
-    items: outItems,
-  };
-
-  const { totalBytes, inlinedBytes } = computeAttachmentStats({
-    attachments: nextAttachments,
-  });
-
   return {
-    ...p,
-    attachments: {
-      ...nextAttachments,
-      totalBytes,
-      inlinedBytes,
-    },
+    ...pruned,
+    attachments: makeAttachments(outItems),
   };
 }
+
 
 /* ───────── Token helpers & URL builders ───────── */
 
@@ -679,14 +680,52 @@ export function buildFeedUrl(origin: string, payload: FeedPostPayload): string {
 }
 
 /* ───────── High-level safe flow helpers ───────── */
-
 export async function preparePayloadForLink(
   p: FeedPostPayload,
   opts: { cacheName?: string; pathPrefix?: string } = {},
 ): Promise<FeedPostPayload> {
-  const withRefs = await materializeInlineToCache(p, opts);
+  // 1) Always prune thumbnails first (safe + reduces size)
+  const pruned = pruneThumbnails(p);
+
+  // 2) If already within hard budget, keep inline files inline (portable)
+  const first = encodeTokenWithBudgets(pruned);
+  if (first.withinHard) return pruned;
+
+  // 3) If there are no inline files, nothing to materialize; caller will use hash mode
+  const hasInline =
+    pruned.attachments?.items?.some((it) => it.kind === "file-inline") ?? false;
+  if (!hasInline) return pruned;
+
+  // 4) Try converting inline → cache-backed refs to shrink token
+  const hasCaches =
+    typeof globalThis.caches !== "undefined" &&
+    typeof globalThis.caches.open === "function";
+
+  if (!hasCaches) {
+    // ✅ Don’t silently drop: fail loudly so UI can tell the truth
+    throw new Error(
+      "Inline attachments exceed safe token size, but CacheStorage is unavailable on this device/session. " +
+        "Attach via a public URL (Drive/S3/IPFS) or use smaller files.",
+    );
+  }
+
+  const withRefs = await materializeInlineToCache(pruned, opts);
+
+  // If we still exceed hard budget AND inline remains (cache failed), fail loudly.
+  const second = encodeTokenWithBudgets(withRefs);
+  const inlineStillPresent =
+    withRefs.attachments?.items?.some((it) => it.kind === "file-inline") ?? false;
+
+  if (!second.withinHard && inlineStillPresent) {
+    throw new Error(
+      "Inline attachments are still too large to share safely (and could not be cached). " +
+        "Attach via public URL or reduce inline file size/count.",
+    );
+  }
+
   return pruneThumbnails(withRefs);
 }
+
 
 export async function buildPreparedHashUrl(
   origin: string,

@@ -3,25 +3,20 @@
 
 /**
  * KaiVoh — Stream Exhale Composer
- * v4.6 — FIX: non-hanging Exhale via Module Worker encode + stage diagnostics
- *        - Moves encodeTokenWithBudgets off the main thread (prevents UI stalls)
- *        - Adds hard timeouts + “where it stopped” stage reporting
- *        - Keeps the SAME token format (still uses encodeTokenWithBudgets from feedPayload)
+ * v4.7 — FIX: real module-worker file (no Blob + no dynamic import inside worker)
+ *        - iOS/Safari-safe: avoids blob-worker + import() CORS/CSP failures
+ *        - Worker-first encode with deterministic main-thread fallback
+ *        - Keeps SAME token format (encodeTokenWithBudgets from feedPayload)
  *
  * Primary role:
  * - Exhale a /stream/p/<token> URL bound to the current verified Sigil.
  * - Attach documents, folders, tiny inline files, extra URLs, and recorded stories.
  * - Embed parentUrl/originUrl lineage + register the stream URL with Sigil Explorer.
- *
- * Notes:
- * - Token encoding happens in a Web Worker to prevent “Exhale Stream URL” hanging.
- * - If worker import fails (CSP/old browser), we fail fast with a precise reason.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent, ReactElement } from "react";
 import "./styles/KaiVoh.css";
-
 import {
   ATTACHMENTS_VERSION,
   TOKEN_SOFT_BUDGET,
@@ -40,6 +35,7 @@ import {
   makeMarkdownBody,
   makeHtmlBody,
   preparePayloadForLink,
+  encodeTokenWithBudgets,
 } from "../../utils/feedPayload";
 
 import { momentFromUTC } from "../../utils/kai_pulse";
@@ -290,12 +286,9 @@ type BodyKind = "text" | "code" | "md" | "html";
 type HtmlMode = "code" | "sanitized";
 type UrlItem = Extract<AttachmentItem, { kind: "url" }>;
 
-/* ───────────────────────── Non-hanging encode (Module Worker) ───────────────────────── */
+/* ───────────────────────── Non-hanging encode (REAL Module Worker file) ───────────────────────── */
 
-type EncodeWorkerRequest = {
-  id: string;
-  payload: FeedPostPayload;
-};
+type EncodeWorkerRequest = { id: string; payload: FeedPostPayload };
 
 type EncodeWorkerResponse =
   | { id: string; ok: true; token: string; withinHard: boolean; ms: number }
@@ -313,7 +306,8 @@ type EncodeDiag = {
   note?: string;
 };
 
-const nowMs = (): number => (typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now());
+const nowMs = (): number =>
+  typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
 
 const nextPaint = async (): Promise<void> => {
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
@@ -339,7 +333,6 @@ const makeId = (): string => {
 
 // Singleton worker plumbing (module-scope; not React state)
 let _encodeWorker: Worker | null = null;
-let _encodeWorkerUrl: string | null = null;
 const _pending = new Map<string, (res: EncodeWorkerResponse) => void>();
 
 function getEncodeWorker(): Worker {
@@ -347,34 +340,8 @@ function getEncodeWorker(): Worker {
   if (typeof window === "undefined") throw new Error("encode worker unavailable (no window)");
   if (typeof Worker === "undefined") throw new Error("encode worker unavailable (Worker not supported)");
 
-  // IMPORTANT: resolve the module URL in real code (so bundler rewrites it correctly)
-  const feedPayloadModUrl = new URL("../../utils/feedPayload", import.meta.url).href;
-
-  const workerSrc = `
-    const FEED_PAYLOAD_URL = ${JSON.stringify(feedPayloadModUrl)};
-    const now = () => (self.performance && self.performance.now ? self.performance.now() : Date.now());
-
-    self.onmessage = async (ev) => {
-      const t0 = now();
-      const data = ev.data || {};
-      const id = data.id;
-      try {
-        const mod = await import(FEED_PAYLOAD_URL);
-        if (!mod || typeof mod.encodeTokenWithBudgets !== "function") {
-          throw new Error("encodeTokenWithBudgets export missing from utils/feedPayload");
-        }
-        const out = await mod.encodeTokenWithBudgets(data.payload);
-        self.postMessage({ id, ok: true, token: out.token, withinHard: out.withinHard, ms: now() - t0 });
-      } catch (e) {
-        const msg = e && e.message ? String(e.message) : String(e);
-        self.postMessage({ id, ok: false, error: msg, ms: now() - t0 });
-      }
-    };
-  `;
-
-  const blob = new Blob([workerSrc], { type: "text/javascript" });
-  const url = URL.createObjectURL(blob);
-  _encodeWorkerUrl = url;
+  // ✅ Real worker module file (bundler-safe; no blob; no import() inside worker)
+  const url = new URL("./encodeToken.worker.ts", import.meta.url);
   _encodeWorker = new Worker(url, { type: "module", name: "kaiVohEncodeWorker" });
 
   _encodeWorker.onmessage = (ev: MessageEvent<EncodeWorkerResponse>) => {
@@ -386,8 +353,8 @@ function getEncodeWorker(): Worker {
   };
 
   _encodeWorker.onerror = () => {
-    // If the worker dies, fail all inflight and reset.
-    for (const [, cb] of _pending) cb({ id: makeId(), ok: false, error: "encode worker crashed", ms: 0 });
+    // Fail all inflight and reset. Keep ids stable.
+    for (const [id, cb] of _pending) cb({ id, ok: false, error: "encode worker crashed", ms: 0 });
     _pending.clear();
     try {
       _encodeWorker?.terminate();
@@ -395,10 +362,6 @@ function getEncodeWorker(): Worker {
       /* ignore */
     }
     _encodeWorker = null;
-    if (_encodeWorkerUrl) {
-      URL.revokeObjectURL(_encodeWorkerUrl);
-      _encodeWorkerUrl = null;
-    }
   };
 
   return _encodeWorker;
@@ -415,13 +378,36 @@ async function encodeTokenInWorker(payload: FeedPostPayload): Promise<EncodeWork
   return p;
 }
 
+/** ✅ Worker-first, deterministic fallback if worker is blocked/unavailable */
+async function encodeTokenWorkerFirst(payload: FeedPostPayload): Promise<EncodeWorkerResponse> {
+  try {
+    return await encodeTokenInWorker(payload);
+  } catch {
+    const t0 = nowMs();
+    try {
+      const out = encodeTokenWithBudgets(payload);
+      return {
+        id: makeId(),
+        ok: true,
+        token: out.token,
+        withinHard: out.withinHard,
+        ms: nowMs() - t0,
+      };
+    } catch (err) {
+      return {
+        id: makeId(),
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+        ms: nowMs() - t0,
+      };
+    }
+  }
+}
+
+
 /* ───────────────────────── Component ───────────────────────── */
 
-export default function KaiVoh({
-  initialCaption = "",
-  initialAuthor = "",
-  onExhale,
-}: KaiVohProps): ReactElement {
+export default function KaiVoh({ initialCaption = "", initialAuthor = "", onExhale }: KaiVohProps): ReactElement {
   const { auth } = useSigilAuth();
   const sigilMeta = auth.meta;
 
@@ -451,8 +437,8 @@ export default function KaiVoh({
   const [storyPreview, setStoryPreview] = useState<{ url: string; durationMs: number } | null>(null);
 
   const [busy, setBusy] = useState<boolean>(false);
-  const [stage, setStage] = useState<string>(""); // ✅ tells you where it is stuck
-  const [diag, setDiag] = useState<EncodeDiag | null>(null); // ✅ “why” + timings
+  const [stage, setStage] = useState<string>("");
+  const [diag, setDiag] = useState<EncodeDiag | null>(null);
 
   const [err, setErr] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
@@ -706,7 +692,6 @@ export default function KaiVoh({
     try {
       setBusy(true);
       setStage("paint");
-      // Ensure “Exhaling…” paints before heavy work
       await nextPaint();
       await nextPaint();
 
@@ -743,7 +728,6 @@ export default function KaiVoh({
       setStage("prepare");
       const tPrep0 = nowMs();
 
-      // If this hangs, you’ll see stage=prepare and the timeout error.
       const prepared = await withTimeout(
         preparePayloadForLink(basePayload, { cacheName: "sigil-attachments-v1", pathPrefix: "/att/" }),
         20_000,
@@ -755,8 +739,8 @@ export default function KaiVoh({
       setStage("encode(worker)");
       const tEnc0 = nowMs();
 
-      // ✅ Non-blocking encode (worker). If it fails, you get the exact error.
-      const enc = await withTimeout(encodeTokenInWorker(prepared), 30_000, "encodeTokenWithBudgets(worker)");
+      // ✅ Worker-first encode (real module worker), deterministic fallback if needed
+      const enc = await withTimeout(encodeTokenWorkerFirst(prepared), 30_000, "encodeTokenWithBudgets(worker)");
 
       const encodeMs = nowMs() - tEnc0;
 
@@ -772,10 +756,10 @@ export default function KaiVoh({
           note: enc.error,
         });
 
-        // Common causes: CSP blocks blob/module workers, or feedPayload depends on window-only APIs.
         setErr(
-          `Token encode failed in worker: ${enc.error}. ` +
-            `If you have a strict CSP, allow "worker-src blob:" (or host a real worker module file).`,
+          `Token encode failed: ${enc.error}. ` +
+            `If you have a strict CSP, allow module workers from 'self' (worker-src 'self'). ` +
+            `This build uses a real worker file (no blob workers).`,
         );
         return;
       }
@@ -785,9 +769,7 @@ export default function KaiVoh({
       setTokenLength(token.length);
 
       const origin = globalThis.location?.origin ?? "https://kaiklok.com";
-      const shareUrl = withinHard
-        ? `${origin}/stream/p/${encodeURIComponent(token)}`
-        : `${origin}/stream#t=${token}`;
+      const shareUrl = withinHard ? `${origin}/stream/p/${encodeURIComponent(token)}` : `${origin}/stream#t=${token}`;
 
       setUrlMode(withinHard ? "path" : "hash");
 
@@ -796,9 +778,7 @@ export default function KaiVoh({
           `Token exceeds hard path limit (${token.length.toLocaleString()} > ${TOKEN_HARD_LIMIT.toLocaleString()}). Using hash URL to avoid request-line limits.`,
         );
       } else if (token.length > TOKEN_SOFT_BUDGET) {
-        setWarn(
-          `Token is large (${token.length.toLocaleString()} chars). Prefer trimming inlined files or relying on external URLs.`,
-        );
+        setWarn(`Token is large (${token.length.toLocaleString()} chars). Prefer trimming inlined files or relying on external URLs.`);
       }
 
       setStage("register");
@@ -991,13 +971,7 @@ export default function KaiVoh({
         )}
       </div>
 
-      <div
-        ref={dropRef}
-        className="dropzone"
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        aria-label="Drop files or folders here"
-      >
+      <div ref={dropRef} className="dropzone" onDragOver={onDragOver} onDrop={onDrop} aria-label="Drop files or folders here">
         <div className="dropzone-inner">
           <div className="dz-title">Seal documents or folders</div>
           <div className="dz-sub">Tiny files get inlined; large files become cache-backed refs.</div>
@@ -1031,8 +1005,7 @@ export default function KaiVoh({
       {attachments.items.length > 0 && (
         <div className="file-summary">
           <div className="composer-hint">
-            Items: <strong>{attachments.items.length}</strong> • Files total:{" "}
-            <strong>{prettyBytes(attachments.totalBytes ?? 0)}</strong> • Inlined:{" "}
+            Items: <strong>{attachments.items.length}</strong> • Files total: <strong>{prettyBytes(attachments.totalBytes ?? 0)}</strong> • Inlined:{" "}
             <strong>{prettyBytes(attachments.inlinedBytes ?? 0)}</strong> (≤ {prettyBytes(MAX_INLINE_BYTES)} each)
           </div>
 
@@ -1070,8 +1043,7 @@ export default function KaiVoh({
 
           {attachments.items.some((i) => i.kind === "file-ref") && (
             <div className="composer-hint warn">
-              Large files are cached and referenced by SHA-256. You can also host publicly (Drive/S3/IPFS) and attach the
-              public URL above.
+              Large files are cached and referenced by SHA-256. You can also host publicly (Drive/S3/IPFS) and attach the public URL above.
             </div>
           )}
         </div>
@@ -1104,36 +1076,16 @@ export default function KaiVoh({
       <div className="composer">
         <label className="composer-label">Body Format</label>
         <div className="story-actions">
-          <button
-            type="button"
-            className={`pill ${bodyKind === "text" ? "prim" : "subtle"}`}
-            onClick={() => setBodyKind("text")}
-            title="Text"
-          >
+          <button type="button" className={`pill ${bodyKind === "text" ? "prim" : "subtle"}`} onClick={() => setBodyKind("text")} title="Text">
             Text
           </button>
-          <button
-            type="button"
-            className={`pill ${bodyKind === "code" ? "prim" : "subtle"}`}
-            onClick={() => setBodyKind("code")}
-            title="Code"
-          >
+          <button type="button" className={`pill ${bodyKind === "code" ? "prim" : "subtle"}`} onClick={() => setBodyKind("code")} title="Code">
             Code
           </button>
-          <button
-            type="button"
-            className={`pill ${bodyKind === "md" ? "prim" : "subtle"}`}
-            onClick={() => setBodyKind("md")}
-            title="Markdown"
-          >
+          <button type="button" className={`pill ${bodyKind === "md" ? "prim" : "subtle"}`} onClick={() => setBodyKind("md")} title="Markdown">
             MD
           </button>
-          <button
-            type="button"
-            className={`pill ${bodyKind === "html" ? "prim" : "subtle"}`}
-            onClick={() => setBodyKind("html")}
-            title="HTML"
-          >
+          <button type="button" className={`pill ${bodyKind === "html" ? "prim" : "subtle"}`} onClick={() => setBodyKind("html")} title="HTML">
             HTML
           </button>
 
@@ -1164,8 +1116,7 @@ export default function KaiVoh({
         </div>
 
         <div className="composer-hint">
-          v2 posts include <span className="mono">body.kind</span> so the stream can render code as code (escaped) instead
-          of treating everything as plain text.
+          v2 posts include <span className="mono">body.kind</span> so the stream can render code as code (escaped) instead of treating everything as plain text.
         </div>
       </div>
 
@@ -1207,7 +1158,6 @@ export default function KaiVoh({
       {err && <div className="composer-error">{err}</div>}
       {warn && !err && <div className="composer-warn">{warn}</div>}
 
-      {/* ✅ Stage + diag visibility so you always know “where it hung” */}
       {(busy || diag) && (
         <div className="composer-hint mono" aria-live="polite">
           {busy && stage ? `stage: ${stage}` : null}
@@ -1241,14 +1191,7 @@ export default function KaiVoh({
           <label htmlFor="gen-url" className="composer-label">
             Your shareable link
           </label>
-          <input
-            id="gen-url"
-            className="composer-input"
-            type="text"
-            readOnly
-            value={generatedUrl}
-            onFocus={(e) => e.currentTarget.select()}
-          />
+          <input id="gen-url" className="composer-input" type="text" readOnly value={generatedUrl} onFocus={(e) => e.currentTarget.select()} />
           <div className="composer-actions">
             <button
               type="button"
