@@ -654,12 +654,51 @@ a:hover {
 }
 
 
-.brand__subtitle {
-  font-size: 0.78rem;
-  color: var(--text-dim);
-  letter-spacing: 0.06em;
+.brand__subtitle{
+  /* clean, sovereign smallcaps vibe */
+  font-size: clamp(0.74rem, 0.66rem + 0.35vw, 0.92rem);
+  font-weight: 720;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
+  line-height: 1.15;
+
+  /* airy “frosted” clarity */
+  color: rgba(210, 245, 245, 0.72);
+  text-shadow:
+    0 0 0.18em rgba(120, 255, 240, 0.12),
+    0 0 0.55em rgba(120, 130, 255, 0.08);
+
+  /* subtle inner-prism (inside letters, not a badge) */
+  background-image: linear-gradient(
+    105deg,
+    rgba(255,255,255,0.86) 0%,
+    rgba(160,255,244,0.84) 28%,
+    rgba(150,205,255,0.78) 58%,
+    rgba(210,170,255,0.72) 86%,
+    rgba(255,255,255,0.82) 100%
+  );
+  background-size: 240% 240%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  /* “alive but restrained” — slower than the title */
+  will-change: background-position, filter;
+  filter: saturate(1.12) brightness(1.02);
+  animation: brandSubtitleDrift 10.472s linear infinite;
 }
+
+@keyframes brandSubtitleDrift{
+  0%{ background-position: 0% 50%; }
+  50%{ background-position: 100% 50%; }
+  100%{ background-position: 0% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .brand__subtitle{ animation: none; }
+}
+
 
 /* LIVE indicator (top right) */
 .topbar-live {

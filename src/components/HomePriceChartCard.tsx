@@ -62,10 +62,7 @@ function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, ms = 15000): Pr
   return fn(ctl.signal).finally(() => clearTimeout(t));
 }
 
-async function createPaymentIntent(
-  apiBase: string,
-  amountUsd: number
-): Promise<{ clientSecret: string; intentId: string }> {
+async function createPaymentIntent(apiBase: string, amountUsd: number): Promise<{ clientSecret: string; intentId: string }> {
   return withTimeout(async (signal) => {
     const res = await fetch(`${apiBase}/api/payments/intent`, {
       method: "POST",
@@ -205,7 +202,6 @@ export default function HomePriceChartCard({
   /* ---------- PURE price fn (used by chart engine only) ---------- */
   const computePrice = useCallback(
     (pulse: number): number => {
-      if (!meta) return 0;
       const usdSample = Math.max(1, Math.round(Number.isFinite(sample) ? sample : 1));
       const q = quotePhiForUsd(
         {
@@ -332,8 +328,10 @@ export default function HomePriceChartCard({
         }}
       >
         <div className="hp-left">
-          {/* ✅ Removed the left-side PhiLogo next to "Value Index" */}
-          <span className="hp-title">{title}</span>
+          {/* ✅ Sleek Atlantean Title */}
+          <span className="hp-title" aria-label={title}>
+            <span className="hp-titleText">{title}</span>
+          </span>
         </div>
 
         <div className="hp-right">
