@@ -1983,9 +1983,9 @@ const VerifierStamperInner: React.FC = () => {
 
                   {isSendFilename && (
                     <div className="child-banner tooltip-container" style={{ fontSize: 10, opacity: 0.9, marginTop: 6 }}>
-                      <strong>3 Steps from Exhale</strong> <span className="tooltip-trigger">INHALE:</span>
+                      <strong>7 Steps from Exhale</strong> <span className="tooltip-trigger">INHALE:</span>
                       <div className="tooltip">
-                        You have 3 steps (33 pulses) to inhale &amp; seal this Sigil. After this period, INHALE is permanently
+                        You have 7 steps (77 pulses) to inhale &amp; seal this Sigil. After this period, INHALE is permanently
                         finalized &amp; the Sigil is eternally sealed.
                       </div>
                     </div>
