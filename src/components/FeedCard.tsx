@@ -4,7 +4,17 @@
 import React, { useCallback, useMemo, useState } from "react";
 import KaiSigil from "../components/KaiSigil";
 import { decodeSigilUrl } from "../utils/sigilDecode";
-import { STEPS_BEAT, momentFromPulse, type ChakraDay } from "../utils/kai_pulse";
+import {
+  STEPS_BEAT,
+  momentFromPulse,
+  epochMsFromPulse,
+  microPulsesSinceGenesis,
+  N_DAY_MICRO,
+  DAYS_PER_MONTH,
+  DAYS_PER_YEAR,
+  MONTHS_PER_YEAR,
+  type ChakraDay,
+} from "../utils/kai_pulse";
 import type {
   Capsule,
   PostPayload,
@@ -33,29 +43,82 @@ const hostOf = (href?: string): string | undefined => {
 const isNonEmpty = (val: unknown): val is string =>
   typeof val === "string" && val.trim().length > 0;
 
-/** Map an unknown value to a valid ChakraDay with a coherent fallback. */
+/* ─────────────────────────────────────────────────────────────
+   KKS-1.0: D/M/Y from μpulses (exact, deterministic)
+   dayOfMonth: 1..42
+   month:      1..8
+   year:       1.. (yearIndex + 1)
+   ───────────────────────────────────────────────────────────── */
+
+
+/** Euclidean mod (always 0..m-1) */
+const modE = (a: bigint, m: bigint): bigint => {
+  const r = a % m;
+  return r >= 0n ? r : r + m;
+};
+
+/** Euclidean floor division (toward −∞) */
+const floorDivE = (a: bigint, d: bigint): bigint => {
+  if (d === 0n) throw new Error("Division by zero");
+  const q = a / d;
+  const r = a % d;
+  return r === 0n ? q : (a >= 0n ? q : q - 1n);
+};
+
+const toSafeNumber = (x: bigint): number => {
+  const MAX = BigInt(Number.MAX_SAFE_INTEGER);
+  const MIN = BigInt(Number.MIN_SAFE_INTEGER);
+  if (x > MAX) return Number.MAX_SAFE_INTEGER;
+  if (x < MIN) return Number.MIN_SAFE_INTEGER;
+  return Number(x);
+};
+
+/** Exact KKS calendar indices from a pulse (no payload heuristics). */
+function kaiDMYFromPulseKKS(pulse: number): { day: number; month: number; year: number } {
+  // Bridge pulse -> epoch ms (φ-exact) -> μpulses (φ-exact) to match engine behavior.
+  const ms = epochMsFromPulse(pulse); // bigint
+  const pμ = microPulsesSinceGenesis(ms); // bigint μpulses
+
+  const dayIdx = floorDivE(pμ, N_DAY_MICRO); // bigint days since genesis (can be negative)
+
+  const monthIdx = floorDivE(dayIdx, BigInt(DAYS_PER_MONTH)); // bigint
+  const yearIdx = floorDivE(dayIdx, BigInt(DAYS_PER_YEAR)); // bigint
+
+  const dayOfMonth = toSafeNumber(modE(dayIdx, BigInt(DAYS_PER_MONTH))) + 1; // 1..42
+  const month = toSafeNumber(modE(monthIdx, BigInt(MONTHS_PER_YEAR))) + 1; // 1..8
+  const year = toSafeNumber(yearIdx) + 1; // display year
+
+  return { day: dayOfMonth, month, year };
+}
+
+/**
+ * Chakra coercion:
+ * - KaiSigil’s CHAKRAS map expects "Crown" (not "Krown")
+ * - UI should DISPLAY "Krown"
+ */
 function toChakra(value: unknown, fallback: ChakraDay): ChakraDay {
-  if (
-    typeof value === "string" &&
-    (
-      [
-        "Root",
-        "Sacral",
-        "Solar Plexus",
-        "Heart",
-        "Throat",
-        "Third Eye",
-        "Krown",
-      ] as const
-    ).includes(value as never)
-  ) {
-    return value as ChakraDay;
+  if (typeof value === "string") {
+    const v = value.trim();
+    if (v === "Krown") return "Crown";
+    if (
+      v === "Root" ||
+      v === "Sacral" ||
+      v === "Solar Plexus" ||
+      v === "Heart" ||
+      v === "Throat" ||
+      v === "Third Eye" ||
+      v === "Crown"
+    ) {
+      return v as ChakraDay;
+    }
   }
   return fallback;
 }
 
 /** Arc name from *zero-based* beat (0..35) — 6 beats per arc */
-function arcFromBeat(beatZ: number):
+function arcFromBeat(
+  beatZ: number,
+):
   | "Ignite"
   | "Integrate"
   | "Harmonize"
@@ -63,19 +126,10 @@ function arcFromBeat(beatZ: number):
   | "Purify"
   | "Dream" {
   const idx = Math.max(0, Math.min(5, Math.floor(beatZ / 6)));
-  return (
-    [
-      "Ignite",
-      "Integrate",
-      "Harmonize",
-      "Reflekt",
-      "Purify",
-      "Dream",
-    ] as const
-  )[idx];
+  return (["Ignite", "Integrate", "Harmonize", "Reflekt", "Purify", "Dream"] as const)[idx];
 }
 
-/** Two-digit pad: 0 → "00", 1 → "01", … 9 → "09", etc. */
+/** Two-digit pad: 0 → "00" */
 const pad2 = (n: number): string => String(Math.max(0, Math.floor(n))).padStart(2, "0");
 
 /** Build a Kai-first meta line with **zero-based**, **two-digit** BB:SS label. NEVER display Chronos. */
@@ -83,11 +137,16 @@ function buildKaiMetaLineZero(
   pulse: number,
   beatZ: number,
   stepZ: number,
-
+  day: number,
+  month: number,
+  year: number,
 ): { arc: string; label: string; line: string } {
   const arc = arcFromBeat(beatZ);
   const label = `${pad2(beatZ)}:${pad2(stepZ)}`; // zero-based, two-digit BB:SS
-  const line = `☤Kai:${pulse} • ${label} `;
+  const d = Math.max(1, Math.floor(day));
+  const m = Math.max(1, Math.floor(month));
+  const y = Math.floor(year); // year may be <=0 for pre-genesis; keep exact
+  const line = `☤Kai:${pulse} • ${label} • D${d}/M${m}/Y${y}`;
   return { arc, label, line };
 }
 
@@ -98,8 +157,8 @@ function stepPctFromIndex(stepZ: number): number {
   return pct >= 1 ? 1 - 1e-12 : pct;
 }
 
-/** Chakra → accent RGB (for CSS vars / “Atlantean glass” theming). */
-const CHAKRA_RGB: Record<ChakraDay, readonly [number, number, number]> = {
+/** Chakra → accent RGB (support both spellings for theming) */
+const CHAKRA_RGB: Record<string, readonly [number, number, number]> = {
   Root: [255, 88, 88],
   Sacral: [255, 146, 88],
   "Solar Plexus": [255, 215, 128],
@@ -107,6 +166,7 @@ const CHAKRA_RGB: Record<ChakraDay, readonly [number, number, number]> = {
   Throat: [42, 197, 255],
   "Third Eye": [164, 126, 255],
   Crown: [238, 241, 251],
+  Krown: [238, 241, 251],
 } as const;
 
 /** Legacy-safe “source” read without any-casts. */
@@ -134,7 +194,6 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
   const decoded = useMemo(() => decodeSigilUrl(url), [url]);
 
-  // Hard error state (invalid capsule)
   if (!decoded.ok) {
     return (
       <article className="fc fc--error" role="group" aria-label="Invalid Sigil-Glyph">
@@ -170,7 +229,6 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
     );
   }
 
-  // Safe destructure
   const { data } = decoded;
   const capsule: Capsule = data.capsule;
 
@@ -179,24 +237,27 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
   const share: SharePayload | undefined = capsule.share;
   const reaction: ReactionPayload | undefined = capsule.reaction;
 
-  // Derive Kai meta robustly
-  const pulse = typeof data.pulse === "number" ? data.pulse : 0;
+  const pulse = typeof data.pulse === "number" && Number.isFinite(data.pulse) ? data.pulse : 0;
 
-  // Start from provided numbers or compute from pulse, then normalize to zero-based ints
-  let beatRaw = typeof data.beat === "number" ? data.beat : NaN;
-  let stepRaw = typeof data.stepIndex === "number" ? data.stepIndex : NaN;
-  let chakraDay: ChakraDay = toChakra(data.chakraDay, "Crown");
+  // Single source of truth: derive moment from pulse
+  const m = momentFromPulse(pulse);
 
-  if (!Number.isFinite(beatRaw) || !Number.isFinite(stepRaw) || !data.chakraDay) {
-    const m = momentFromPulse(pulse);
-    if (!Number.isFinite(beatRaw)) beatRaw = m.beat;
-    if (!Number.isFinite(stepRaw)) stepRaw = m.stepIndex;
-    if (!data.chakraDay) chakraDay = m.chakraDay;
-  }
+  const beatRaw = typeof data.beat === "number" && Number.isFinite(data.beat) ? data.beat : m.beat;
+  const stepRaw =
+    typeof data.stepIndex === "number" && Number.isFinite(data.stepIndex)
+      ? data.stepIndex
+      : m.stepIndex;
 
-  // Normalize to **zero-based** integers for all downstream usage
+  // INTERNAL chakra value (what KaiSigil expects)
+  const chakraDay: ChakraDay = toChakra(data.chakraDay, m.chakraDay);
+  // DISPLAY chakra value (what user sees)
+  const chakraDayDisplay = chakraDay === "Crown" ? "Krown" : String(chakraDay);
+
   const beatZ = Math.max(0, Math.floor(beatRaw));
   const stepZ = Math.max(0, Math.floor(stepRaw));
+
+  // ✅ Exact KKS v1.0 D/M/Y (1-based day & month)
+  const { day, month, year } = kaiDMYFromPulseKKS(pulse);
 
   const kind =
     data.kind ??
@@ -210,25 +271,23 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
   const signaturePresent = isNonEmpty(capsule.kaiSignature);
   const verifiedTitle = signaturePresent ? "Signature present (Kai Signature)" : "Unsigned capsule";
 
-  // author exists on capsule
   const authorBadge = isNonEmpty(capsule.author) ? capsule.author : undefined;
 
-  // Source may exist on capsule or (legacy) data
-  const sourceBadge = (isNonEmpty(capsule.source) ? capsule.source : undefined) ?? legacySourceFromData(data);
+  const sourceBadge =
+    (isNonEmpty(capsule.source) ? capsule.source : undefined) ?? legacySourceFromData(data);
 
-  // Kai meta (split + full line)
-  const kai = buildKaiMetaLineZero(pulse, beatZ, stepZ);
+  const kai = buildKaiMetaLineZero(pulse, beatZ, stepZ, day, month, year);
   const stepPct = stepPctFromIndex(stepZ);
 
-  // Accent vars for “alive frosted crystal” CSS
-  const [ar, ag, ab] = CHAKRA_RGB[chakraDay] ?? CHAKRA_RGB.Crown;
-  const phase = pulse % 13; // deterministic phase for subtle per-card breath offsets
+  // Accent vars
+  const [ar, ag, ab] =
+    CHAKRA_RGB[chakraDayDisplay] ?? CHAKRA_RGB.Crown ?? ([238, 241, 251] as const);
+
+  const phase = ((pulse % 13) + 13) % 13; // safe Euclidean mod for negative pulses
   const styleVars: React.CSSProperties = {
-    // Accent
     ["--fc-accent-r" as never]: String(ar),
     ["--fc-accent-g" as never]: String(ag),
     ["--fc-accent-b" as never]: String(ab),
-    // Breath
     ["--fc-pulse-dur" as never]: "5236ms",
     ["--fc-pulse-offset" as never]: `${-(phase * 120)}ms`,
   };
@@ -239,27 +298,25 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
       role="article"
       aria-label={`${kind} glyph`}
       data-kind={kind}
-      data-chakra={chakraDay}
+      data-chakra={chakraDayDisplay}
       data-signed={signaturePresent ? "true" : "false"}
       data-beat={pad2(beatZ)}
       data-step={pad2(stepZ)}
       style={styleVars}
     >
-      {/* Purely visual Atlantean layers (CSS-driven) */}
       <div className="fc-crystal" aria-hidden="true" />
       <div className="fc-rim" aria-hidden="true" />
       <div className="fc-veil" aria-hidden="true" />
 
       <div className="fc-shell">
-        {/* Left: living sigil stage */}
         <aside className="fc-left" aria-label="Sigil">
           <div className="fc-sigilStage">
             <div className="fc-sigilGlass" aria-hidden="true" />
             <div className="fc-sigil">
+              {/* ✅ KaiSigil receives INTERNAL chakra ("Crown"), never "Krown" */}
               <KaiSigil pulse={pulse} beat={beatZ} stepPct={stepPct} chakraDay={chakraDay} />
             </div>
 
-            {/* Kai stamp (CSS can float/ghost this) */}
             <div className="fc-stamp mono" aria-label="Kai stamp">
               <span className="fc-stamp__pulse" title="Pulse">
                 {pulse}
@@ -272,9 +329,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
           </div>
         </aside>
 
-        {/* Right: content stage */}
         <section className="fc-right">
-          {/* Meta header */}
           <header className="fc-head" aria-label="Glyph metadata">
             <div className="fc-metaRow">
               <span className="fc-chip fc-chip--kind" title={`Kind: ${kind}-glyph`}>
@@ -309,7 +364,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               )}
 
               <span className="fc-chip fc-chip--chakra" title="Chakra day">
-                {chakraDay}
+                {chakraDayDisplay}
               </span>
 
               <span
@@ -321,7 +376,6 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               </span>
             </div>
 
-            {/* Kai-only line (split into stylable segments) */}
             <div className="fc-kaiRow" aria-label="Kai meta">
               <span className="fc-kai mono" title="Kai meta line">
                 {kai.line}
@@ -332,7 +386,6 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
             </div>
           </header>
 
-          {/* Body by kind */}
           {post && (
             <section className="fc-bodywrap" aria-label="Post body">
               {isNonEmpty(post.title) && <h3 className="fc-title">{post.title}</h3>}
@@ -350,17 +403,17 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
               {Array.isArray(post.media) && post.media.length > 0 && (
                 <div className="fc-media" aria-label="Attached media">
-                  {post.media.map((m) => {
-                    const key = `${m.kind}:${m.url}`;
-                    const label = hostOf(m.url) ?? m.kind;
+                  {post.media.map((mm) => {
+                    const key = `${mm.kind}:${mm.url}`;
+                    const label = hostOf(mm.url) ?? mm.kind;
                     return (
                       <a
                         key={key}
                         className="fc-btn fc-btn--ghost"
-                        href={m.url}
+                        href={mm.url}
                         target="_blank"
                         rel="noreferrer"
-                        title={m.url}
+                        title={mm.url}
                       >
                         {label}
                       </a>
@@ -415,7 +468,6 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
             </section>
           )}
 
-          {/* Fallback body if no typed content is present */}
           {!post && !message && !share && !reaction && (
             <section className="fc-bodywrap" aria-label="Sigil body">
               <h3 className="fc-title">Proof Of Breath™</h3>
@@ -425,15 +477,8 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
             </section>
           )}
 
-          {/* Actions */}
           <footer className="fc-actions" role="group" aria-label="Actions">
-            <a
-              className="fc-btn"
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              title="Open original sigil"
-            >
+            <a className="fc-btn" href={url} target="_blank" rel="noreferrer" title="Open original sigil">
               ↗ Sigil-Glyph
             </a>
 
