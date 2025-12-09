@@ -162,7 +162,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               aria-pressed={copied}
               data-state={copied ? "copied" : "idle"}
             >
-              {copied ? "Remembered" : "Remember URL"}
+              {copied ? "Remembered" : "Remember Sigil"}
             </button>
           </footer>
         </div>
@@ -432,7 +432,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               href={url}
               target="_blank"
               rel="noreferrer"
-              title="Open original sigil URL"
+              title="Open original sigil"
             >
               Open Sigil
             </a>
@@ -444,7 +444,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               aria-pressed={copied}
               data-state={copied ? "kopied" : "idle"}
             >
-              {copied ? "Remembered" : "Remember URL"}
+              {copied ? "Remembered" : "Remember Sigil"}
             </button>
 
             <span className="fc-live" aria-live="polite">

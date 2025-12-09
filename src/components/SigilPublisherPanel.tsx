@@ -623,7 +623,7 @@ import { useSigilSession } from "./session/useSigilSession";
                       }
                     }}
                   >
-                    Remember URL
+                    Remember
                   </button>
                 </>
               )}

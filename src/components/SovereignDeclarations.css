@@ -40,10 +40,11 @@
 
 /* ───────────────────────────────────────────────────────────────
    1) Footer Trigger (Official Summary Button)
+   (Integrated “ULTRA-THIN” final values; no duplicate patches)
 ──────────────────────────────────────────────────────────────── */
 
 .nav-foot {
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 /* The trigger is built to WRAP cleanly on small screens (no truncation). */
@@ -52,11 +53,11 @@
   width: 100%;
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 12px;
+  gap: 9px;
   align-items: center;
 
-  padding: 12px 14px;
-  border-radius: 16px;
+  padding: 7px 10px;          /* ultra-thin */
+  border-radius: 13px;
 
   color: var(--kai-ink);
   cursor: pointer;
@@ -65,6 +66,7 @@
   transform: translateZ(0);
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  touch-action: manipulation;
 
   /* Crystal base */
   border: 1px solid rgba(120, 220, 255, 0.22);
@@ -99,8 +101,8 @@
     rgba(51, 246, 255, 0.00)
   );
 
-  filter: blur(14px);
-  opacity: 0.70;
+  filter: blur(10px);         /* slimmer aura */
+  opacity: 0.56;
   z-index: 0;
   pointer-events: none;
 
@@ -114,7 +116,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 16px;
+  border-radius: 13px;
 
   background: linear-gradient(
     110deg,
@@ -125,7 +127,7 @@
   );
 
   transform: translateX(-62%) skewX(-14deg);
-  opacity: 0.18;
+  opacity: 0.12;              /* slimmer sheen */
   z-index: 1;
   pointer-events: none;
 
@@ -156,9 +158,9 @@
 /* Badge — crystal capsule + breath pulse */
 .nav-foot__badge {
   position: relative;
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 11px;
   display: grid;
   place-items: center;
   z-index: 2;
@@ -178,8 +180,8 @@
 .nav-foot__badge::after {
   content: "";
   position: absolute;
-  inset: 6px;
-  border-radius: 12px;
+  inset: 4px;
+  border-radius: 9px;
   border: 1px solid rgba(155, 91, 255, 0.20);
   opacity: 0.90;
   pointer-events: none;
@@ -187,49 +189,49 @@
 
 .nav-foot__main {
   display: grid;
-  gap: 3px;
-  min-width: 0; /* critical for wrapping in grid */
+  gap: 1px;          /* tighter */
+  min-width: 0;      /* critical for wrapping in grid */
   z-index: 2;
 }
 
 .nav-foot__kicker {
-  font-size: 11px;
+  font-size: 9px;    /* tighter */
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  opacity: 0.96;
+  line-height: 1.0;
+  opacity: 0.92;
 }
 
 /* ✅ NO TRUNCATION: wrap naturally; never ellipsis */
 .nav-foot__summary {
-  font-size: 12.5px;
-  opacity: 0.86;
+  font-size: 11.25px;
+  opacity: 0.82;
 
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
   min-width: 0;
 
-  /* Make long phrases behave on tiny screens */
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 1.25;
+  line-height: 1.08;
 }
 
-/* “View” pill */
+/* “Open” pill */
 .nav-foot__chev {
   z-index: 2;
 
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 
-  font-size: 12px;
+  font-size: 10px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
   opacity: 0.95;
 
-  padding: 7px 12px;
-  border-radius: 14px;
+  padding: 4px 8px;
+  border-radius: 12px;
 
   border: 1px solid rgba(155, 91, 255, 0.24);
   background:
@@ -247,26 +249,35 @@
   opacity: 0.92;
 }
 
+.nav-foot__chevIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
 .nav-foot__toggle:hover .nav-foot__chevIcon {
   transform: translateX(1px);
   transition: transform 160ms ease;
 }
 
-/* Responsive: slightly tighter on very small widths */
+/* Micro-compact for tiny screens */
 @media (max-width: 380px) {
   .nav-foot__toggle {
-    padding: 11px 12px;
-    gap: 10px;
+    padding: 6px 9px;
+    gap: 8px;
+  }
+  .nav-foot__badge {
+    width: 26px;
+    height: 26px;
   }
   .nav-foot__kicker {
-    font-size: 10px;
+    font-size: 8.5px;
   }
   .nav-foot__summary {
-    font-size: 12px;
+    font-size: 11px;
   }
   .nav-foot__chev {
-    padding: 6px 10px;
-    font-size: 11px;
+    padding: 4px 7px;
+    font-size: 9.75px;
   }
 }
 
@@ -283,12 +294,10 @@
   place-items: center;
   padding: 18px;
 
-  /* Prevent weird scroll chaining while open */
   overscroll-behavior: none;
 }
 
-/* Backdrop: deep vignette + aurora haze (breath)
-   Works for both <div> and <button> backdrops. */
+/* Backdrop: deep vignette + aurora haze (breath) */
 .nav-footSheet__backdrop {
   position: absolute;
   inset: 0;
@@ -316,8 +325,6 @@
 .nav-footSheet__panel {
   position: relative;
   width: min(780px, 92vw);
-
-  /* dvh-safe; capped for desktop */
   max-height: min(78dvh, 820px);
 
   overflow: hidden;
@@ -325,7 +332,6 @@
 
   border: 1px solid rgba(120, 220, 255, 0.22);
 
-  /* Crystal glass base */
   background:
     radial-gradient(1100px 520px at 18% 0%, rgba(51, 246, 255, 0.16), rgba(0, 0, 0, 0) 60%),
     radial-gradient(940px 420px at 92% 18%, rgba(155, 91, 255, 0.12), rgba(0, 0, 0, 0) 62%),
@@ -339,7 +345,6 @@
   transform: translateY(10px) scale(0.985);
   opacity: 0;
 
-  /* Open + Breath (breath starts after open finishes) */
   animation:
     navVaultIn 220ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards,
     navBreathPanel var(--kai-breath) var(--kai-breath-ease) 220ms infinite;
@@ -383,11 +388,9 @@
   pointer-events: none;
 
   background:
-    /* crisp audit grid */
     linear-gradient(rgba(51, 246, 255, 0.06) 1px, rgba(0, 0, 0, 0) 1px) 0 0 / 28px 28px,
     linear-gradient(90deg, rgba(155, 91, 255, 0.05) 1px, rgba(0, 0, 0, 0) 1px) 0 0 / 28px 28px,
 
-    /* glass micro-film */
     repeating-linear-gradient(
       0deg,
       rgba(255, 255, 255, 0.018) 0px,
@@ -396,7 +399,6 @@
       rgba(0, 0, 0, 0) 7px
     ),
 
-    /* breathing scanline (subtle) */
     linear-gradient(
       180deg,
       rgba(255, 255, 255, 0) 0%,
@@ -457,7 +459,7 @@
   gap: 8px;
 }
 
-/* (If your TS has a subtitle block, this makes it look official) */
+/* (Optional subtitle styling) */
 .nav-footSheet__sub {
   margin-top: 6px;
   font-size: 12px;
@@ -467,44 +469,126 @@
   overflow-wrap: anywhere;
 }
 
-/* Close button (crystal) */
+/* ───────────────────────────────────────────────────────────────
+   BEST X BUTTON EVER — Living Crystal Close
+   (No markup changes required: draws the “X” via ::before/::after)
+──────────────────────────────────────────────────────────────── */
+
 .nav-footSheet__close {
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
+  position: relative;
+  width: 40px;   /* slightly larger for thumb perfection */
+  height: 40px;
+  border-radius: 15px;
 
   display: grid;
   place-items: center;
 
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background:
-    radial-gradient(220px 60px at 30% 0%, rgba(51, 246, 255, 0.12), rgba(0, 0, 0, 0) 70%),
-    rgba(255, 255, 255, 0.06);
-
+  border: 1px solid rgba(120, 220, 255, 0.16);
   color: var(--kai-ink);
+
   cursor: pointer;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+
+  /* Prismatic crystal base + living sheen */
+  background:
+    radial-gradient(220px 60px at 30% 0%, rgba(51, 246, 255, 0.14), rgba(0, 0, 0, 0) 72%),
+    radial-gradient(180px 80px at 90% 30%, rgba(155, 91, 255, 0.12), rgba(0, 0, 0, 0) 70%),
+    conic-gradient(
+      from 180deg,
+      rgba(51, 246, 255, 0.00),
+      rgba(51, 246, 255, 0.14),
+      rgba(38, 255, 196, 0.10),
+      rgba(155, 91, 255, 0.14),
+      rgba(51, 246, 255, 0.00)
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.18)),
+    linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.12) 22%,
+      rgba(51, 246, 255, 0.10) 30%,
+      rgba(255, 255, 255, 0) 46%
+    );
+
+  background-size: auto, auto, auto, auto, 220% 220%;
+  background-position: 0 0, 0 0, 0 0, 0 0, 0% 55%;
 
   box-shadow:
-    0 10px 24px rgba(0, 0, 0, 0.48),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 14px 34px rgba(0, 0, 0, 0.58),
+    0 0 0 1px rgba(51, 246, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
 
-  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+  transform: translateZ(0);
+  transition:
+    border-color 160ms ease,
+    transform 120ms ease,
+    box-shadow 160ms ease,
+    filter 160ms ease;
+
+  animation:
+    navXBreath var(--kai-breath) var(--kai-breath-ease) infinite,
+    navXSheen calc(var(--kai-breath) * 2) linear infinite;
 }
 
-.nav-footSheet__close:hover {
-  border-color: rgba(120, 220, 255, 0.24);
-  background:
-    radial-gradient(220px 60px at 30% 0%, rgba(155, 91, 255, 0.14), rgba(0, 0, 0, 0) 70%),
-    rgba(255, 255, 255, 0.08);
+/* Draw the X: two living crystal beams */
+.nav-footSheet__close::before,
+.nav-footSheet__close::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
 
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.20),
+    rgba(51, 246, 255, 0.92),
+    rgba(155, 91, 255, 0.86),
+    rgba(255, 255, 255, 0.20)
+  );
+
+  transform: translate(-50%, -50%) rotate(45deg);
+  transform-origin: center;
+
+  opacity: 0.92;
+
+  filter:
+    drop-shadow(0 0 10px rgba(51, 246, 255, 0.20))
+    drop-shadow(0 0 18px rgba(155, 91, 255, 0.14));
+  animation: navXLines var(--kai-breath) var(--kai-breath-ease) infinite;
+}
+
+.nav-footSheet__close::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+/* Hover: the X “evolves” (tight bloom + micro-rotation) */
+.nav-footSheet__close:hover {
+  border-color: rgba(120, 220, 255, 0.28);
   box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.56),
-    0 0 34px rgba(155, 91, 255, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    0 18px 44px rgba(0, 0, 0, 0.66),
+    0 0 46px rgba(51, 246, 255, 0.08),
+    0 0 36px rgba(155, 91, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px) rotate(0.35deg);
+  filter: saturate(1.06) brightness(1.04);
+}
+
+.nav-footSheet__close:hover::before {
+  transform: translate(-50%, -50%) rotate(49deg);
+}
+.nav-footSheet__close:hover::after {
+  transform: translate(-50%, -50%) rotate(-49deg);
 }
 
 .nav-footSheet__close:active {
-  transform: translateY(1px);
+  transform: translateY(0px) rotate(0deg);
+  filter: brightness(1.02);
 }
 
 .nav-footSheet__close:focus-visible {
@@ -512,6 +596,7 @@
   outline-offset: 3px;
 }
 
+/* Body */
 .nav-footSheet__body {
   position: relative;
   z-index: 2;
@@ -520,21 +605,17 @@
   display: grid;
   gap: 12px;
 
-  /* header ~56px, footer ~64px; keep body scroll inside */
   max-height: calc(min(78dvh, 820px) - 56px - 64px);
 
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 
-  /* nicer scrollbars without being loud */
   scrollbar-width: thin;
   scrollbar-color: rgba(51, 246, 255, 0.22) rgba(0, 0, 0, 0.2);
 }
 
-.nav-footSheet__body::-webkit-scrollbar {
-  width: 10px;
-}
+.nav-footSheet__body::-webkit-scrollbar { width: 10px; }
 .nav-footSheet__body::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.18);
   border-radius: 12px;
@@ -569,13 +650,11 @@
   animation: navBreathCard var(--kai-breath) var(--kai-breath-ease) infinite;
 }
 
-/* Optional “fine print” line if you add it */
 .nav-foot__line--fine {
   opacity: 0.80;
   font-size: 12.5px;
 }
 
-/* Divider if present in TS */
 .nav-footSheet__divider {
   height: 1px;
   border-radius: 999px;
@@ -626,6 +705,7 @@
   animation: navBreathCTA var(--kai-breath) var(--kai-breath-ease) infinite;
 
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .nav-footSheet__cta:hover {
@@ -636,9 +716,7 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-.nav-footSheet__cta:active {
-  transform: translateY(1px);
-}
+.nav-footSheet__cta:active { transform: translateY(1px); }
 
 .nav-footSheet__cta:focus-visible {
   outline: 2px solid rgba(51, 246, 255, 0.92);
@@ -647,9 +725,7 @@
 
 /* Mobile: tighter vault spacing, slightly taller usable body */
 @media (max-width: 520px) {
-  .nav-footSheet {
-    padding: 14px;
-  }
+  .nav-footSheet { padding: 14px; }
 
   .nav-footSheet__panel {
     width: min(780px, 96vw);
@@ -672,34 +748,19 @@
 ──────────────────────────────────────────────────────────────── */
 
 @keyframes navVaultIn {
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-@keyframes navAuroraSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+@keyframes navAuroraSpin { to { transform: rotate(360deg); } }
 
 /* fast hover shimmer (one-shot) */
 @keyframes navShimmer {
-  0% {
-    transform: translateX(-70%) skewX(-14deg);
-    opacity: 0.0;
-  }
-  20% {
-    opacity: 0.75;
-  }
-  100% {
-    transform: translateX(140%) skewX(-14deg);
-    opacity: 0.0;
-  }
+  0%   { transform: translateX(-70%) skewX(-14deg); opacity: 0.0; }
+  20%  { opacity: 0.75; }
+  100% { transform: translateX(140%) skewX(-14deg); opacity: 0.0; }
 }
 
-/* panel breath: glow + border + micro-luminance */
+/* panel breath */
 @keyframes navBreathPanel {
   0% {
     border-color: rgba(120, 220, 255, 0.18);
@@ -728,69 +789,98 @@
   }
 }
 
-/* aurora breath */
 @keyframes navBreathAurora {
   0%   { opacity: 0.70; filter: blur(18px); }
   50%  { opacity: 0.98; filter: blur(22px); }
   100% { opacity: 0.70; filter: blur(18px); }
 }
 
-/* grid breath */
 @keyframes navBreathGrid {
   0%   { opacity: 0.46; }
   50%  { opacity: 0.72; }
   100% { opacity: 0.46; }
 }
 
-/* living sheen breath */
 @keyframes navBreathSheen {
   0%   { transform: translateX(-62%) skewX(-14deg); opacity: 0.06; }
   50%  { transform: translateX(-40%) skewX(-14deg); opacity: 0.14; }
   100% { transform: translateX(-62%) skewX(-14deg); opacity: 0.06; }
 }
 
-/* badge breath */
 @keyframes navBreathBadge {
-  0% {
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  }
+  0% { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
   50% {
     box-shadow:
       0 14px 34px rgba(0, 0, 0, 0.58),
       0 0 30px rgba(51, 246, 255, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.10);
   }
-  100% {
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  }
+  100% { box-shadow: 0 10px 26px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
 }
 
-/* cards breath (tiny) */
 @keyframes navBreathCard {
   0%   { transform: translateZ(0); border-color: rgba(120, 220, 255, 0.12); }
   50%  { transform: translateZ(0); border-color: rgba(120, 220, 255, 0.18); }
   100% { transform: translateZ(0); border-color: rgba(120, 220, 255, 0.12); }
 }
 
-/* CTA breath (a little more “alive”) */
 @keyframes navBreathCTA {
   0%   { filter: brightness(1); }
   50%  { filter: brightness(1.06); }
   100% { filter: brightness(1); }
 }
 
-/* Backdrop breath (subtle haze) */
 @keyframes navBreathBackdrop {
   0%   { filter: brightness(1) saturate(1); }
   50%  { filter: brightness(1.04) saturate(1.06); }
   100% { filter: brightness(1) saturate(1); }
 }
 
-/* Scanline pass synchronized to breath (moves once per cycle) */
 @keyframes navScanline {
   0%   { background-position: 0 0, 0 0, 0 0, 0 -120%; }
   50%  { background-position: 0 0, 0 0, 0 0, 0 20%; }
   100% { background-position: 0 0, 0 0, 0 0, 0 140%; }
+}
+
+/* Close button: breath + evolving sheen */
+@keyframes navXBreath {
+  0% {
+    border-color: rgba(120, 220, 255, 0.14);
+    box-shadow:
+      0 14px 34px rgba(0, 0, 0, 0.58),
+      0 0 0 1px rgba(51, 246, 255, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    filter: brightness(1) saturate(1);
+  }
+  50% {
+    border-color: rgba(120, 220, 255, 0.24);
+    box-shadow:
+      0 18px 44px rgba(0, 0, 0, 0.66),
+      0 0 52px rgba(51, 246, 255, 0.10),
+      0 0 36px rgba(155, 91, 255, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    filter: brightness(1.05) saturate(1.08);
+  }
+  100% {
+    border-color: rgba(120, 220, 255, 0.14);
+    box-shadow:
+      0 14px 34px rgba(0, 0, 0, 0.58),
+      0 0 0 1px rgba(51, 246, 255, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes navXSheen {
+  0%   { background-position: 0 0, 0 0, 0 0, 0 0, 0% 55%; }
+  50%  { background-position: 0 0, 0 0, 0 0, 0 0, 120% 35%; }
+  100% { background-position: 0 0, 0 0, 0 0, 0 0, 240% 55%; }
+}
+
+@keyframes navXLines {
+  0%   { opacity: 0.84; filter: drop-shadow(0 0 8px rgba(51, 246, 255, 0.16)) drop-shadow(0 0 14px rgba(155, 91, 255, 0.10)); }
+  50%  { opacity: 1.00; filter: drop-shadow(0 0 14px rgba(51, 246, 255, 0.26)) drop-shadow(0 0 22px rgba(155, 91, 255, 0.16)); }
+  100% { opacity: 0.84; filter: drop-shadow(0 0 8px rgba(51, 246, 255, 0.16)) drop-shadow(0 0 14px rgba(155, 91, 255, 0.10)); }
 }
 
 /* ───────────────────────────────────────────────────────────────
@@ -806,7 +896,10 @@
   .nav-foot__badge,
   .nav-foot__line,
   .nav-footSheet__cta,
-  .nav-footSheet__backdrop {
+  .nav-footSheet__backdrop,
+  .nav-footSheet__close,
+  .nav-footSheet__close::before,
+  .nav-footSheet__close::after {
     animation: none !important;
   }
 
@@ -818,105 +911,20 @@
   .nav-foot__toggle:hover::after {
     animation: none !important;
   }
-}
-/* ───────────────────────────────────────────────────────────────
-   ULTRA-THIN PATCH — even slimmer trigger bar
-   Paste BELOW your current refinement patch (last wins)
-──────────────────────────────────────────────────────────────── */
 
-.nav-foot {
-  margin-top: 6px;
-}
-
-/* Ultra-thin, still premium */
-.nav-foot__toggle {
-  padding: 7px 10px;          /* ↓ thinner */
-  border-radius: 13px;
-  gap: 9px;
-}
-
-/* Slightly smaller aura so it doesn’t add perceived height */
-.nav-foot__toggle::before {
-  filter: blur(10px);
-  opacity: 0.56;
-}
-
-.nav-foot__toggle::after {
-  opacity: 0.12;
-}
-
-/* Smaller badge + tighter inner ring */
-.nav-foot__badge {
-  width: 28px;
-  height: 28px;
-  border-radius: 11px;
-}
-.nav-foot__badge::after {
-  inset: 4px;
-  border-radius: 9px;
-}
-
-/* Tight text */
-.nav-foot__main {
-  gap: 1px;
-}
-
-.nav-foot__kicker {
-  font-size: 9px;
-  letter-spacing: 0.18em;
-  line-height: 1.0;
-  opacity: 0.92;
-}
-
-.nav-foot__summary {
-  font-size: 11.25px;
-  line-height: 1.08;
-  opacity: 0.82;
-}
-
-/* Slim “Open” pill */
-.nav-foot__chev {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  gap: 5px;
-}
-
-/* Compact chevron */
-.nav-foot__chevIcon svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* Micro-compact for tiny screens */
-@media (max-width: 380px) {
-  .nav-foot__toggle {
-    padding: 6px 9px;
-    gap: 8px;
-  }
-  .nav-foot__badge {
-    width: 26px;
-    height: 26px;
-  }
-  .nav-foot__kicker {
-    font-size: 8.5px;
-  }
-  .nav-foot__summary {
-    font-size: 11px;
-  }
-  .nav-foot__chev {
-    padding: 4px 7px;
-    font-size: 9.75px;
+  .nav-footSheet__close:hover {
+    transform: none;
   }
 }
+
 /* Public phi.svg logo sizing */
-.nav-foot__phiLogo{
+.nav-foot__phiLogo {
   width: 18px;
   height: 18px;
   display: block;
 }
 
-.nav-footSheet__phiLogo{
+.nav-footSheet__phiLogo {
   width: 18px;
   height: 18px;
   display: inline-block;
