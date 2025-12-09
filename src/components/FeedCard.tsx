@@ -45,7 +45,7 @@ function toChakra(value: unknown, fallback: ChakraDay): ChakraDay {
         "Heart",
         "Throat",
         "Third Eye",
-        "Crown",
+        "Krown",
       ] as const
     ).includes(value as never)
   ) {
@@ -56,21 +56,21 @@ function toChakra(value: unknown, fallback: ChakraDay): ChakraDay {
 
 /** Arc name from *zero-based* beat (0..35) — 6 beats per arc */
 function arcFromBeat(beatZ: number):
-  | "Ignition Ark"
-  | "Integration Ark"
-  | "Harmonization Ark"
-  | "Reflection Ark"
-  | "Purification Ark"
-  | "Dream Ark" {
+  | "Ignition"
+  | "Integration"
+  | "Harmonization"
+  | "Reflektion"
+  | "Purifikation"
+  | "Dream" {
   const idx = Math.max(0, Math.min(5, Math.floor(beatZ / 6)));
   return (
     [
-      "Ignition Ark",
-      "Integration Ark",
-      "Harmonization Ark",
-      "Reflection Ark",
-      "Purification Ark",
-      "Dream Ark",
+      "Ignition",
+      "Integration",
+      "Harmonization",
+      "Reflektion",
+      "Purifikation",
+      "Dream",
     ] as const
   )[idx];
 }
@@ -87,7 +87,7 @@ function buildKaiMetaLineZero(
 ): { arc: string; label: string; line: string } {
   const arc = arcFromBeat(beatZ);
   const label = `${pad2(beatZ)}:${pad2(stepZ)}`; // zero-based, two-digit BB:SS
-  const line = `Kai:${pulse} • ${label} • ${chakraDay} • ${arc}`;
+  const line = `☤Kai:${pulse} • ${label} • ${chakraDay} • ${arc}`;
   return { arc, label, line };
 }
 
@@ -128,7 +128,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
       window.setTimeout(() => setCopied(false), 1100);
     } catch (e: unknown) {
       // eslint-disable-next-line no-console
-      console.warn("Clipboard copy failed:", e);
+      console.warn("Remember failed:", e);
     }
   }, [url]);
 
@@ -137,13 +137,13 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
   // Hard error state (invalid capsule)
   if (!decoded.ok) {
     return (
-      <article className="fc fc--error" role="group" aria-label="Invalid Sigil URL">
+      <article className="fc fc--error" role="group" aria-label="Invalid Sigil-Glyph">
         <div className="fc-crystal" aria-hidden="true" />
         <div className="fc-shell">
           <header className="fc-head">
             <div className="fc-titleRow">
               <span className="fc-chip fc-chip--danger">INVALID</span>
-              <span className="fc-muted">Sigil capsule could not be decoded</span>
+              <span className="fc-muted">Sigil-Glyph capsule could not be decoded</span>
             </div>
             <div className="fc-url mono" title={url}>
               {url}
@@ -277,7 +277,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
           {/* Meta header */}
           <header className="fc-head" aria-label="Glyph metadata">
             <div className="fc-metaRow">
-              <span className="fc-chip fc-chip--kind" title={`Kind: ${kind}`}>
+              <span className="fc-chip fc-chip--kind" title={`Kind: ${kind}-glyph`}>
                 {kind.toUpperCase()}
               </span>
 
@@ -285,8 +285,8 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               {userBadge && <span className="fc-chip">{userBadge}</span>}
 
               {sigilId && (
-                <span className="fc-chip fc-chip--sigil" title={`Sigil: ${sigilId}`}>
-                  SIGIL {short(sigilId, 6, 4)}
+                <span className="fc-chip fc-chip--sigil" title={`Sigil-Glyph: ${sigilId}`}>
+                  SIGIL-GLYPH {short(sigilId, 6, 4)}
                 </span>
               )}
 
@@ -434,7 +434,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               rel="noreferrer"
               title="Open original sigil"
             >
-              ↗ Sigil
+              ↗ Sigil-Glyph
             </a>
 
             <button
@@ -442,9 +442,9 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               type="button"
               onClick={onCopy}
               aria-pressed={copied}
-              data-state={copied ? "kopied" : "idle"}
+              data-state={copied ? "remembered" : "idle"}
             >
-              {copied ? "Remembered" : "Remember Sigil"}
+              {copied ? "Remembered" : "Remember"}
             </button>
 
             <span className="fc-live" aria-live="polite">

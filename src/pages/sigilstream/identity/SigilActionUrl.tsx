@@ -150,7 +150,7 @@ function SigilActionUrlNode({ value, isCanonical }: { value: string; isCanonical
     <div className="sf-reply-row sf-actionurl">
       <div className="sf-actionurl__head">
         <label className="sf-label sf-actionurl__label">
-          Proof of Breath™ <span className="sf-muted">(URL)</span>
+          Proof of Breath™ <span className="sf-muted">(Sigil-Glyph)</span>
         </label>
 
         <span className={`sf-actionurl__pill ${isCanonical ? "is-ok" : "is-warn"}`}>
@@ -167,7 +167,7 @@ function SigilActionUrlNode({ value, isCanonical }: { value: string; isCanonical
             readOnly
             onClick={onSelect}
             onFocus={onSelect}
-            aria-label="Proof of Breath URL"
+            aria-label="Proof of Breath™ Sigil-Glyph"
           />
           <div className="sf-actionurl__meta" aria-hidden="true">
             {host ? <span className="sf-actionurl__host">{host}</span> : <span className="sf-actionurl__host">URL</span>}
