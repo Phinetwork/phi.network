@@ -119,6 +119,14 @@ function normalizeChakraLabel(s: string): string {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+/** ✅ ONLY CHANGE: display label translation (manual → Sovereign) */
+function normalizeFeedSourceLabel(s: string): string {
+  const t = s.trim();
+  if (!t) return t;
+  if (/^manual$/i.test(t)) return "Sovereign";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 function safeModulo(n: number, m: number): number {
   const r = n % m;
   return r < 0 ? r + m : r;
@@ -687,10 +695,13 @@ function PayloadCard(props: {
     pickString((payload as unknown as { meta?: unknown }).meta, ["userPhiKey", "phiKey", "phikey"]) ??
     "";
 
-  const modeLabel =
+  const modeLabelRaw =
     pickString(payload, ["mode", "source", "origin", "transport"]) ??
     pickString((payload as unknown as { meta?: unknown }).meta, ["mode", "source", "origin"]) ??
-    "Manual";
+    "Sovereign";
+
+  // ✅ ONLY CHANGE: translate "manual" → "Sovereign" for display
+  const modeLabel = normalizeFeedSourceLabel(modeLabelRaw);
 
   useEffect(() => {
     try {
@@ -720,7 +731,7 @@ function PayloadCard(props: {
   return (
     <section className="sf-payload" role="region" aria-label="Loaded payload">
       <div className="sf-payload-line sf-tags">
-        <span className="sf-pill sf-pill--mode">{modeLabel || "Manual"}</span>
+        <span className="sf-pill sf-pill--mode">{modeLabel || "Sovereign"}</span>
         {sealPill}
         {phiKey ? (
           <span className="sf-pill sf-pill--phikey" title={phiKey}>
@@ -744,12 +755,7 @@ function PayloadCard(props: {
           {unsealState.status === "open" ? (
             <div className="sf-seal__row">
               <span className="sf-seal__label">Unsealed</span>
-              <button
-                type="button"
-                className="sf-seal__btn"
-                onClick={onForgetUnsealed}
-                aria-label="Seal view"
-              >
+              <button type="button" className="sf-seal__btn" onClick={onForgetUnsealed} aria-label="Seal view">
                 SEAL
               </button>
             </div>
@@ -776,12 +782,7 @@ function PayloadCard(props: {
               ) : null}
 
               {/* 🔒 LOCK SCREEN: glyph upload gate (ONLY for sealed posts) */}
-              <div
-                ref={gateRef}
-                className="sf-seal__gate"
-                role="region"
-                aria-label="Unlock gate"
-              >
+              <div ref={gateRef} className="sf-seal__gate" role="region" aria-label="Unlock gate">
                 {!verifiedThisSession ? (
                   <>
                     <div className="sf-seal__hint" role="note">
@@ -933,8 +934,7 @@ function SigilStreamInner(): React.JSX.Element {
       setUnsealState({ status: "none" });
       return;
     }
-    const hasSeal =
-      isRecord(payload as unknown) && (payload as unknown as Record<string, unknown>)["seal"] !== undefined;
+    const hasSeal = isRecord(payload as unknown) && (payload as unknown as Record<string, unknown>)["seal"] !== undefined;
     setUnsealState(hasSeal ? { status: "sealed" } : { status: "none" });
   }, [payload]);
 
@@ -1049,8 +1049,7 @@ function SigilStreamInner(): React.JSX.Element {
 
   /** ---------- Verified session flag (per-thread) ---------- */
   const sessionKey = useMemo(() => {
-    const token =
-      activeToken ?? (typeof window !== "undefined" ? extractPayloadTokenFromLocation() : null) ?? "root";
+    const token = activeToken ?? (typeof window !== "undefined" ? extractPayloadTokenFromLocation() : null) ?? "root";
     return `sf.verifiedSession:${sessionTokenKey(token)}`;
   }, [activeToken]);
 
@@ -1100,16 +1099,13 @@ function SigilStreamInner(): React.JSX.Element {
   const authLike = useMemo(() => coerceAuth(rawSigilAuth), [rawSigilAuth]);
 
   const composerMeta = useMemo(() => (verifiedThisSession ? authLike.meta : null), [verifiedThisSession, authLike.meta]);
-  const composerSvgText = useMemo(
-    () => (verifiedThisSession ? authLike.svgText : null),
-    [verifiedThisSession, authLike.svgText],
-  );
+  const composerSvgText = useMemo(() => (verifiedThisSession ? authLike.svgText : null), [
+    verifiedThisSession,
+    authLike.svgText,
+  ]);
 
   const composerPhiKey = useMemo(() => (composerMeta ? readStringProp(composerMeta, "userPhiKey") : undefined), [composerMeta]);
-  const composerKaiSig = useMemo(
-    () => (composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined),
-    [composerMeta],
-  );
+  const composerKaiSig = useMemo(() => (composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined), [composerMeta]);
 
   /** ---------- Optional sigil tint vars (if present in meta) ---------- */
   type CSSVarStyle = React.CSSProperties & { [key: `--${string}`]: string };
