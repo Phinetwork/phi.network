@@ -71,19 +71,19 @@ export function InhaleSection({
       const text = await navigator.clipboard.readText();
       const s = text.trim();
       if (!s) {
-        setErr("Clipboard is empty.");
+        setErr("Memory is empty.");
         return;
       }
       const normalized = normalizeForInhale(s);
       if (!normalized) {
-        setErr("Clipboard does not contain a valid link.");
+        setErr("Memory does not contain a valid link.");
         return;
       }
       setValue(normalized);
       handleInhale(normalized);
     } catch {
       // Clipboard API might be blocked by permissions or context
-      setErr("Clipboard read is not permitted.");
+      setErr("Memory read is not permitted.");
     }
   }, [handleInhale]);
 
@@ -116,7 +116,7 @@ export function InhaleSection({
             Inhale
           </button>
           <button className="sf-btn sf-btn--ghost" onClick={grabFromClipboard}>
-            Inhale from Klipboard
+            Inhale from memory
           </button>
         </div>
         {err && (

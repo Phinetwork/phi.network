@@ -3,7 +3,7 @@
 
 /**
  * SigilStreamRoot — Memory Stream Shell
- * v7.2x — v7 payload robustness + v6.1/v6.2 TOAST-driven KOPY sound + UX
+ * v7.3.2 — Bottom list restored to EXACT v6.1 behavior (StreamList only)
  *
  * ✅ Keeps v7 features:
  *    - extractPayloadTokenFromLocation (ALL token forms)
@@ -12,16 +12,14 @@
  *    - per-thread verified session keyed off ANY token form
  *    - body renders: text | md (safe) | html (sanitized) | code
  *
- * ✅ KOPY stays toast-driven (sound is toast system behavior)
+ * ✅ Restores EXACT bottom behavior:
+ *    - <StreamList urls={urls} /> ONLY (no RichList, no mirror)
  *
- * ✅ Rich URL cards:
- *    - OG meta (best-effort via jina proxy)
- *    - favicon + host + title/desc
- *    - embeds via ./attachments/embeds.tsx (NO duplicate embed mapping here)
- *
- * ✅ Payload attachments:
- *    - Rendered via ./attachments/gallery.tsx
- *    - Validated/coerced into AttachmentManifest via ./attachments/types.ts
+ * ✅ Keeps v7.3.x look + parity:
+ *    - Sigil stage wrapped in .sf-sigilWrap (SVG sizing/centering)
+ *    - .sf root receives data-weekday + data-chakra
+ *    - KOPY button uses .sf-kopyBtn (toast-driven sound stays external)
+ *    - PhiStream auto-add (guarded)
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -47,10 +45,11 @@ import { coerceAuth, readStringProp, report, isRecord } from "./core/utils";
 import { IdentityBar } from "./identity/IdentityBar";
 import { SigilActionUrl } from "./identity/SigilActionUrl";
 
-/* Inhaler / Composer / Status */
+/* Inhaler / Composer / Status / List */
 import { InhaleSection } from "./inhaler/InhaleSection";
 import { Composer } from "./composer/Composer";
 import { KaiStatus } from "./status/KaiStatus";
+import { StreamList } from "./list/StreamList";
 
 /* External app hooks (existing app) */
 import SigilLogin from "../../components/KaiVoh/SigilLogin";
@@ -77,8 +76,8 @@ import {
   type AttachmentItem,
 } from "./attachments/types";
 
-/* Embeds (single source of truth) */
-import { UrlEmbed } from "./attachments/embeds";
+/* PhiStream auto-add */
+import { autoAddVisitedPayloadToPhiStream } from "./core/phiStreamAutoAdd";
 
 /** Simple source shape */
 type Source = { url: string };
@@ -87,24 +86,9 @@ type Source = { url: string };
    Kai display helpers (deterministic fallbacks)
 ──────────────────────────────────────────────────────────────── */
 
-const WEEKDAYS: readonly string[] = [
-  "Solhara",
-  "Aquaris",
-  "Flamora",
-  "Verdari",
-  "Sonari",
-  "Kaelith",
-] as const;
+const WEEKDAYS: readonly string[] = ["Solhara", "Aquaris", "Flamora", "Verdari", "Sonari", "Kaelith"] as const;
 
-const CHAKRAS: readonly string[] = [
-  "Root",
-  "Sacral",
-  "Solar",
-  "Heart",
-  "Throat",
-  "Third Eye",
-  "Crown",
-] as const;
+const CHAKRAS: readonly string[] = ["Root", "Sacral", "Solar", "Heart", "Throat", "Third Eye", "Crown"] as const;
 
 function normalizeWeekdayLabel(s: string): string {
   const t = s.trim();
@@ -154,10 +138,7 @@ function pulseToWeekday(pulse: number): string {
 
 function stepToChakra(step: number): string {
   const STEPS_PER_BEAT = 44;
-  const idx = Math.min(
-    CHAKRAS.length - 1,
-    Math.max(0, Math.floor((step / STEPS_PER_BEAT) * CHAKRAS.length)),
-  );
+  const idx = Math.min(CHAKRAS.length - 1, Math.max(0, Math.floor((step / STEPS_PER_BEAT) * CHAKRAS.length)));
   return CHAKRAS[idx] ?? "Crown";
 }
 
@@ -173,9 +154,7 @@ function sessionTokenKey(token: string): string {
 function canonicalizeCurrentStreamUrl(token: string): string {
   const origin = globalThis.location?.origin ?? "https://kaiklok.com";
   const base = origin.replace(/\/+$/, "");
-  return token.length <= TOKEN_HARD_LIMIT
-    ? `${base}/stream/p/${encodeURIComponent(token)}`
-    : `${base}/stream#t=${token}`;
+  return token.length <= TOKEN_HARD_LIMIT ? `${base}/stream/p/${encodeURIComponent(token)}` : `${base}/stream#t=${token}`;
 }
 
 function shortAliasUrl(token: string): string {
@@ -196,13 +175,7 @@ function normalizeIncomingToken(raw: string): string {
     const u = new URL(t);
     const h = new URLSearchParams(u.hash.startsWith("#") ? u.hash.slice(1) : u.hash);
     const s = new URLSearchParams(u.search);
-    const got =
-      h.get("t") ??
-      h.get("p") ??
-      h.get("token") ??
-      s.get("t") ??
-      s.get("p") ??
-      s.get("token");
+    const got = h.get("t") ?? h.get("p") ?? h.get("token") ?? s.get("t") ?? s.get("p") ?? s.get("token");
     if (got) t = got;
     else if (/\/p~/.test(u.pathname)) t = u.pathname.split("/p~")[1] ?? t;
     else if (/\/stream\/p\//.test(u.pathname)) t = u.pathname.split("/stream/p/")[1] ?? t;
@@ -222,51 +195,13 @@ function normalizeIncomingToken(raw: string): string {
   // Query/base64 legacy: '+' may come through as space; restore it.
   if (t.includes(" ")) t = t.replaceAll(" ", "+");
 
-  // If it looks like standard base64, normalize to base64url (decoder expects base64url)
+  // If it looks like standard base64, normalize to base64url
   if (/[+/=]/.test(t)) {
     t = t.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
   }
 
   return t;
 }
-
-function safeHttpUrl(u: string): string | null {
-  try {
-    const url = new URL(u);
-    if (url.protocol === "http:" || url.protocol === "https:") return url.toString();
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function urlHost(u: string): string {
-  try {
-    return new URL(u).host;
-  } catch {
-    return "";
-  }
-}
-
-function urlHostPretty(u: string): string {
-  const h = urlHost(u);
-  return h.replace(/^www\./, "");
-}
-
-function faviconFor(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const host = u.hostname;
-    if (!host) return null;
-    return `https://icons.duckduckgo.com/ip3/${host}.ico`;
-  } catch {
-    return null;
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────
-   Clipboard (robust) — NO audio here (toast system handles sound)
-──────────────────────────────────────────────────────────────── */
 
 async function writeClipboardText(text: string): Promise<void> {
   if (typeof window === "undefined") throw new Error("Clipboard unavailable (SSR).");
@@ -307,12 +242,7 @@ async function writeClipboardText(text: string): Promise<void> {
 ──────────────────────────────────────────────────────────────── */
 
 function escapeHtml(s: string): string {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
 /**
@@ -350,6 +280,16 @@ function sanitizeHtml(input: string): string {
     return doc.body.innerHTML;
   } catch {
     return escapeHtml(input);
+  }
+}
+
+function safeHttpUrl(u: string): string | null {
+  try {
+    const url = new URL(u);
+    if (url.protocol === "http:" || url.protocol === "https:") return url.toString();
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -393,160 +333,6 @@ function renderMarkdownToSafeHtml(md: string): string {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Rich link previews (favicons + embeds + OG meta)
-──────────────────────────────────────────────────────────────── */
-
-type LinkMeta = {
-  title?: string;
-  description?: string;
-  siteName?: string;
-  image?: string;
-};
-
-const META_CACHE = new Map<string, LinkMeta>();
-
-function absUrl(base: string, maybeRel: string): string {
-  try {
-    return new URL(maybeRel, base).toString();
-  } catch {
-    return maybeRel;
-  }
-}
-
-function pickMeta(doc: Document, selector: string): string | undefined {
-  const el = doc.querySelector(selector);
-  const v = el?.getAttribute("content") ?? el?.getAttribute("href") ?? undefined;
-  return v && v.trim().length ? v.trim() : undefined;
-}
-
-// Best-effort, CORS-safe fetch via jina proxy.
-// If you later add your own endpoint (recommended), swap this function.
-async function fetchLinkMeta(url: string, signal?: AbortSignal): Promise<LinkMeta | null> {
-  const safe = safeHttpUrl(url);
-  if (!safe) return null;
-
-  const cached = META_CACHE.get(safe);
-  if (cached) return cached;
-
-  const proxy = `https://r.jina.ai/${safe}`;
-
-  try {
-    const res = await fetch(proxy, {
-      method: "GET",
-      mode: "cors",
-      signal,
-      headers: { Accept: "text/html, text/plain;q=0.9,*/*;q=0.1" },
-    });
-
-    if (!res.ok) return null;
-
-    const text = await res.text();
-    if (!text || text.length < 20) return null;
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, "text/html");
-
-    const ogTitle = pickMeta(doc, 'meta[property="og:title"]');
-    const ogDesc = pickMeta(doc, 'meta[property="og:description"]');
-    const ogSite = pickMeta(doc, 'meta[property="og:site_name"]');
-    const ogImage = pickMeta(doc, 'meta[property="og:image"]');
-
-    const twTitle = pickMeta(doc, 'meta[name="twitter:title"]');
-    const twDesc = pickMeta(doc, 'meta[name="twitter:description"]');
-    const twImage = pickMeta(doc, 'meta[name="twitter:image"]');
-
-    const titleTag = doc.querySelector("title")?.textContent?.trim() || undefined;
-    const descTag = pickMeta(doc, 'meta[name="description"]');
-
-    const meta: LinkMeta = {
-      title: ogTitle ?? twTitle ?? titleTag,
-      description: ogDesc ?? twDesc ?? descTag,
-      siteName: ogSite,
-      image: ogImage ?? twImage,
-    };
-
-    if (meta.image) meta.image = absUrl(safe, meta.image);
-
-    META_CACHE.set(safe, meta);
-    return meta;
-  } catch {
-    return null;
-  }
-}
-
-function useInView<T extends Element>(): { ref: React.RefCallback<T>; inView: boolean } {
-  const ioSupported = typeof window !== "undefined" && typeof IntersectionObserver !== "undefined";
-  const [inView, setInView] = useState<boolean>(() => !ioSupported);
-
-  const ioRef = useRef<IntersectionObserver | null>(null);
-
-  const ref = useCallback(
-    (node: T | null) => {
-      if (ioRef.current) {
-        ioRef.current.disconnect();
-        ioRef.current = null;
-      }
-      if (!ioSupported) return;
-      if (!node) return;
-
-      const io = new IntersectionObserver(
-        (entries) => {
-          for (const e of entries) {
-            if (e.target === node && e.isIntersecting) {
-              setInView(true);
-              io.disconnect();
-              break;
-            }
-          }
-        },
-        { root: null, rootMargin: "250px 0px", threshold: 0.01 },
-      );
-
-      ioRef.current = io;
-      io.observe(node);
-    },
-    [ioSupported],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (ioRef.current) {
-        ioRef.current.disconnect();
-        ioRef.current = null;
-      }
-    };
-  }, []);
-
-  return { ref, inView };
-}
-
-function useLinkMeta(url: string, enabled: boolean): LinkMeta | null {
-  const safe = safeHttpUrl(url) ?? "";
-  const cached: LinkMeta | null = safe ? (META_CACHE.get(safe) ?? null) : null;
-
-  type FetchedMeta = { safe: string; meta: LinkMeta };
-  const [fetched, setFetched] = useState<FetchedMeta | null>(null);
-  const fetchedForThisUrl = fetched && fetched.safe === safe ? fetched.meta : null;
-
-  useEffect(() => {
-    if (!enabled) return;
-    if (!safe) return;
-    if (META_CACHE.has(safe)) return;
-
-    const ac = new AbortController();
-
-    (async () => {
-      const m = await fetchLinkMeta(safe, ac.signal);
-      if (m) setFetched({ safe, meta: m });
-    })().catch(() => void 0);
-
-    return () => ac.abort();
-  }, [safe, enabled]);
-
-  return cached ?? fetchedForThisUrl;
-}
-
-/* ────────────────────────────────────────────────────────────────
    Attachments: coerce payload attachments into AttachmentManifest
 ──────────────────────────────────────────────────────────────── */
 
@@ -586,158 +372,12 @@ function coerceAttachmentManifest(v: unknown): AttachmentManifest | null {
   const items: AttachmentItem[] = itemsRaw.filter(isAttachmentItem);
   const totals = sumBytes(items);
 
-  const totalBytes =
-    typeof v["totalBytes"] === "number" && Number.isFinite(v["totalBytes"])
-      ? v["totalBytes"]
-      : totals.total;
+  const totalBytes = typeof v["totalBytes"] === "number" && Number.isFinite(v["totalBytes"]) ? v["totalBytes"] : totals.total;
 
   const inlinedBytes =
-    typeof v["inlinedBytes"] === "number" && Number.isFinite(v["inlinedBytes"])
-      ? v["inlinedBytes"]
-      : totals.inlined;
+    typeof v["inlinedBytes"] === "number" && Number.isFinite(v["inlinedBytes"]) ? v["inlinedBytes"] : totals.inlined;
 
   return { version: 1, totalBytes, inlinedBytes, items };
-}
-
-/* ────────────────────────────────────────────────────────────────
-   Rich URL cards (List)
-──────────────────────────────────────────────────────────────── */
-
-function RichLinkCard(props: {
-  url: string;
-  onInhale?: (u: string) => void;
-  toast?: (kind: "success" | "warn" | "info", msg: string) => void;
-}): React.JSX.Element {
-  const { url, onInhale, toast } = props;
-  const safe = safeHttpUrl(url);
-  const host = safe ? urlHostPretty(safe) : "Invalid URL";
-  const fav = safe ? faviconFor(safe) : null;
-
-  const { ref, inView } = useInView<HTMLElement>();
-  const meta = useLinkMeta(safe ?? "", inView);
-
-  const title = meta?.title?.trim() || host;
-  const desc = meta?.description?.trim() || "";
-  const site = meta?.siteName?.trim() || "";
-  const ogImgSafe = meta?.image ? safeHttpUrl(meta.image) : null;
-
-  const [copied, setCopied] = useState(false);
-  const tRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (tRef.current !== null) window.clearTimeout(tRef.current);
-    };
-  }, []);
-
-  const onCopyUrl = useCallback(async () => {
-    if (!safe) return;
-    try {
-      await writeClipboardText(safe);
-      setCopied(true);
-      if (tRef.current !== null) window.clearTimeout(tRef.current);
-      tRef.current = window.setTimeout(() => setCopied(false), 900);
-      toast?.("success", "Link kopied.");
-    } catch {
-      toast?.("warn", "Copy failed. Select the address bar.");
-    }
-  }, [safe, toast]);
-
-  const onInhaleClick = useCallback(() => {
-    if (!safe) return;
-    onInhale?.(safe);
-    toast?.("success", "Inhaled into your stream.");
-  }, [safe, onInhale, toast]);
-
-  return (
-    <article ref={ref} className="sf-linkcard" role="article" aria-label="Link preview">
-      <header className="sf-linkcard__head">
-        <div className="sf-linkcard__brand">
-          {fav ? (
-            <img
-              className="sf-favicon"
-              src={fav}
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <span className="sf-favicon sf-favicon--blank" aria-hidden="true" />
-          )}
-
-          <div className="sf-linkcard__brandText">
-            <div className="sf-linkcard__title" title={title}>
-              {title}
-            </div>
-            <div className="sf-linkcard__sub">
-              <span className="sf-linkcard__host">{site || host}</span>
-              {safe ? <span className="sf-muted"> · </span> : null}
-              <span className="sf-linkcard__url" title={url}>
-                {safe ?? url}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="sf-linkcard__actions">
-          {safe ? (
-            <a className="sf-btn sf-btn--ghost" href={safe} target="_blank" rel="noreferrer noopener">
-              Open
-            </a>
-          ) : null}
-
-          <button type="button" className="sf-btn sf-btn--ghost" onClick={onCopyUrl} disabled={!safe || copied}>
-            {copied ? "Kopied" : "Kopy"}
-          </button>
-
-          {onInhale ? (
-            <button type="button" className="sf-btn" onClick={onInhaleClick} disabled={!safe}>
-              Inhale
-            </button>
-          ) : null}
-        </div>
-      </header>
-
-      {desc ? <div className="sf-linkcard__desc">{desc}</div> : null}
-
-      {ogImgSafe ? (
-        <div className="sf-linkcard__thumb">
-          <img
-            className="sf-linkcard__thumbImg"
-            src={ogImgSafe}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-      ) : null}
-
-      {safe ? (
-        <div className="sf-linkcard__embed">
-          <UrlEmbed url={safe} title={title} />
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function RichStreamList(props: {
-  urls: string[];
-  onInhale?: (u: string) => void;
-  toast?: (kind: "success" | "warn" | "info", msg: string) => void;
-}): React.JSX.Element {
-  const { urls, onInhale, toast } = props;
-
-  return (
-    <div className="sf-rlist" role="list" aria-label="Stream links">
-      {urls.map((u) => (
-        <div key={u} role="listitem" className="sf-rlist__item">
-          <RichLinkCard url={u} onInhale={onInhale} toast={toast} />
-        </div>
-      ))}
-    </div>
-  );
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -745,14 +385,11 @@ function RichStreamList(props: {
 ──────────────────────────────────────────────────────────────── */
 
 function PostBodyView({ body, caption }: { body?: PostBody; caption?: string }): React.JSX.Element {
-  const effectiveBody: PostBody | null =
-    body ?? (caption && caption.trim().length ? { kind: "text", text: caption } : null);
+  const effectiveBody: PostBody | null = body ?? (caption && caption.trim().length ? { kind: "text", text: caption } : null);
 
   if (!effectiveBody) return <></>;
 
-  if (effectiveBody.kind === "text") {
-    return <div className="sf-text">— {`"${effectiveBody.text}"`}</div>;
-  }
+  if (effectiveBody.kind === "text") return <div className="sf-text">— {`"${effectiveBody.text}"`}</div>;
 
   if (effectiveBody.kind === "code") {
     return (
@@ -779,6 +416,21 @@ function pickString(obj: unknown, keys: readonly string[]): string | null {
     if (typeof v === "string" && v.trim().length) return v.trim();
   }
   return null;
+}
+
+function readNumberLoose(obj: unknown, key: string): number | null {
+  if (!obj || typeof obj !== "object") return null;
+  const v = (obj as Record<string, unknown>)[key];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim().length) {
+    const n = Number(v.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function clamp255(n: number): number {
+  return Math.max(0, Math.min(255, Math.round(n)));
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -837,7 +489,6 @@ function PayloadCard(props: {
     <section className="sf-payload" role="region" aria-label="Loaded payload">
       <div className="sf-payload-line sf-tags">
         <span className="sf-pill sf-pill--mode">{modeLabel || "Manual"}</span>
-
         {phiKey ? (
           <span className="sf-pill sf-pill--phikey" title={phiKey}>
             ΦKey <span className="sf-key">{phiKey}</span>
@@ -860,8 +511,15 @@ function PayloadCard(props: {
       {manifest ? <AttachmentGallery manifest={manifest} /> : null}
 
       <div className="sf-reply-actions">
-        <button type="button" className="sf-btn" onClick={onKopy} disabled={copied} aria-label="Kopy share link">
-          {copied ? "Kopied" : "Kopy"}
+        <button
+          type="button"
+          className="sf-kopyBtn"
+          onClick={onKopy}
+          disabled={copied}
+          data-state={copied ? "copied" : "idle"}
+          aria-label="Kopy share link"
+        >
+          {copied ? "KOPIED" : "KOPY"}
         </button>
       </div>
     </section>
@@ -911,9 +569,7 @@ function SigilStreamInner(): React.JSX.Element {
     if (typeof window === "undefined") return;
     try {
       const search = new URLSearchParams(window.location.search);
-      const hash = new URLSearchParams(
-        window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash,
-      );
+      const hash = new URLSearchParams(window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash);
 
       const addsRaw = [...search.getAll("add"), ...hash.getAll("add")];
       const adds = addsRaw.map(normalizeAddParam).filter((x): x is string => Boolean(x));
@@ -944,6 +600,8 @@ function SigilStreamInner(): React.JSX.Element {
     return raw ? coerceAttachmentManifest(raw) : null;
   }, [payload]);
 
+  const autoAddGuardRef = useRef<string | null>(null);
+
   const refreshPayloadFromLocation = useCallback(async () => {
     if (typeof window === "undefined") return;
 
@@ -955,6 +613,7 @@ function SigilStreamInner(): React.JSX.Element {
     if (!token) {
       setPayload(null);
       setPayloadError(null);
+      autoAddGuardRef.current = null;
       return;
     }
 
@@ -965,9 +624,7 @@ function SigilStreamInner(): React.JSX.Element {
     }
 
     try {
-      const decoded =
-        (await decodeFeedPayload(token)) ||
-        (raw && raw !== token ? await decodeFeedPayload(raw) : null);
+      const decoded = (await decodeFeedPayload(token)) || (raw && raw !== token ? await decodeFeedPayload(raw) : null);
 
       if (!decoded) {
         setPayload(null);
@@ -978,15 +635,42 @@ function SigilStreamInner(): React.JSX.Element {
       setPayload(decoded);
       setPayloadError(null);
 
-      if (decoded.url && typeof decoded.url === "string") {
-        registerSigilUrl(decoded.url);
-        prependUniqueToStorage([decoded.url]);
+      if (decoded.url && typeof decoded.url === "string" && decoded.url.length) {
+        if (autoAddGuardRef.current !== token) {
+          autoAddGuardRef.current = token;
 
-        setSources((prev) => {
-          const seen = new Set(prev.map((s) => s.url));
-          if (seen.has(decoded.url)) return prev;
-          return [{ url: decoded.url }, ...prev];
-        });
+          try {
+            prependUniqueToStorage([decoded.url]);
+          } catch (e) {
+            report("prependUniqueToStorage (payload url)", e);
+          }
+
+          const res = autoAddVisitedPayloadToPhiStream({
+            token,
+            payloadUrl: decoded.url,
+            toast: (kind, msg) => toasts.push(kind, msg),
+          });
+
+          setSources((prev) => {
+            const seen = new Set(prev.map((s) => s.url));
+            if (seen.has(decoded.url)) return prev;
+            return [{ url: decoded.url }, ...prev];
+          });
+
+          if (!res.ok) report("phistream auto-add", res.reason);
+        } else {
+          setSources((prev) => {
+            const seen = new Set(prev.map((s) => s.url));
+            if (seen.has(decoded.url)) return prev;
+            return [{ url: decoded.url }, ...prev];
+          });
+        }
+
+        try {
+          registerSigilUrl(decoded.url);
+        } catch (e) {
+          report("register payload.url (post-decode)", e);
+        }
       }
 
       try {
@@ -999,11 +683,32 @@ function SigilStreamInner(): React.JSX.Element {
       setPayload(null);
       setPayloadError("Payload decode failed.");
     }
-  }, []);
+  }, [toasts]);
 
   useEffect(() => {
     void refreshPayloadFromLocation();
-  }, [refreshPayloadFromLocation, loc.pathname, loc.search, loc.hash]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc.pathname, loc.search, loc.hash, refreshPayloadFromLocation]);
+
+  /** ---------- Derived Kai attrs for theming ---------- */
+  const kaiTheme = useMemo(() => {
+    if (!payload) return { weekday: undefined as string | undefined, chakra: undefined as string | undefined };
+
+    const pulse = payload.pulse;
+    const { step } = pulseToBeatStep(pulse);
+
+    const payloadWeekdayRaw =
+      pickString(payload, ["weekday", "weekdayName", "dayName"]) ??
+      pickString((payload as unknown as { kai?: unknown }).kai, ["weekday", "day", "weekdayName", "dayName"]);
+
+    const payloadChakraRaw =
+      pickString(payload, ["chakra", "chakraName"]) ?? pickString((payload as unknown as { kai?: unknown }).kai, ["chakra", "chakraName"]);
+
+    const weekday = normalizeWeekdayLabel(payloadWeekdayRaw ?? pulseToWeekday(pulse));
+    const chakra = normalizeChakraLabel(payloadChakraRaw ?? stepToChakra(step));
+
+    return { weekday, chakra };
+  }, [payload]);
 
   /** ---------- Verified session flag (per-thread) ---------- */
   const sessionKey = useMemo(() => {
@@ -1059,14 +764,39 @@ function SigilStreamInner(): React.JSX.Element {
   const composerMeta = useMemo(() => (verifiedThisSession ? authLike.meta : null), [verifiedThisSession, authLike.meta]);
   const composerSvgText = useMemo(() => (verifiedThisSession ? authLike.svgText : null), [verifiedThisSession, authLike.svgText]);
 
-  const composerPhiKey = useMemo(
-    () => (composerMeta ? readStringProp(composerMeta, "userPhiKey") : undefined),
-    [composerMeta],
-  );
-  const composerKaiSig = useMemo(
-    () => (composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined),
-    [composerMeta],
-  );
+  const composerPhiKey = useMemo(() => (composerMeta ? readStringProp(composerMeta, "userPhiKey") : undefined), [composerMeta]);
+  const composerKaiSig = useMemo(() => (composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined), [composerMeta]);
+
+  /** ---------- Optional sigil tint vars (if present in meta) ---------- */
+  type CSSVarStyle = React.CSSProperties & { [key: `--${string}`]: string };
+
+  const sigilTintStyle = useMemo<React.CSSProperties>(() => {
+    const r =
+      readNumberLoose(composerMeta, "sigil_r") ??
+      readNumberLoose(composerMeta, "sigilR") ??
+      readNumberLoose(composerMeta, "tintR") ??
+      null;
+
+    const g =
+      readNumberLoose(composerMeta, "sigil_g") ??
+      readNumberLoose(composerMeta, "sigilG") ??
+      readNumberLoose(composerMeta, "tintG") ??
+      null;
+
+    const b =
+      readNumberLoose(composerMeta, "sigil_b") ??
+      readNumberLoose(composerMeta, "sigilB") ??
+      readNumberLoose(composerMeta, "tintB") ??
+      null;
+
+    if (r === null || g === null || b === null) return {};
+
+    const style: CSSVarStyle = {};
+    style["--sigil-r"] = String(clamp255(r));
+    style["--sigil-g"] = String(clamp255(g));
+    style["--sigil-b"] = String(clamp255(b));
+    return style;
+  }, [composerMeta]);
 
   /** ---------- Inhaler: add a link to list ---------- */
   const onAddInhaled = (u: string) => {
@@ -1131,20 +861,14 @@ function SigilStreamInner(): React.JSX.Element {
       : null;
 
   return (
-    <main className="sf">
+    <main className="sf" data-weekday={kaiTheme.weekday} data-chakra={kaiTheme.chakra} style={sigilTintStyle}>
       <header className="sf-head" role="region" aria-labelledby="glyph-stream-title">
         <h1 id="glyph-stream-title">Memory Stream</h1>
 
         <KaiStatus />
 
         {payload && activeToken ? (
-          <PayloadCard
-            token={activeToken}
-            payload={payload}
-            manifest={payloadManifest}
-            copied={copied}
-            onKopy={onKopy}
-          />
+          <PayloadCard token={activeToken} payload={payload} manifest={payloadManifest} copied={copied} onKopy={onKopy} />
         ) : payloadError ? (
           <div className="sf-error" role="alert">
             {payloadError}
@@ -1164,7 +888,12 @@ function SigilStreamInner(): React.JSX.Element {
 
         <IdentityBar phiKey={composerPhiKey} kaiSignature={composerKaiSig} />
 
-        {sigilBlock && sigilBlock.node}
+        {/* ✅ Sigil stage wrapper (keeps SVG big/centered) */}
+        {sigilBlock?.node ? (
+          <section className="sf-sigilWrap" aria-label="Sigil stage">
+            <div className="sf-sigilWrap__inner">{sigilBlock.node}</div>
+          </section>
+        ) : null}
 
         {payload && (
           <section className="sf-reply" aria-labelledby="reply-title">
@@ -1188,13 +917,14 @@ function SigilStreamInner(): React.JSX.Element {
         )}
       </header>
 
+      {/* ✅ THIS is the v6.1 bottom behavior you want. */}
       <section className="sf-list">
         {urls.length === 0 ? (
           <div className="sf-empty">
             No items yet. Paste a link above or open a <code>/stream/p/&lt;payload&gt;</code> link and reply to start a thread.
           </div>
         ) : (
-          <RichStreamList urls={urls} onInhale={onAddInhaled} toast={(kind, msg) => toasts.push(kind, msg)} />
+          <StreamList urls={urls} />
         )}
       </section>
     </main>

@@ -1,11 +1,10 @@
 /* src/pages/sigilstream/styles/sigilstream.css
    ─────────────────────────────────────────────────────────────
-   Sigil Stream — Atlantean Priest-King ◇ Sentient Feed (v7.0)
-   Mobile-first • Overflow-safe • iOS safe-areas • Breath aura
-   - Breath timing: --pulse-dur / --pulse-offset
-   - Theme: chakra/day mapping OR set sigil tint: --sigil-r/g/b (0–255)
-   - Embeds: URL cards + iframes + rich HTML/MD code blocks (all styled)
-   - Favicons: crisp, touch-safe, never squish, never bleed off edge
+   Sigil Stream — Atlantean Priest-King ◇ Sentient Feed
+   v7.3.0 — Refactor: canonical primitives restored + Holy Card scoped
+   - Mobile-first • Overflow-safe • iOS safe-areas • Breath aura
+   - Accent resolution: sigil tint → chakra mapping → default
+   - data-weekday / data-chakra now driven by TSX (v7.3.0)
    ───────────────────────────────────────────────────────────── */
 
 /* ========== 0) RESET / HARD GUARDS ============================ */
@@ -16,7 +15,7 @@
 html, body{
   width:100%;
   max-width:100%;
-  overflow-x:hidden;         /* ✅ no right-edge shave */
+  overflow-x:hidden;
   height:auto;
 }
 
@@ -26,7 +25,6 @@ html, body{
   height:auto;
 }
 
-/* iOS: prevent odd over-scroll glow + keep within container */
 body{
   overscroll-behavior-x:none;
   overscroll-behavior-y:contain;
@@ -59,15 +57,15 @@ body{
   --chakra-g: 197;
   --chakra-b: 255;
 
-  /* Optional per-sigil tint (set from TSX) */
+  /* Optional per-sigil tint (set from TSX via style vars) */
   /* --sigil-r: 42; --sigil-g: 197; --sigil-b: 255; */
-  /* Optional hue (0–360) if you compute it in TSX (for deeper aura math) */
+  /* Optional hue if computed */
   /* --sigil-hue: 180; */
 
   --alpha-card: .06;
   --alpha-border: .12;
 
-  /* Breath timing (overridden by ticker) */
+  /* Breath timing (overridden by ticker if you want) */
   --pulse-dur: 5236ms;
   --pulse-offset: 0ms;
 
@@ -97,7 +95,7 @@ body{
   --focus2: rgba(255,255,255,.10);
 }
 
-/* Optional: smooth breath mantle variables (safe fallback if unsupported) */
+/* Optional: smooth breath mantle variables */
 @supports (background: paint(something)) or (offset: path("M0,0")){
   @property --sf-breath-scale { syntax:"<number>"; inherits:false; initial-value:0; }
   @property --sf-breath-hue   { syntax:"<angle>";  inherits:false; initial-value:0deg; }
@@ -115,13 +113,11 @@ body{
   background-color: rgb(var(--bg));
 }
 
-/* Selection (feels “alive”) */
 ::selection{
   background: rgba(255,255,255,.14);
   color: rgb(var(--ink));
 }
 
-/* Scrollbar (WebKit, subtle) */
 *::-webkit-scrollbar{ height:10px; width:10px; }
 *::-webkit-scrollbar-thumb{
   background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.08));
@@ -160,7 +156,7 @@ body{
   --accent-10: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .10);
   --accent-06: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .06);
 
-  /* “SigilPage-like” vars (so shared components feel identical) */
+  /* SigilPage-like vars */
   --crystal-accent: rgb(var(--accent-r), var(--accent-g), var(--accent-b));
   --crystal-hue: var(--sigil-hue, 180);
 
@@ -168,7 +164,6 @@ body{
   --day-hue: 195;
   --day-aura: hsla(var(--day-hue), 95%, 65%, .08);
 
-  /* Field */
   background:
     radial-gradient(900px 520px at 20% -10%, var(--accent-10), transparent 62%),
     radial-gradient(820px 520px at 92% 2%, var(--day-aura), transparent 66%),
@@ -176,7 +171,7 @@ body{
   border-radius: 22px;
 }
 
-/* Soft noise (cheap, iOS friendly) */
+/* Soft noise */
 .sf::before{
   content:"";
   position:absolute; inset:-2px;
@@ -192,7 +187,7 @@ body{
   filter: blur(.2px);
 }
 
-/* Breath mantle (non-rotating, SigilPage vibe) */
+/* Breath mantle */
 .sf::after{
   content:"";
   position: fixed;
@@ -224,7 +219,7 @@ body{
 
 /* ========== 4) TYPOGRAPHY / WRAP =============================== */
 .mono, .sf-mono{ font-family: var(--font-mono); }
-.sf input, .sf textarea{ font-size:16px; } /* ✅ prevent iOS zoom */
+.sf input, .sf textarea{ font-size:16px; } /* prevent iOS zoom */
 
 .sf :where(p, li, .sf-payload-core, .sf-caption, .sf-kai-label, .sf-hash, .sf-note, .feed-card__body){
   overflow-wrap: break-word;
@@ -275,13 +270,11 @@ body{
   opacity: .9;
 }
 .sf-muted{ opacity:.75; }
-.sf-label{ font-weight: 800; font-size: .95rem; letter-spacing:.01em; }
 
 /* ========== 6) PILLS / CHIPS =================================== */
 .sf-pill, .sf-chip{
   display:inline-flex;
   align-items:center;
-  height:auto;
   min-height: 26px;
   padding: 6px 10px;
   border-radius: var(--r-pill);
@@ -304,30 +297,8 @@ body{
   min-width:0;
 }
 
-.sf-reply-id{
-  margin-top: .25rem;
-  display:flex;
-  flex-wrap:wrap;
-  gap:.5rem;
-  min-width:0;
-  width:100%;
-}
-.sf-reply-id .sf-pill{
-  white-space: normal;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  line-height: 1.2;
-}
-
-.sf-pill--phikey,
-.sf-pill--ksig,
-.sf-pill[data-kind="phikey"],
-.sf-pill[data-kind="ksig"]{
-  white-space: normal;
-  flex-wrap: wrap;
-  max-width: 100%;
-  min-width: 0;
-}
+.sf-pill--phikey{ color: rgb(var(--ok)); border-color: rgba(88,255,174,.35); }
+.sf-pill--ksig{ color: rgb(var(--gold-ink)); border-color: rgba(255,215,128,.35); }
 
 .sf .sf-key{
   display:inline-block;
@@ -336,9 +307,6 @@ body{
   line-break:anywhere;
   min-width:0;
 }
-
-.sf-pill--phikey{ color: rgb(var(--ok)); border-color: rgba(88,255,174,.35); }
-.sf-pill--ksig{ color: rgb(var(--gold-ink)); border-color: rgba(255,215,128,.35); }
 
 /* ========== 7) ALERTS ========================================== */
 .sf-warn{
@@ -382,6 +350,13 @@ body{
 .sf-btn[disabled]{ opacity:.6; cursor: default; }
 .sf-btn--ghost{ background: transparent; border: 1px dashed rgba(var(--glass), .25); }
 
+/* Mini utility (used in some URL rows) */
+.sf .sf-btn.sf-btn--mini{
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
 /* ========== 9) INPUTS ========================================== */
 .sf-input, .sf-textarea{
   width:100%;
@@ -412,7 +387,6 @@ body{
   position: relative;
   isolation: isolate;
   overflow: visible;
-  -webkit-mask-image: none;
   min-width: 0;
 }
 .kai-feed-status::after{
@@ -430,68 +404,7 @@ body{
   100%{ box-shadow: 0 0 0 0 rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0); }
 }
 
-/* ========== 11) BANNER / PAYLOAD SURFACE ======================= */
-.sf-banner{
-  margin-top: 14px;
-  border-radius: var(--r-card);
-  border: 1px solid rgba(var(--glass), .12);
-  background:
-    radial-gradient(820px 420px at 18% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .14), transparent 62%),
-    radial-gradient(720px 420px at 88% 10%, hsla(var(--day-hue), 90%, 62%, .10), transparent 64%),
-    linear-gradient(180deg, rgba(12,16,24,.72), rgba(10,14,22,.58));
-  box-shadow: var(--shadow-2), var(--inset-2);
-  overflow: hidden;
-  position: relative;
-  min-width: 0;
-}
-
-/* Circuit ring edge (slow) */
-.sf-banner::before{
-  content:"";
-  position:absolute; inset:-1px;
-  border-radius: calc(var(--r-card) + 1px);
-  pointer-events:none;
-  background:
-    conic-gradient(from 180deg,
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0),
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .26),
-      rgba(255,215,128,.18),
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .22),
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0)
-    );
-  opacity: .75;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  padding: 1px;
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: atl-spin calc(var(--pulse-dur) * 6) linear infinite;
-  animation-delay: var(--pulse-offset);
-}
-@keyframes atl-spin{ to{ transform: rotate(360deg); } }
-
-.sf-banner .sf-chip,
-.sf-banner .sf-pill{
-  min-height: 24px;
-  padding: 5px 10px;
-  font-size: 12.5px;
-  letter-spacing: .02em;
-  border-color: rgba(var(--glass), .12);
-  background: rgba(var(--glass), .055);
-}
-
-.sf-banner .sf-title{
-  margin: 10px 0 8px;
-  font-size: clamp(18px, 3.6vw, 22px);
-  line-height: 1.2;
-  font-weight: 900;
-  color: rgba(255,255,255,.92);
-}
-.sf-banner .sf-title .sf-accent{
-  color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .92);
-  text-shadow: 0 10px 34px rgba(0,0,0,.28);
-}
-
+/* ========== 11) BODY CONTENT (TEXT / MD / HTML / CODE) ========= */
 .sf-text{
   margin-top: 10px;
   white-space: pre-wrap;
@@ -500,7 +413,6 @@ body{
   opacity: .95;
 }
 
-/* ========== 12) CODE / PRE (HTML + MD) ========================= */
 .sf-code,
 .sf-md pre,
 .sf-html pre{
@@ -518,8 +430,8 @@ body{
 .sf-md pre code,
 .sf-html pre code{
   display:block;
-  white-space: pre;                 /* ✅ preserve */
-  overflow-wrap: normal;            /* ✅ avoid mid-token wraps inside code blocks */
+  white-space: pre;
+  overflow-wrap: normal;
   font-size: 12px;
   line-height: 1.5;
   font-family: var(--font-mono);
@@ -527,7 +439,6 @@ body{
   tab-size: 2;
 }
 
-/* Inline code */
 .sf-md code,
 .sf-html code{
   font-family: var(--font-mono);
@@ -538,7 +449,6 @@ body{
   border: 1px solid rgba(255,255,255,.10);
 }
 
-/* Tables (rare but must look perfect) */
 .sf :where(.sf-md table, .sf-html table){
   width:100%;
   border-collapse: collapse;
@@ -561,7 +471,6 @@ body{
 }
 .sf :where(.sf-md tr:last-child td, .sf-html tr:last-child td){ border-bottom:0; }
 
-/* Blockquote (prophetic cards) */
 .sf :where(.sf-md blockquote, .sf-html blockquote){
   margin: 10px 0;
   padding: 10px 12px;
@@ -580,79 +489,42 @@ body{
   background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
 }
 
-/* ========== 13) EMBEDS (URL CARDS + IFAMES) ==================== */
-/* URL Card shell (use for any “link preview” style embed)
-   Markup-friendly selectors:
-   - .sf-embedCard (preferred)
-   - .sf-embed-card (alt)
-*/
-.sf :where(.sf-embedCard, .sf-embed-card){
-  margin-top: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,.10);
-  background:
-    radial-gradient(720px 280px at 12% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .12), transparent 60%),
-    linear-gradient(180deg, rgba(12,16,24,.70), rgba(10,14,22,.56));
-  box-shadow: 0 16px 46px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.05);
-  overflow:hidden;
+/* ========== 12) CANONICAL EMBED / MEDIA PRIMITIVES ============= */
+/* Canonical iframe embed behavior (global) */
+.sf-embed{
   position: relative;
-  min-width:0;
-  isolation:isolate;
-  transform: translateZ(0);
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: rgba(255,255,255,.03);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 14px 44px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.05);
+  overflow: hidden;
+  min-width: 0;
 }
+.sf-embed iframe,
+.sf-embed__frame{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: transparent;
+}
+.sf-embed--doc{ aspect-ratio: 4/3; }
+.sf-embed--tall{ aspect-ratio: 10/16; }
 
-/* Soft glint (breath-synced) */
-.sf :where(.sf-embedCard, .sf-embed-card)::before{
-  content:"";
-  position:absolute; inset:-2px;
-  pointer-events:none;
-  border-radius: 18px;
-  background:
-    radial-gradient(420px 120px at 30% 10%,
-      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .18),
-      transparent 70%);
-  opacity: .85;
-  filter: blur(10px);
-  transform: translateX(-18%);
-  animation: sf-embed-sheen calc(var(--pulse-dur) * 2) ease-in-out infinite;
-  animation-delay: var(--pulse-offset);
-}
-@keyframes sf-embed-sheen{
-  0%{ transform: translateX(-22%); opacity: .45; }
-  50%{ transform: translateX(18%);  opacity: .92; }
-  100%{ transform: translateX(-22%); opacity: .45; }
-}
+/* Canonical media behavior (global) */
+.sf-media{ position:relative; width:100%; background: rgba(255,255,255,.02); min-width:0; }
+.sf-media--image{ display:grid; place-items:center; }
+.sf-media--image img{ width:100%; height:auto; display:block; border-radius: 12px; }
+.sf-media--video video{ width:100%; height:auto; display:block; border-radius:12px; background:#000; }
+.sf-media--audio{ padding:10px; }
+.sf-media--audio audio{ width:100%; }
 
-/* Hover/press */
-@media (hover:hover){
-  .sf :where(.sf-embedCard, .sf-embed-card):hover{
-    border-color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .22);
-    box-shadow: 0 20px 56px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.06);
-  }
-}
-.sf :where(.sf-embedCard, .sf-embed-card):active{
-  transform: translateY(1px);
-}
-
-/* Embed card inner layout */
-.sf :where(.sf-embedCard__inner, .sf-embed-inner){
-  position:relative;
-  display:grid;
-  gap:10px;
-  padding: 12px;
-  min-width:0;
-}
-
-/* Head row */
-.sf :where(.sf-embedHead, .sf-embed-head){
-  display:flex;
-  align-items:center;
-  gap:10px;
-  min-width:0;
-}
-
-/* Favicons (crisp on mobile) */
-.sf :where(.sf-favicon, .sf-embedFavicon){
+/* ========== 13) FAVICON (shared) =============================== */
+.sf-favicon{
   width: 22px;
   height: 22px;
   border-radius: 7px;
@@ -666,119 +538,123 @@ body{
   display:grid;
   place-items:center;
 }
-.sf :where(.sf-favicon img, .sf-embedFavicon img){
+.sf-favicon img{
   width:100%;
   height:100%;
   object-fit: cover;
-  image-rendering: auto;
   -webkit-user-drag:none;
 }
+.sf-favicon--blank{
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+}
 
-/* Title + meta */
-.sf :where(.sf-embedTitle, .sf-embed-title){
+/* ========== 14) LINKCARDS (stream list) ======================== */
+.sf-rlist{ display:grid; gap: 12px; }
+.sf-rlist__item{ min-width:0; }
+
+.sf-linkcard{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.10);
+  background:
+    radial-gradient(720px 280px at 12% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .12), transparent 60%),
+    linear-gradient(180deg, rgba(12,16,24,.70), rgba(10,14,22,.56));
+  box-shadow: 0 16px 46px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.05);
+  overflow:hidden;
+  min-width:0;
+  position: relative;
+  isolation:isolate;
+}
+.sf-linkcard__head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap: 12px;
+  padding: 12px;
+  min-width:0;
+}
+.sf-linkcard__brand{
+  display:flex;
+  gap: 10px;
+  align-items:flex-start;
+  min-width:0;
+}
+.sf-linkcard__brandText{ min-width:0; }
+.sf-linkcard__title{
   font-weight: 900;
-  font-size: 14.5px;
+  font-size: 15px;
   line-height: 1.2;
   color: rgba(255,255,255,.92);
-  min-width:0;
   overflow:hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sf :where(.sf-embedMeta, .sf-embed-meta){
-  margin-top: 2px;
+.sf-linkcard__sub{
+  margin-top: 4px;
   font-size: 12.5px;
-  opacity: .80;
+  opacity: .85;
   min-width:0;
+}
+.sf-linkcard__host{
+  font-weight: 900;
+  opacity: .92;
+}
+.sf-linkcard__url{
+  font-family: var(--font-mono);
+  opacity: .90;
   overflow:hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display:inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
 }
-
-/* URL line (monospace, wraps safely) */
-.sf :where(.sf-embedUrl, .sf-embed-url){
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.35;
-  color: rgba(255,255,255,.84);
-  background: rgba(0,0,0,.22);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
-  padding: 8px 10px;
-  overflow-wrap:anywhere;
-  word-break: break-word;
+.sf-linkcard__actions{
+  display:flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content:flex-end;
+  flex: 0 0 auto;
 }
-
-/* Preview image */
-.sf :where(.sf-embedPreview, .sf-embed-preview){
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.03);
-  overflow:hidden;
-  min-width:0;
+.sf-linkcard__desc{
+  padding: 0 12px 12px;
+  opacity: .90;
+  font-size: 13.5px;
+  line-height: 1.4;
 }
-.sf :where(.sf-embedPreview img, .sf-embed-preview img){
+.sf-linkcard__thumb{
+  padding: 0 12px 12px;
+}
+.sf-linkcard__thumbImg{
   width:100%;
   height:auto;
-  display:block;
-}
-
-/* Actions row */
-.sf :where(.sf-embedActions, .sf-embed-actions){
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  margin-top: 2px;
-}
-.sf :where(.sf-embedBtn, .sf-embed-btn){
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  padding: 8px 10px;
-  min-height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
-  color: rgba(255,255,255,.92);
-  text-decoration:none;
-  font-weight: 900;
-  letter-spacing:.02em;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
-  cursor:pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  transition: transform .06s ease, filter .18s ease, border-color .18s ease;
-}
-.sf :where(.sf-embedBtn, .sf-embed-btn):hover{
-  border-color: rgba(var(--accent-r), var(--accent-g), var(--accent-b), .26);
-  filter: brightness(1.04);
-}
-.sf :where(.sf-embedBtn, .sf-embed-btn):active{
-  transform: translateY(1px) scale(.995);
-}
-
-/* Iframe embeds (kept + upgraded edge) */
-.sf-embed{
-  position:relative;
-  width:100%;
-  aspect-ratio:16/9;
-  background: rgba(255,255,255,.03);
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.10);
-  box-shadow: 0 14px 44px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.05);
-  overflow:hidden;
+  background: rgba(255,255,255,.03);
+  display:block;
+}
+.sf-linkcard__embed{
+  padding: 0 12px 12px;
+}
+
+/* ========== 15) PAYLOAD SURFACE ================================ */
+.sf-payload{
+  margin-top:.5rem;
+  padding:.75rem 14px;
+  background: linear-gradient(180deg, rgba(12,16,24,.70), rgba(10,14,22,.60));
+  border: 1px solid rgba(var(--glass), .12);
+  border-radius: 12px;
+  box-shadow: 0 8px 26px rgba(0,0,0,.35), var(--inset-1);
+  overflow: visible;
   min-width:0;
 }
-.sf-embed iframe{
-  position:absolute; inset:0;
-  width:100%; height:100%;
-  border:0;
-}
-.sf-embed--doc{ aspect-ratio:4/3; }
-.sf-embed--tall{ aspect-ratio:10/16; }
+.sf-payload-line{ display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.35rem; min-width:0; }
+.sf-payload-core{ font-size: .98rem; line-height: 1.35; }
 
-/* ========== 14) KOPY BUTTON (v6.2 tuned) ======================= */
+/* ========== 16) KOPY BUTTON (canonical) ======================== */
 .sf-kopyBtn{
   width: 100%;
   height: 56px;
@@ -845,112 +721,165 @@ body{
   100%{ opacity:.45; transform: translateX(-10%) scale(1); }
 }
 
-/* ========== 15) PAYLOAD LINE HELPER ============================ */
-.sf-payload{
-  margin-top:.5rem;
-  padding:.75rem 14px;
-  background: linear-gradient(180deg, rgba(12,16,24,.70), rgba(10,14,22,.60));
-  border: 1px solid rgba(var(--glass), .12);
-  border-radius: 12px;
-  box-shadow: 0 8px 26px rgba(0,0,0,.35), var(--inset-1);
-  overflow: visible;
-  -webkit-mask-image:none;
-  min-width:0;
-}
-.sf-payload-line{ display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.35rem; min-width:0; }
-.sf-payload-core{ font-size: .98rem; line-height: 1.35; }
-
-/* ========== 16) REPLY COMPOSER ================================ */
+/* ========== 17) REPLY COMPOSER ================================ */
 .sf-reply{ margin-top: 1rem; overflow: visible; min-width:0; }
 .sf-reply-title{ font-size: 1.15rem; margin: 0 0 .4rem; }
-.sf-reply-row{ margin-top: .6rem; min-width:0; }
 .sf-reply-actions{ margin-top: .6rem; display:flex; gap: .6rem; flex-wrap: wrap; }
 .sf-reply-login{ margin-top: .5rem; }
 .sf-inhaler .sf-reply-actions{ display:flex; gap:.5rem; flex-wrap:wrap; }
 
-/* ========== 17) ATTACHMENTS / MEDIA ============================ */
-.sf-att-wrap{ margin-top: 14px; }
+/* ========== 18) ATTACHMENTS (Holy Card) — SCOPED =============== */
+.sf-attachments{ margin-top: 14px; }
+.sf-att-title{
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin: 0 0 10px 2px;
+}
 .sf-att-grid{
   display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(320px,100%), 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
-}
-.sf-att-item{
-  background: linear-gradient(180deg, rgba(12,16,24,.72), rgba(10,14,22,.58));
-  border: 1px solid rgba(var(--glass), .08);
-  border-radius: 14px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.28), var(--inset-1);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
   min-width:0;
-  position: relative;
 }
-.sf-att-item::before{
+.sf-att-item{ width: 100%; max-width: 100%; min-width: 0; }
+
+/* Card */
+.sf-att-card{
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  contain: paint;
+  isolation: isolate;
+  backface-visibility: hidden;
+}
+.sf-att-card::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  border-radius: 20px;
+  pointer-events:none;
+  background:
+    radial-gradient(1200px 240px at 20% -10%, rgba(255,215,120,0.18), transparent 55%),
+    radial-gradient(900px 220px at 90% 0%, rgba(140,220,255,0.16), transparent 60%),
+    radial-gradient(800px 260px at 60% 110%, rgba(180,140,255,0.14), transparent 60%);
+  animation: sf-breath-aura var(--pulse-dur) ease-in-out infinite;
+  animation-delay: var(--pulse-offset);
+  opacity: 0.65;
+  filter: blur(0.3px);
+  will-change: opacity, filter;
+}
+@keyframes sf-breath-aura{
+  0%,100%{ opacity:.50; filter: blur(.2px); }
+  50%{ opacity:.90; filter: blur(1.1px); }
+}
+.sf-att-card::after{
   content:"";
   position:absolute; inset:0;
   pointer-events:none;
-  background: radial-gradient(520px 220px at 10% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .10), transparent 60%);
-  opacity: .85;
+  background:
+    linear-gradient(120deg,
+      transparent 0%,
+      rgba(255,255,255,0.12) 22%,
+      rgba(255,255,255,0.08) 50%,
+      transparent 78%);
+  transform: translateX(-38%);
+  animation: sf-breath-shimmer var(--pulse-dur) ease-in-out infinite;
+  animation-delay: var(--pulse-offset);
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  will-change: transform, opacity, filter;
+  filter: brightness(0.95);
 }
-.sf-att-kind{ font-size: 12px; opacity: .85; margin-bottom: 6px; position: relative; }
-.sf-att-line{ font-size: 12px; position: relative; }
-.sf-att-foot{ margin-top:.35rem; opacity:.85; font-size:.9rem; }
+@keyframes sf-breath-shimmer{
+  0%{ transform: translateX(-38%); opacity:.30; filter: brightness(.9); }
+  25%{ opacity:.55; filter: brightness(1.05); }
+  50%{ transform: translateX(38%); opacity:.70; filter: brightness(1.15); }
+  75%{ opacity:.55; filter: brightness(1.05); }
+  100%{ transform: translateX(-38%); opacity:.30; filter: brightness(.9); }
+}
 
-/* Embeds & media */
-.sf-media{ position:relative; width:100%; background: rgba(255,255,255,.02); }
-.sf-media--image{ display:grid; place-items:center; }
-.sf-media--image img{ width:100%; height:auto; display:block; border-radius: 12px; }
-.sf-media--video video{ width:100%; height:auto; display:block; border-radius:12px; background:#000; }
-.sf-media--audio{ padding:10px; }
-.sf-media--audio audio{ width:100%; }
+/* Header hit area */
+.sf-att-head{ position: relative; padding: 12px 12px 10px; }
+.sf-att-head__hit{
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 20px rgba(0,0,0,0.22);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.sf-att-head__hit:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(0,0,0,0.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 14px 28px rgba(0,0,0,0.28);
+}
+.sf-att-head__hit:active{ transform: translateY(0px) scale(0.995); }
+.sf-att-head__hit:focus-visible{
+  outline: 2px solid rgba(255,215,120,0.55);
+  outline-offset: 2px;
+}
+.sf-att-head__text{ min-width:0; }
+.sf-att-head__title{
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.45), 0 10px 22px rgba(0,0,0,0.35);
+}
+.sf-att-open{
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  padding-left: 8px;
+  white-space: nowrap;
+  color: rgba(255, 230, 170, 0.95);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.35), 0 12px 24px rgba(0,0,0,0.35);
+}
 
-/* Files */
-.sf-file, .sf-fileref{ padding:10px 12px; }
-.sf-file-head, .sf-file-foot{ display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
-.sf-file-name{ font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.sf-file-size{ opacity:.85; font-variant-numeric: tabular-nums; }
-.sf-file-pre{
-  margin: 8px 0;
-  max-height: 240px;
-  overflow:auto;
-  background: rgba(255,255,255,.04);
-  border: 1px dashed rgba(255,255,255,.12);
-  border-radius: 10px;
-  padding: 10px;
-  line-height: 1.25;
-  font-family: var(--font-mono);
-  font-size: .88rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.sf-file-meta{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  padding:6px 8px;
-  opacity:.9;
-  min-width:0;
-}
-.sf-file-dl{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  margin:6px 0 0;
-  padding:6px 10px;
-  border-radius:10px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.12);
-  text-decoration:none;
-  color:inherit;
-}
-.sf-file-type{ opacity:.85; }
-.sf-hash{ user-select: all; font-size: .85rem; }
-.sf-note{ margin-top: 6px; opacity:.8; font-size: .9rem; }
+/* Body */
+.sf-att-body{ padding: 0 12px 12px; }
 
-/* ========== 18) STREAM LIST / CARDS ============================ */
-.sf-list{ margin: 1rem 0; display:grid; gap: .75rem; }
+/* IMPORTANT: Holy Card only “polishes” primitives; it does NOT redefine geometry */
+.sf-att-card .sf-embed{
+  border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.sf-att-card .sf-media{
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.28);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+/* tighten spacing when card is link-only */
+.sf-att-card > .sf-att-head:last-child{ padding-bottom: 12px; }
+
+/* ========== 19) STREAM LIST / EMPTY ============================ */
+.sf-list{ margin: 1rem 0; display:grid; gap: .75rem; min-width:0; }
 
 .sf-empty{
   padding: .85rem .95rem;
@@ -960,436 +889,119 @@ body{
   background: rgba(255,255,255,.02);
 }
 
-/* If you render “feed cards” inside stream, this makes them legendary */
-.sf :where(.feed-card, .sf-feed-card){
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,.10);
+/* ========== 20) SIGIL STAGE (restored) ========================= */
+.sf-sigilWrap{
+  margin-top: 14px;
+  border-radius: var(--r-card);
+  border: 1px solid rgba(var(--glass), .12);
   background:
-    radial-gradient(620px 240px at 12% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .10), transparent 60%),
-    linear-gradient(180deg, rgba(12,16,24,.68), rgba(10,14,22,.56));
-  box-shadow: 0 16px 46px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.05);
-  overflow:hidden;
-  min-width:0;
+    radial-gradient(820px 420px at 18% 0%, rgba(var(--accent-r), var(--accent-g), var(--accent-b), .14), transparent 62%),
+    radial-gradient(720px 420px at 88% 10%, hsla(var(--day-hue), 90%, 62%, .10), transparent 64%),
+    linear-gradient(180deg, rgba(12,16,24,.72), rgba(10,14,22,.58));
+  box-shadow: var(--shadow-2), var(--inset-2);
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+  isolation: isolate;
 }
-.sf :where(.feed-card__body, .sf-feed-card__body){
+.sf-sigilWrap::before{
+  content:"";
+  position:absolute; inset:-1px;
+  border-radius: calc(var(--r-card) + 1px);
+  pointer-events:none;
+  background:
+    conic-gradient(from 180deg,
+      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0),
+      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .26),
+      rgba(255,215,128,.18),
+      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .22),
+      rgba(var(--accent-r), var(--accent-g), var(--accent-b), .0)
+    );
+  opacity: .65;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  padding: 1px;
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: atl-spin calc(var(--pulse-dur) * 6) linear infinite;
+  animation-delay: var(--pulse-offset);
+}
+@keyframes atl-spin{ to{ transform: rotate(360deg); } }
+
+.sf-sigilWrap__inner{
+  position: relative;
   padding: 12px;
-  line-height: 1.5;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
-/* ========== 19) ACCESSIBILITY / STATE ========================== */
-.sf [role="button"]{ cursor:pointer; }
-.sf [aria-busy="true"]{ cursor:progress; }
-.sf [aria-disabled="true"]{ opacity:.6; cursor:default; }
-
-/* ========== 20) CHAKRA MAPPING ================================ */
-.sf[data-chakra="Root"], .sf.chakra-root{        --chakra-r: 255; --chakra-g: 88;  --chakra-b: 88;  }
-.sf[data-chakra="Sacral"], .sf.chakra-sacral{    --chakra-r: 255; --chakra-g: 146; --chakra-b: 88;  }
-.sf[data-chakra="Solar"], .sf.chakra-solar{      --chakra-r: 255; --chakra-g: 215; --chakra-b: 128; }
-.sf[data-chakra="Heart"], .sf.chakra-heart{      --chakra-r: 88;  --chakra-g: 255; --chakra-b: 174; }
-.sf[data-chakra="Throat"], .sf.chakra-throat{    --chakra-r: 42;  --chakra-g: 197; --chakra-b: 255; }
-.sf[data-chakra="Third Eye"], .sf.chakra-third-eye{ --chakra-r: 164; --chakra-g: 126; --chakra-b: 255; }
-.sf[data-chakra="Crown"], .sf.chakra-crown{      --chakra-r: 238; --chakra-g: 241; --chakra-b: 251; }
-
-/* ========== 21) WEEKDAY MAPPING ================================ */
-.sf[data-weekday="Solhara"], .sf.day-solhara{ --day-hue: 48;  }
-.sf[data-weekday="Aquaris"], .sf.day-aquaris{ --day-hue: 198; }
-.sf[data-weekday="Flamora"], .sf.day-flamora{ --day-hue: 18;  }
-.sf[data-weekday="Verdari"], .sf.day-verdari{ --day-hue: 128; }
-.sf[data-weekday="Sonari"],  .sf.day-sonari{  --day-hue: 270; }
-.sf[data-weekday="Kaelith"], .sf.day-kaelith{ --day-hue: 205; } /* (label stays Kaelith here because that’s what your data attr uses) */
-
-/* ========== 22) MOBILE POLISH ================================== */
-@media (max-width: 520px){
-  .sf{ border-radius: 18px; }
-  .sf-banner{ border-radius: 16px; }
-  .sf :where(.sf-embedTitle, .sf-embed-title){ font-size: 14px; }
-  .sf :where(.sf-favicon, .sf-embedFavicon){ width:20px; height:20px; border-radius:6px; }
+/* Main sigil SVG big + centered, but don't blow up button icons */
+.sf-sigilWrap :where(svg){
+  display:block;
+  width: min(520px, 100%);
+  height:auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 16px 40px rgba(0,0,0,.35));
+}
+.sf-sigilWrap :where(button svg, a svg){
+  width: 1em;
+  height: 1em;
+  margin: 0;
+  filter: none;
 }
 
-/* Coarse pointers: slightly bigger tap targets */
-@media (pointer: coarse){
-  .sf-btn{ min-height: 48px; padding: 12px 14px; border-radius: 14px; }
-  .sf :where(.sf-embedBtn, .sf-embed-btn){ min-height: 46px; padding: 10px 12px; }
-}
-
-/* ========== 23) REDUCED MOTION ================================ */
-@media (prefers-reduced-motion: reduce){
-  .kai-feed-status::after,
-  .sf-banner::before,
-  .sf-kopyBtn::after,
-  .sf::after,
-  .sf :where(.sf-embedCard, .sf-embed-card)::before{
-    animation: none !important;
-  }
-  *{ transition:none !important; }
-}
-/* ───────────────────────────────────────────────────────────────
-   v7.2y — URL TRUNCATION GUARD (mobile + desktop)
-   Keeps href/copy full; only clamps visual text.
-────────────────────────────────────────────────────────────────── */
-
+/* ========== 21) URL TRUNCATION GUARD =========================== */
 .sf a.sf-link{
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;         /* important if inside flex */
-}
-
-.sf .sf-text.sf-text--url{
-  display: flex;
-  align-items: center;
-  gap: 10px;
   min-width: 0;
 }
 
-.sf .sf-text.sf-text--url a.sf-link{
-  flex: 1 1 auto;
-  min-width: 0;
+/* ========== 22) CHAKRA MAPPING ================================= */
+.sf[data-chakra="Root"], .sf.chakra-root{           --chakra-r: 255; --chakra-g: 88;  --chakra-b: 88;  }
+.sf[data-chakra="Sacral"], .sf.chakra-sacral{       --chakra-r: 255; --chakra-g: 146; --chakra-b: 88;  }
+.sf[data-chakra="Solar"], .sf.chakra-solar{         --chakra-r: 255; --chakra-g: 215; --chakra-b: 128; }
+.sf[data-chakra="Heart"], .sf.chakra-heart{         --chakra-r: 88;  --chakra-g: 255; --chakra-b: 174; }
+.sf[data-chakra="Throat"], .sf.chakra-throat{       --chakra-r: 42;  --chakra-g: 197; --chakra-b: 255; }
+.sf[data-chakra="Third Eye"], .sf.chakra-third-eye{ --chakra-r: 164; --chakra-g: 126; --chakra-b: 255; }
+.sf[data-chakra="Crown"], .sf.chakra-crown{         --chakra-r: 238; --chakra-g: 241; --chakra-b: 251; }
+
+/* ========== 23) WEEKDAY MAPPING ================================ */
+.sf[data-weekday="Solhara"], .sf.day-solhara{ --day-hue: 48;  }
+.sf[data-weekday="Aquaris"], .sf.day-aquaris{ --day-hue: 198; }
+.sf[data-weekday="Flamora"], .sf.day-flamora{ --day-hue: 18;  }
+.sf[data-weekday="Verdari"], .sf.day-verdari{ --day-hue: 128; }
+.sf[data-weekday="Sonari"],  .sf.day-sonari{  --day-hue: 270; }
+.sf[data-weekday="Kaelith"], .sf.day-kaelith{ --day-hue: 205; }
+
+/* ========== 24) MOBILE POLISH ================================== */
+@media (max-width: 520px){
+  .sf{ border-radius: 18px; }
+  .sf-linkcard{ border-radius: 16px; }
+  .sf-favicon{ width:20px; height:20px; border-radius:6px; }
+  .sf-att-card{ border-radius: 16px; }
+  .sf-att-head__hit{ border-radius: 13px; }
+  .sf-att-head__title{ font-size: 13px; }
+  .sf-att-open{ font-size: 11px; }
 }
 
-.sf .sf-btn.sf-btn--mini{
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 1;
-}
-/* ─────────────────────────────────────────────────────────────
-   ATTACHMENTS — “Holy Card” styling (UrlEmbed / EmbedCard)
-   Targets classes from embeds.tsx:
-   .sf-att-card, .sf-att-head, .sf-att-head__hit, .sf-att-head__title,
-   .sf-att-open, .sf-att-body, .sf-embed, .sf-embed__frame,
-   .sf-media__img, .sf-media__video, .sf-favicon
-   ───────────────────────────────────────────────────────────── */
-
-.sf-attachments {
-  margin-top: 14px;
+/* Coarse pointers: bigger tap targets */
+@media (pointer: coarse){
+  .sf-btn{ min-height: 48px; padding: 12px 14px; border-radius: 14px; }
 }
 
-.sf-att-title {
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.85;
-  margin: 0 0 10px 2px;
-}
-
-.sf-att-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  width: 100%;
-  max-width: 100%;
-}
-
-/* container each item already uses */
-.sf-att-item {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
-
-/* ---------- The Card ---------- */
-.sf-att-card {
-  position: relative;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  border-radius: 18px;
-  overflow: hidden;
-
-  /* glass */
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.10);
-  box-shadow:
-    0 16px 40px rgba(0,0,0,0.35),
-    inset 0 1px 0 rgba(255,255,255,0.08);
-
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-/* aura ring */
-.sf-att-card::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: 20px;
-  pointer-events: none;
-  background:
-    radial-gradient(1200px 240px at 20% -10%, rgba(255,215,120,0.18), transparent 55%),
-    radial-gradient(900px 220px at 90% 0%, rgba(140,220,255,0.16), transparent 60%),
-    radial-gradient(800px 260px at 60% 110%, rgba(180,140,255,0.14), transparent 60%);
-  opacity: 0.9;
-  filter: blur(0.2px);
-}
-/* breath shimmer (φ‑entrained, smooth, alive) */
-.sf-att-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-
-  background:
-    linear-gradient(
-      120deg,
-      transparent 0%,
-      rgba(255,255,255,0.12) 22%,
-      rgba(255,255,255,0.08) 50%,
-      transparent 78%
-    );
-
-  transform: translateX(-38%);
-  animation: sf-breath-shimmer 5.236s ease-in-out infinite;
-  mix-blend-mode: screen;
-  opacity: 0.5;
-  will-change: transform, opacity, filter;
-  filter: brightness(0.95);
-}
-
-@keyframes sf-breath-shimmer {
-  0% {
-    transform: translateX(-38%);
-    opacity: 0.3;
-    filter: brightness(0.9);
+/* ========== 25) REDUCED MOTION ================================= */
+@media (prefers-reduced-motion: reduce){
+  .kai-feed-status::after,
+  .sf::after,
+  .sf-kopyBtn::after,
+  .sf-att-card::before,
+  .sf-att-card::after,
+  .sf-sigilWrap::before{
+    animation: none !important;
   }
-  25% {
-    opacity: 0.55;
-    filter: brightness(1.05);
-  }
-  50% {
-    transform: translateX(38%);
-    opacity: 0.7;
-    filter: brightness(1.15);
-  }
-  75% {
-    opacity: 0.55;
-    filter: brightness(1.05);
-  }
-  100% {
-    transform: translateX(-38%);
-    opacity: 0.3;
-    filter: brightness(0.9);
-  }
-}
-
-.sf-att-card::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: 20px;
-  pointer-events: none;
-  background:
-    radial-gradient(1200px 240px at 20% -10%, rgba(255,215,120,0.18), transparent 55%),
-    radial-gradient(900px 220px at 90% 0%, rgba(140,220,255,0.16), transparent 60%),
-    radial-gradient(800px 260px at 60% 110%, rgba(180,140,255,0.14), transparent 60%);
-  animation: sf-breath-aura 5.236s ease-in-out infinite;
-  opacity: 0.65;
-  filter: blur(0.3px);
-  will-change: opacity, filter;
-}
-
-@keyframes sf-breath-aura {
-  0%, 100% {
-    opacity: 0.5;
-    filter: blur(0.2px);
-  }
-  50% {
-    opacity: 0.9;
-    filter: blur(1.1px);
-  }
-}
-
-/* ---------- Header (clickable) ---------- */
-.sf-att-head {
-  position: relative;
-  padding: 12px 12px 10px 12px;
-}
-
-.sf-att-head__hit {
-  display: grid;
-  grid-template-columns: 18px 1fr auto;
-  align-items: center;
-  gap: 10px;
-
-  text-decoration: none;
-  color: inherit;
-
-  padding: 10px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.16);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.06),
-    0 10px 20px rgba(0,0,0,0.22);
-
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
-}
-
-.sf-att-head__hit:hover {
-  transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.16);
-  background: rgba(0,0,0,0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.07),
-    0 14px 28px rgba(0,0,0,0.28);
-}
-
-.sf-att-head__hit:active {
-  transform: translateY(0px) scale(0.995);
-}
-
-.sf-att-head__hit:focus-visible {
-  outline: 2px solid rgba(255,215,120,0.55);
-  outline-offset: 2px;
-}
-
-.sf-favicon {
-  border-radius: 4px;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.25);
-}
-
-.sf-favicon--blank {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.08);
-}
-
-.sf-att-head__text {
-  min-width: 0;
-}
-
-.sf-att-head__title {
-  font-size: 14px;
-  line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-
-  /* overflow safe */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  /* glow */
-  text-shadow:
-    0 1px 0 rgba(0,0,0,0.45),
-    0 10px 22px rgba(0,0,0,0.35);
-}
-
-.sf-att-open {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  opacity: 0.75;
-  padding-left: 8px;
-  white-space: nowrap;
-
-  color: rgba(255, 230, 170, 0.95);
-  text-shadow:
-    0 1px 0 rgba(0,0,0,0.35),
-    0 12px 24px rgba(0,0,0,0.35);
-}
-
-/* ---------- Body (embed/media frame) ---------- */
-.sf-att-body {
-  padding: 0 12px 12px 12px;
-}
-
-.sf-embed {
-  width: 100%;
-  max-width: 100%;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.28);
-  box-shadow:
-    0 18px 44px rgba(0,0,0,0.32),
-    inset 0 1px 0 rgba(255,255,255,0.06);
-}
-
-.sf-embed__frame {
-  display: block;
-  width: 100%;
-  border: 0;
-  aspect-ratio: 16 / 9;
-  background: rgba(0,0,0,0.4);
-}
-
-/* PDFs: give more vertical room */
-.sf-embed--doc .sf-embed__frame {
-  aspect-ratio: 4 / 5;
-}
-
-/* Media wrappers */
-.sf-media {
-  width: 100%;
-  max-width: 100%;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.28);
-  box-shadow:
-    0 18px 44px rgba(0,0,0,0.32),
-    inset 0 1px 0 rgba(255,255,255,0.06);
-}
-
-.sf-media__img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.sf-media__video {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-/* tighten spacing when card is link-only (no body) */
-.sf-att-card > .sf-att-head:last-child {
-  padding-bottom: 12px;
-}
-
-/* Mobile polish */
-@media (max-width: 520px) {
-  .sf-att-card {
-    border-radius: 16px;
-  }
-  .sf-att-head__hit {
-    border-radius: 13px;
-  }
-  .sf-embed,
-  .sf-media {
-    border-radius: 14px;
-  }
-  .sf-att-head__title {
-    font-size: 13px;
-  }
-  .sf-att-open {
-    font-size: 11px;
-  }
-}
-
-/* Respect reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .sf-att-card::after {
-    animation: none;
-    opacity: 0.35;
-  }
-  .sf-att-head__hit {
-    transition: none;
-  }
-}
-.sf-att-card{
-  contain: paint;
-  isolation: isolate; /* keeps blend-mode clean */
-  backface-visibility: hidden;
-}
-
-.sf-att-card::before,
-.sf-att-card::after{
-  backface-visibility: hidden;
+  *{ transition:none !important; }
 }
