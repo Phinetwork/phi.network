@@ -3358,7 +3358,7 @@ useEffect(() => {
           
 
           <p className="sp-fine">
-            Deterministik sigil-glyph; the hash reflekts the kanonikal payload. All provenanse and Stewardship are
+            Determinate sigil-glyph; the hash mirrors the law-true payload. All Origin and Stewardship are
             embedded in the Φkey metadata. Sovereign. End-to-end.
           </p>
 
