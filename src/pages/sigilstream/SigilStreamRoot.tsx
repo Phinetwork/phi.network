@@ -123,7 +123,7 @@ function normalizeChakraLabel(s: string): string {
 function normalizeFeedSourceLabel(s: string): string {
   const t = s.trim();
   if (!t) return t;
-  if (/^manual$/i.test(t)) return "Sovereign";
+  if (/^manual$/i.test(t)) return "Proof of Memory™";
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -731,7 +731,7 @@ function PayloadCard(props: {
   return (
     <section className="sf-payload" role="region" aria-label="Loaded payload">
       <div className="sf-payload-line sf-tags">
-        <span className="sf-pill sf-pill--mode">{modeLabel || "Sovereign"}</span>
+        <span className="sf-pill sf-pill--mode">{modeLabel || "Proof of Memory™"}</span>
         {sealPill}
         {phiKey ? (
           <span className="sf-pill sf-pill--phikey" title={phiKey}>
