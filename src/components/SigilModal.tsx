@@ -1379,14 +1379,14 @@ const SigilModal: FC<Props> = ({ initialPulse = 0, onClose }) => {
               <strong>Kairos:</strong>&nbsp;
               {beatStepDisp}
               <button className="copy-btn" onClick={() => copy(beatStepDisp)}>
-                Remember
+                💠
               </button>
             </p>
             <p>
               <strong>Kairos/Date:</strong>&nbsp;
               {kairosDisp}
               <button className="copy-btn" onClick={() => copy(kairosDisp)}>
-                Remember
+                💠
               </button>
             </p>
 
@@ -1396,7 +1396,7 @@ const SigilModal: FC<Props> = ({ initialPulse = 0, onClose }) => {
                   <strong>Seal:</strong>&nbsp;
                   {kairos.eternalSeal}
                   <button className="copy-btn" onClick={() => copy(kairos.eternalSeal)}>
-                    Remember
+                    💠
                   </button>
                 </p>
                 <p><strong>Day:</strong> {kairos.harmonicDay}</p>
@@ -1407,7 +1407,7 @@ const SigilModal: FC<Props> = ({ initialPulse = 0, onClose }) => {
                   <strong>Kai-Turah:</strong>&nbsp;
                   {kairos.kaiTurahPhrase}
                   <button className="copy-btn" onClick={() => copy(kairos.kaiTurahPhrase)}>
-                    Remember
+                    💠
                   </button>
                 </p>
               </>
