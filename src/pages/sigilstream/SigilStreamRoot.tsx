@@ -1169,7 +1169,7 @@ function SigilStreamInner(): React.JSX.Element {
   const onForgetUnsealed = useCallback(() => {
     if (!payload) return;
     setUnsealState(isSealed ? { status: "sealed" } : { status: "none" });
-    toasts.push("success", "Sealed view.");
+    toasts.push("success", "Sealed");
   }, [payload, isSealed, toasts]);
 
   const onUnseal = useCallback(async () => {
