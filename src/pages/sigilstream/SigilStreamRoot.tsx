@@ -1256,7 +1256,7 @@ function SigilStreamInner(): React.JSX.Element {
       if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
       copiedTimer.current = window.setTimeout(() => setCopied(false), 1200);
 
-      toasts.push("success", "Kopied.");
+      toasts.push("success", "Remembered.");
       return;
     }
 
@@ -1268,19 +1268,19 @@ function SigilStreamInner(): React.JSX.Element {
       if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
       copiedTimer.current = window.setTimeout(() => setCopied(false), 1200);
 
-      toasts.push("success", "Kopied.");
+      toasts.push("success", "Remembered.");
 
       p.catch((e: unknown) => {
         report("kopy clipboard.writeText", e);
         setCopied(false);
-        toasts.push("warn", "Copy failed. Select the address bar.");
+        toasts.push("warn", "Remember failed. Select the address bar.");
       });
 
       return;
     }
 
     // 3) Total failure
-    toasts.push("warn", "Copy failed. Select the address bar.");
+    toasts.push("warn", "Remember failed. Select the address bar.");
   }, [activeToken, toasts]);
 
   /** ---------- Derived list: show payload first if present ---------- */
