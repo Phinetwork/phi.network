@@ -945,7 +945,7 @@ const SigilExplorer: React.FC = () => {
 
           <footer className="kx-footer" aria-label="About">
             <div className="row">
-              <span>Deterministic • Stateless • Kairos-traceable</span>
+              <span>Determinate • Stateless • Kairos-remembered</span>
               <span className="dot">•</span>
               <span>No DB. No backend. Pure Φ.</span>
             </div>
