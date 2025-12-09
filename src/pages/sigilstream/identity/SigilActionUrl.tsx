@@ -194,11 +194,11 @@ function SigilActionUrlNode({ value, isCanonical }: { value: string; isCanonical
               rel="noreferrer noopener"
               aria-label="Open Proof of Breath URL in a new tab"
             >
-              Open ↗
+              ↗
             </a>
           ) : (
             <button type="button" className="sf-actionurl__btn sf-actionurl__btn--disabled" disabled>
-              Open ↗
+              ↗
             </button>
           )}
         </div>
