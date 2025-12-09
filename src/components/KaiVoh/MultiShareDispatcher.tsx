@@ -13,10 +13,10 @@ import { useMemo, useState } from "react";
 import type { ReactElement } from "react";
 import { useSession } from "../session/useSession";
 import type { EmbeddedMediaResult } from "./SignatureEmbedder";
-import SocialConnector, {
-  type SocialMediaPayload,
-  type SocialPlatform as SharePlatform,
-} from "./SocialConnector";
+
+import SocialConnector from "./SocialConnector";
+import type { SocialMediaPayload, SocialPlatform } from "./SocialConnector.shared";
+
 import "./styles/MultiShareDispatcher.css";
 
 /* -------------------------------------------------------------------------- */
@@ -116,11 +116,24 @@ function sanitizeMetadataForSocial(meta: SigMetadata | undefined): ShareMetadata
   }
 
   // Copy a few extra well-known KKS fields (primitives only) for future-proofing.
-  const extraKeys = ["beat", "stepIndex", "step", "kaiTime", "kksVersion", "userPhiKey", "timestamp"];
+  const extraKeys = [
+    "beat",
+    "stepIndex",
+    "step",
+    "kaiTime",
+    "kksVersion",
+    "userPhiKey",
+    "timestamp",
+  ];
 
   for (const key of extraKeys) {
     const value = source[key];
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
       result[key] = value;
     }
   }
@@ -132,7 +145,11 @@ function sanitizeMetadataForSocial(meta: SigMetadata | undefined): ShareMetadata
  * Build a platform-specific caption.
  * Uses sanitized ShareMetadata so everything is deterministic and safe.
  */
-function buildCaption(meta: ShareMetadata, platform: BroadcastPlatform, handle?: string): string {
+function buildCaption(
+  meta: ShareMetadata,
+  platform: BroadcastPlatform,
+  handle?: string,
+): string {
   const pulseRaw = meta.pulse;
   const pulseDisplay = typeof pulseRaw === "number" ? pulseRaw : "∞";
 
@@ -217,7 +234,13 @@ export default function MultiShareDispatcher({
       if (!isBroadcastPlatform(k)) continue;
 
       const label =
-        k === "x" ? "X / Twitter" : k === "ig" ? "Instagram" : k === "tiktok" ? "TikTok" : "Threads";
+        k === "x"
+          ? "X / Twitter"
+          : k === "ig"
+            ? "Instagram"
+            : k === "tiktok"
+              ? "TikTok"
+              : "Threads";
 
       list.push({ platform: k, label, handle: v });
     }
@@ -225,7 +248,10 @@ export default function MultiShareDispatcher({
   }, [session?.connectedAccounts]);
 
   // Connected set (stable, derived)
-  const connected = useMemo(() => new Set<BroadcastPlatform>(targets.map((t) => t.platform)), [targets]);
+  const connected = useMemo(
+    () => new Set<BroadcastPlatform>(targets.map((t) => t.platform)),
+    [targets],
+  );
 
   /**
    * User overrides only.
@@ -263,21 +289,27 @@ export default function MultiShareDispatcher({
     });
   };
 
-  const [broadcastStatus, setBroadcastStatus] = useState<"idle" | "posting" | "done">("idle");
+  const [broadcastStatus, setBroadcastStatus] = useState<
+    "idle" | "posting" | "done"
+  >("idle");
   const [broadcastResults, setBroadcastResults] = useState<PostResult[]>([]);
 
   // Manual share tracking (from SocialConnector)
   const [manualShared, setManualShared] = useState(false);
-  const [lastManualPlatform, setLastManualPlatform] = useState<SharePlatform | null>(null);
+  const [lastManualPlatform, setLastManualPlatform] =
+    useState<SocialPlatform | null>(null);
   const [manualError, setManualError] = useState<string | null>(null);
 
   /* ------------------------------------------------------------------------ */
   /*                   Canonical share metadata & payload                     */
   /* ------------------------------------------------------------------------ */
 
-  const shareMetadata = useMemo<ShareMetadata>(() => sanitizeMetadataForSocial(media.metadata), [media.metadata]);
+  const shareMetadata = useMemo<ShareMetadata>(
+    () => sanitizeMetadataForSocial(media.metadata),
+    [media.metadata],
+  );
 
-  const socialMedia: SocialMediaPayload = useMemo(
+  const socialMedia = useMemo<SocialMediaPayload>(
     () => ({
       content: media.content,
       filename: media.filename,
@@ -291,7 +323,10 @@ export default function MultiShareDispatcher({
   /*                             Backend posting                              */
   /* ------------------------------------------------------------------------ */
 
-  async function postToPlatform(platform: BroadcastPlatform, handle?: string): Promise<{ link: string }> {
+  async function postToPlatform(
+    platform: BroadcastPlatform,
+    handle?: string,
+  ): Promise<{ link: string }> {
     const form = new FormData();
     form.append("file", media.content, media.filename);
 
@@ -300,7 +335,10 @@ export default function MultiShareDispatcher({
 
     if (handle) form.append("handle", handle);
 
-    const res = await fetch(`/api/post/${platform}`, { method: "POST", body: form });
+    const res = await fetch(`/api/post/${platform}`, {
+      method: "POST",
+      body: form,
+    });
 
     if (!res.ok) throw new Error(`POST /api/post/${platform} failed: ${res.status}`);
 
@@ -333,7 +371,8 @@ export default function MultiShareDispatcher({
     setBroadcastStatus("done");
   };
 
-  const allDisabled = targets.length === 0 || !targets.some((t) => selection[t.platform]);
+  const allDisabled =
+    targets.length === 0 || !targets.some((t) => selection[t.platform]);
   const canContinue = broadcastStatus === "done" || manualShared;
 
   /* ------------------------------------------------------------------------ */
@@ -345,14 +384,16 @@ export default function MultiShareDispatcher({
       <header className="kv-share-header">
         <h2 className="kv-share-title">Broadcast to connected socials</h2>
         <p className="kv-share-subtitle">
-          Post directly to linked accounts, then (or instead) use the manual share hub below to reach any platform —
-          every share carries your Kai-Sigil proof.
+          Post directly to linked accounts, then (or instead) use the manual share hub
+          below to reach any platform — every share carries your Kai-Sigil proof.
         </p>
       </header>
 
       <section className="kv-share-broadcast">
         {targets.length === 0 ? (
-          <p className="kv-share-empty">No platforms connected yet. You can still share manually below.</p>
+          <p className="kv-share-empty">
+            No platforms connected yet. You can still share manually below.
+          </p>
         ) : (
           <>
             <div className="kv-share-connected-label">Connected accounts</div>
@@ -362,7 +403,9 @@ export default function MultiShareDispatcher({
                 <label
                   key={t.platform}
                   className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition ${
-                    selection[t.platform] ? "border-emerald-400 bg-emerald-400/10" : "border-white/20 bg-white/5"
+                    selection[t.platform]
+                      ? "border-emerald-400 bg-emerald-400/10"
+                      : "border-white/20 bg-white/5"
                   }`}
                 >
                   <input
@@ -401,16 +444,25 @@ export default function MultiShareDispatcher({
 
             {broadcastStatus === "done" && (
               <div className="kv-share-results mt-3">
-                <h3 className="text-xs uppercase tracking-wide opacity-60 mb-2">Post results</h3>
+                <h3 className="text-xs uppercase tracking-wide opacity-60 mb-2">
+                  Post results
+                </h3>
                 <ul className="text-sm space-y-1">
                   {broadcastResults.map((r) => (
                     <li key={r.platform} className="flex items-center gap-2 break-all">
-                      <span className="font-semibold min-w-[80px] capitalize">{r.platform}</span>
+                      <span className="font-semibold min-w-[80px] capitalize">
+                        {r.platform}
+                      </span>
                       <span>:</span>
                       {r.link === "❌ Failed" ? (
                         <span className="text-red-400">{r.link}</span>
                       ) : (
-                        <a href={r.link} target="_blank" rel="noopener noreferrer" className="underline">
+                        <a
+                          href={r.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
                           {r.link}
                         </a>
                       )}
@@ -426,7 +478,7 @@ export default function MultiShareDispatcher({
       <section className="kv-share-manual">
         <SocialConnector
           media={socialMedia}
-          onShared={(platform: SharePlatform) => {
+          onShared={(platform) => {
             setManualShared(true);
             setLastManualPlatform(platform);
             setManualError(null);
@@ -438,11 +490,16 @@ export default function MultiShareDispatcher({
 
         {lastManualPlatform && (
           <p className="kv-share-status text-xs opacity-70 mt-2">
-            Last shared via <span className="font-semibold">{lastManualPlatform}</span>.
+            Last shared via{" "}
+            <span className="font-semibold">{lastManualPlatform}</span>.
           </p>
         )}
 
-        {manualError && <p className="kv-share-error text-xs text-red-400 mt-1">{manualError}</p>}
+        {manualError && (
+          <p className="kv-share-error text-xs text-red-400 mt-1">
+            {manualError}
+          </p>
+        )}
       </section>
 
       <footer className="kv-share-footer mt-4 flex flex-col items-center gap-2">
