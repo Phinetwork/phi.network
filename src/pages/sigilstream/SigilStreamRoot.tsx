@@ -350,7 +350,6 @@ function renderMarkdownToSafeHtml(md: string): string {
 /* ────────────────────────────────────────────────────────────────
    UI pieces
 ──────────────────────────────────────────────────────────────── */
-
 function AttachmentList({ attachments }: { attachments: Attachments }): React.JSX.Element {
   return (
     <div className="sf-attachments">
@@ -358,31 +357,21 @@ function AttachmentList({ attachments }: { attachments: Attachments }): React.JS
 
       <div className="sf-att-grid">
         {attachments.items.map((it: AttachmentItem, i: number) => {
-        if (it.kind === "url") {
-  const href = safeHttpUrl(it.url);
-  return (
-    <div key={`${it.kind}:${i}`} className="sf-att-item">
-      <div className="sf-att-kind">Link</div>
+          if (it.kind === "url") {
+            const href = safeHttpUrl(it.url);
 
-      {href ? (
-        <>
-          {/* ✅ real embed (spotify / video / yt / etc) */}
-          <UrlEmbed url={href} />
-
-          {/* ✅ still show the canonical link text exactly like before */}
-          <a className="sf-link" href={href} target="_blank" rel="noreferrer noopener">
-            {it.title ? it.title : href}
-          </a>
-        </>
-      ) : (
-        <div className="sf-error" role="note">
-          Invalid URL: {it.url}
-        </div>
-      )}
-    </div>
-  );
-}
-
+            return (
+              <div key={`${it.kind}:${i}`} className="sf-att-item">
+                {href ? (
+                  <UrlEmbed url={href} title={it.title} />
+                ) : (
+                  <div className="sf-error" role="note">
+                    Invalid URL: {it.url}
+                  </div>
+                )}
+              </div>
+            );
+          }
 
           if (it.kind === "file-ref") {
             return (
@@ -419,6 +408,8 @@ function AttachmentList({ attachments }: { attachments: Attachments }): React.JS
     </div>
   );
 }
+
+
 
 function PostBodyView({ body, caption }: { body?: PostBody; caption?: string }): React.JSX.Element {
   const effectiveBody: PostBody | null =

@@ -1023,3 +1023,373 @@ body{
   }
   *{ transition:none !important; }
 }
+/* ───────────────────────────────────────────────────────────────
+   v7.2y — URL TRUNCATION GUARD (mobile + desktop)
+   Keeps href/copy full; only clamps visual text.
+────────────────────────────────────────────────────────────────── */
+
+.sf a.sf-link{
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;         /* important if inside flex */
+}
+
+.sf .sf-text.sf-text--url{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sf .sf-text.sf-text--url a.sf-link{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sf .sf-btn.sf-btn--mini{
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+/* ─────────────────────────────────────────────────────────────
+   ATTACHMENTS — “Holy Card” styling (UrlEmbed / EmbedCard)
+   Targets classes from embeds.tsx:
+   .sf-att-card, .sf-att-head, .sf-att-head__hit, .sf-att-head__title,
+   .sf-att-open, .sf-att-body, .sf-embed, .sf-embed__frame,
+   .sf-media__img, .sf-media__video, .sf-favicon
+   ───────────────────────────────────────────────────────────── */
+
+.sf-attachments {
+  margin-top: 14px;
+}
+
+.sf-att-title {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin: 0 0 10px 2px;
+}
+
+.sf-att-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* container each item already uses */
+.sf-att-item {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ---------- The Card ---------- */
+.sf-att-card {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 18px;
+  overflow: hidden;
+
+  /* glass */
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow:
+    0 16px 40px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* aura ring */
+.sf-att-card::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 20px;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 240px at 20% -10%, rgba(255,215,120,0.18), transparent 55%),
+    radial-gradient(900px 220px at 90% 0%, rgba(140,220,255,0.16), transparent 60%),
+    radial-gradient(800px 260px at 60% 110%, rgba(180,140,255,0.14), transparent 60%);
+  opacity: 0.9;
+  filter: blur(0.2px);
+}
+/* breath shimmer (φ‑entrained, smooth, alive) */
+.sf-att-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      120deg,
+      transparent 0%,
+      rgba(255,255,255,0.12) 22%,
+      rgba(255,255,255,0.08) 50%,
+      transparent 78%
+    );
+
+  transform: translateX(-38%);
+  animation: sf-breath-shimmer 5.236s ease-in-out infinite;
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  will-change: transform, opacity, filter;
+  filter: brightness(0.95);
+}
+
+@keyframes sf-breath-shimmer {
+  0% {
+    transform: translateX(-38%);
+    opacity: 0.3;
+    filter: brightness(0.9);
+  }
+  25% {
+    opacity: 0.55;
+    filter: brightness(1.05);
+  }
+  50% {
+    transform: translateX(38%);
+    opacity: 0.7;
+    filter: brightness(1.15);
+  }
+  75% {
+    opacity: 0.55;
+    filter: brightness(1.05);
+  }
+  100% {
+    transform: translateX(-38%);
+    opacity: 0.3;
+    filter: brightness(0.9);
+  }
+}
+
+.sf-att-card::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 20px;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 240px at 20% -10%, rgba(255,215,120,0.18), transparent 55%),
+    radial-gradient(900px 220px at 90% 0%, rgba(140,220,255,0.16), transparent 60%),
+    radial-gradient(800px 260px at 60% 110%, rgba(180,140,255,0.14), transparent 60%);
+  animation: sf-breath-aura 5.236s ease-in-out infinite;
+  opacity: 0.65;
+  filter: blur(0.3px);
+  will-change: opacity, filter;
+}
+
+@keyframes sf-breath-aura {
+  0%, 100% {
+    opacity: 0.5;
+    filter: blur(0.2px);
+  }
+  50% {
+    opacity: 0.9;
+    filter: blur(1.1px);
+  }
+}
+
+/* ---------- Header (clickable) ---------- */
+.sf-att-head {
+  position: relative;
+  padding: 12px 12px 10px 12px;
+}
+
+.sf-att-head__hit {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+
+  text-decoration: none;
+  color: inherit;
+
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.16);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 10px 20px rgba(0,0,0,0.22);
+
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.sf-att-head__hit:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(0,0,0,0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 14px 28px rgba(0,0,0,0.28);
+}
+
+.sf-att-head__hit:active {
+  transform: translateY(0px) scale(0.995);
+}
+
+.sf-att-head__hit:focus-visible {
+  outline: 2px solid rgba(255,215,120,0.55);
+  outline-offset: 2px;
+}
+
+.sf-favicon {
+  border-radius: 4px;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+}
+
+.sf-favicon--blank {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.sf-att-head__text {
+  min-width: 0;
+}
+
+.sf-att-head__title {
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+
+  /* overflow safe */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  /* glow */
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.45),
+    0 10px 22px rgba(0,0,0,0.35);
+}
+
+.sf-att-open {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  padding-left: 8px;
+  white-space: nowrap;
+
+  color: rgba(255, 230, 170, 0.95);
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.35),
+    0 12px 24px rgba(0,0,0,0.35);
+}
+
+/* ---------- Body (embed/media frame) ---------- */
+.sf-att-body {
+  padding: 0 12px 12px 12px;
+}
+
+.sf-embed {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.28);
+  box-shadow:
+    0 18px 44px rgba(0,0,0,0.32),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.sf-embed__frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  aspect-ratio: 16 / 9;
+  background: rgba(0,0,0,0.4);
+}
+
+/* PDFs: give more vertical room */
+.sf-embed--doc .sf-embed__frame {
+  aspect-ratio: 4 / 5;
+}
+
+/* Media wrappers */
+.sf-media {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.28);
+  box-shadow:
+    0 18px 44px rgba(0,0,0,0.32),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.sf-media__img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.sf-media__video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* tighten spacing when card is link-only (no body) */
+.sf-att-card > .sf-att-head:last-child {
+  padding-bottom: 12px;
+}
+
+/* Mobile polish */
+@media (max-width: 520px) {
+  .sf-att-card {
+    border-radius: 16px;
+  }
+  .sf-att-head__hit {
+    border-radius: 13px;
+  }
+  .sf-embed,
+  .sf-media {
+    border-radius: 14px;
+  }
+  .sf-att-head__title {
+    font-size: 13px;
+  }
+  .sf-att-open {
+    font-size: 11px;
+  }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .sf-att-card::after {
+    animation: none;
+    opacity: 0.35;
+  }
+  .sf-att-head__hit {
+    transition: none;
+  }
+}
+.sf-att-card{
+  contain: paint;
+  isolation: isolate; /* keeps blend-mode clean */
+  backface-visibility: hidden;
+}
+
+.sf-att-card::before,
+.sf-att-card::after{
+  backface-visibility: hidden;
+}

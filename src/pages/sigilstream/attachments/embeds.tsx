@@ -1,7 +1,6 @@
 // src/pages/sigilstream/attachments/embeds.tsx
 "use client";
 
-
 /* ─────────────────────────────────────────────────────────────
    Local helpers (URL parsing + file-type detection)
    ───────────────────────────────────────────────────────────── */
@@ -29,6 +28,31 @@ function isPdfExt(ext: string): boolean {
   return ext === "pdf";
 }
 
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
+}
+
+/** Display helper: remove scheme, hide hash (often huge), trim trailing slash. */
+function displayUrlNoScheme(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const host = u.host;
+    let path = u.pathname || "";
+
+    if (path === "/") path = "";
+    if (path.endsWith("/") && path.length > 1) path = path.slice(0, -1);
+
+    const qs = u.search || "";
+    return `${host}${path}${qs}`;
+  } catch {
+    return raw.replace(/^https?:\/\//i, "").replace(/\/+$/g, "");
+  }
+}
+
 function ytIdFromUrl(url: string): string | null {
   try {
     const u = new URL(url);
@@ -39,7 +63,7 @@ function ytIdFromUrl(url: string): string | null {
     if (u.hostname.includes("youtube.com")) {
       const v = u.searchParams.get("v");
       if (v) return v;
-      // /embed/<id>
+
       const parts = u.pathname.split("/").filter(Boolean);
       const idx = parts.indexOf("embed");
       if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
@@ -66,7 +90,7 @@ function spotifyEmbedFromUrl(url: string): string | null {
   try {
     const u = new URL(url);
     if (!u.hostname.includes("spotify.com")) return null;
-    // Support /track/, /album/, /playlist/
+
     if (
       u.pathname.startsWith("/track/") ||
       u.pathname.startsWith("/album/") ||
@@ -81,20 +105,20 @@ function spotifyEmbedFromUrl(url: string): string | null {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Small presentational pieces
+   Presentational pieces (CSS is driven entirely by classNames)
    ───────────────────────────────────────────────────────────── */
 
-export function Favicon({ host }: { host: string }) {
+export function Favicon({ host }: { host: string }): React.JSX.Element {
   const src = `https://${host}/favicon.ico`;
   return (
     <img
+      className="sf-favicon"
       src={src}
       alt=""
       width={16}
       height={16}
       loading="lazy"
       decoding="async"
-      style={{ borderRadius: 3 }}
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
       }}
@@ -102,92 +126,123 @@ export function Favicon({ host }: { host: string }) {
   );
 }
 
-export function LinkCard({ url, title }: { url: string; title?: string }) {
-  let host = "";
-  try {
-    host = new URL(url).host;
-  } catch {
-    /* ignore */
-  }
+/** Shared “holy card” shell for ANY URL attachment. */
+function EmbedCard(props: {
+  url: string;
+  title?: string;
+  children?: React.ReactNode;
+}): React.JSX.Element {
+  const { url, title, children } = props;
+
+  const host = hostFromUrl(url);
+  const label = (title && title.trim().length ? title.trim() : "") || displayUrlNoScheme(url);
 
   return (
-    <a
-      className="sf-att-link"
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      <div className="sf-att-link__row">
-        {host && <Favicon host={host} />}
-        <div className="sf-att-link__text">
-          <div className="sf-att-link__title">{title || host || "Open link"}</div>
-          <div className="sf-att-link__url">{url}</div>
-        </div>
+    <div className="sf-att-card">
+      <div className="sf-att-head">
+        <a className="sf-att-head__hit" href={url} target="_blank" rel="noopener noreferrer" title={url}>
+          {host ? <Favicon host={host} /> : <span className="sf-favicon sf-favicon--blank" aria-hidden="true" />}
+          <div className="sf-att-head__text">
+            <div className="sf-att-head__title">{label}</div>
+          </div>
+
+          <span className="sf-att-open" aria-hidden="true">
+            Open ↗
+          </span>
+        </a>
       </div>
-    </a>
+
+      {children ? <div className="sf-att-body">{children}</div> : null}
+    </div>
   );
 }
 
-export function IframeEmbed({ src, title }: { src: string; title: string }) {
+export function IframeEmbed({ src, title }: { src: string; title: string }): React.JSX.Element {
   return (
     <div className="sf-embed">
       <iframe
+        className="sf-embed__frame"
         src={src}
         title={title}
         loading="lazy"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowFullScreen
-        // Constrain powers for third-party content
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
       />
     </div>
   );
 }
 
+/** Fallback card: single label (scheme-less), no duplicate URL text. */
+export function LinkCard({ url, title }: { url: string; title?: string }): React.JSX.Element {
+  return <EmbedCard url={url} title={title} />;
+}
+
 /**
  * UrlEmbed renders a smart preview:
- * - YouTube / Vimeo / Spotify → iframe player
- * - Direct image/video/pdf → inline media
- * - Otherwise → LinkCard
+ * - YouTube / Vimeo / Spotify → iframe player (inside EmbedCard)
+ * - Direct image/video/pdf → inline media (inside EmbedCard)
+ * - Otherwise → LinkCard (same EmbedCard)
  */
-export function UrlEmbed({ url, title }: { url: string; title?: string }) {
-  // Media & rich embeds
+export function UrlEmbed({ url, title }: { url: string; title?: string }): React.JSX.Element {
   const yt = ytIdFromUrl(url);
-  if (yt) return <IframeEmbed src={`https://www.youtube.com/embed/${yt}`} title={title || "YouTube"} />;
+  if (yt) {
+    return (
+      <EmbedCard url={url} title={title}>
+        <IframeEmbed src={`https://www.youtube.com/embed/${yt}`} title={title || "YouTube"} />
+      </EmbedCard>
+    );
+  }
 
   const vimeo = vimeoIdFromUrl(url);
-  if (vimeo) return <IframeEmbed src={`https://player.vimeo.com/video/${vimeo}`} title={title || "Vimeo"} />;
+  if (vimeo) {
+    return (
+      <EmbedCard url={url} title={title}>
+        <IframeEmbed src={`https://player.vimeo.com/video/${vimeo}`} title={title || "Vimeo"} />
+      </EmbedCard>
+    );
+  }
 
   const spot = spotifyEmbedFromUrl(url);
-  if (spot) return <IframeEmbed src={spot} title={title || "Spotify"} />;
+  if (spot) {
+    return (
+      <EmbedCard url={url} title={title}>
+        <IframeEmbed src={spot} title={title || "Spotify"} />
+      </EmbedCard>
+    );
+  }
 
-  // Direct file assets
   const ext = extFromUrl(url);
 
   if (isImageExt(ext)) {
     return (
-      <div className="sf-media sf-media--image">
-        <img src={url} alt={title || "image"} loading="lazy" decoding="async" />
-      </div>
+      <EmbedCard url={url} title={title}>
+        <div className="sf-media sf-media--image">
+          <img className="sf-media__img" src={url} alt={title || "image"} loading="lazy" decoding="async" />
+        </div>
+      </EmbedCard>
     );
   }
 
   if (isVideoExt(ext)) {
     return (
-      <div className="sf-media sf-media--video">
-        <video src={url} controls playsInline preload="metadata" />
-      </div>
+      <EmbedCard url={url} title={title}>
+        <div className="sf-media sf-media--video">
+          <video className="sf-media__video" src={url} controls playsInline preload="metadata" />
+        </div>
+      </EmbedCard>
     );
   }
 
   if (isPdfExt(ext)) {
     return (
-      <div className="sf-embed sf-embed--doc">
-        <iframe src={url} title={title || "Document"} loading="lazy" />
-      </div>
+      <EmbedCard url={url} title={title}>
+        <div className="sf-embed sf-embed--doc">
+          <iframe className="sf-embed__frame" src={url} title={title || "Document"} loading="lazy" />
+        </div>
+      </EmbedCard>
     );
   }
 
-  // Fallback: basic link card
   return <LinkCard url={url} title={title} />;
 }
