@@ -1196,7 +1196,7 @@ function SigilStreamInner(): React.JSX.Element {
       });
 
       setUnsealState({ status: "open", content });
-      toasts.push("success", "Unsealed.");
+      toasts.push("success", "Unsealed");
     } catch (e) {
       report("unseal", e);
       setUnsealState({
@@ -1256,7 +1256,7 @@ function SigilStreamInner(): React.JSX.Element {
       if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
       copiedTimer.current = window.setTimeout(() => setCopied(false), 1200);
 
-      toasts.push("success", "Remembered.");
+      toasts.push("success", "Remembered");
       return;
     }
 
@@ -1268,7 +1268,7 @@ function SigilStreamInner(): React.JSX.Element {
       if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
       copiedTimer.current = window.setTimeout(() => setCopied(false), 1200);
 
-      toasts.push("success", "Remembered.");
+      toasts.push("success", "Remembered");
 
       p.catch((e: unknown) => {
         report("kopy clipboard.writeText", e);
