@@ -498,7 +498,7 @@ function AppChrome(): React.JSX.Element {
             <div className="brand__text">
               <div className="brand__title">Sovereign Gate</div>
               <div className="brand__subtitle">
-                Custody of Breath-Minted Value · Kairos Identity Registry
+                Stewardship of Breath-Minted Value · Kairos Identity Registry
               </div>
             </div>
           </div>
