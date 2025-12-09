@@ -1,5 +1,5 @@
 // src/pages/SigilExplorer.tsx
-// v3.6 — Holographic Frost edition ✨
+// v3.7 — Holographic Frost edition ✨
 // - Matches SealMomentModal colorway (Atlantean Priest-King Holographic Frost)
 // - Ultra-responsive, zero overflow, glassy/frosted, refined
 // - BroadcastChannel + storage sync + resilient ancestry reconstruction
@@ -10,6 +10,7 @@
 // - Φ display: per-pulse total Φ sent (if any), shown on each node row
 // - Node toggle: reveals per-glyph Memory Stream details, even for leaf nodes
 // - Detail panel: stacked, mobile-first, page remains scrollable when open
+// ✅ NEW: official Φ mark inside the top-left brand square (.kx-glyph)
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -60,6 +61,12 @@ type DetailEntry = {
 const REGISTRY_LS_KEY = "kai:sigils:v1"; // explorer’s persisted URL list
 const MODAL_FALLBACK_LS_KEY = "sigil:urls"; // modal’s fallback URL list
 const BC_NAME = "kai-sigil-registry";
+
+/**
+ * Φ mark source.
+ * Expectation: phi.svg is served from /public/phi.svg (Vite/Next static).
+ */
+const PHI_MARK_SRC = "/phi.svg";
 
 const hasWindow = typeof window !== "undefined";
 const canStorage = hasWindow && typeof window.localStorage !== "undefined";
@@ -471,9 +478,28 @@ function buildDetailEntries(node: SigilNode): DetailEntry[] {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- *  Scoped inline styles placeholder (external CSS does the heavy lifting)
+ *  Scoped inline styles (tiny surgical rules only; CSS file still owns layout)
  *  ───────────────────────────────────────────────────────────────────── */
-const Styles: React.FC = () => <style>{``}</style>;
+const Styles: React.FC = () => (
+  <style>{`
+    /* Φ mark inside the brand square */
+    .kx-glyph{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .kx-glyph__mark{
+      width:72%;
+      height:72%;
+      display:block;
+      object-fit:contain;
+      user-select:none;
+      -webkit-user-drag:none;
+      pointer-events:none;
+      filter: drop-shadow(0 6px 18px rgba(0,0,0,.28));
+    }
+  `}</style>
+);
 
 /* ─────────────────────────────────────────────────────────────────────
  *  UI Components
@@ -670,14 +696,22 @@ function ExplorerToolbar({
     <div className="kx-toolbar" role="region" aria-label="Explorer toolbar">
       <div className="kx-toolbar-inner">
         <div className="kx-brand">
-          <div className="kx-glyph" aria-hidden />
+          <div className="kx-glyph" aria-hidden>
+            <img
+              className="kx-glyph__mark"
+              src={PHI_MARK_SRC}
+              alt=""
+              aria-hidden="true"
+              decoding="async"
+              loading="eager"
+              draggable={false}
+            />
+          </div>
           <div className="kx-title">
             <h1>
               KAIROS <span>Keystream</span>
             </h1>
-            <div className="kx-tagline">
-              Sovereign Lineage • No DB • Pure Φ
-            </div>
+            <div className="kx-tagline">Sovereign Lineage • No DB • Pure Φ</div>
           </div>
         </div>
 
@@ -930,8 +964,8 @@ const SigilExplorer: React.FC = () => {
                 <li>Import your keystream data.</li>
                 <li>Seal a moment — auto-registered here.</li>
                 <li>
-                  Inhale any sigil-glyph or memory URL above — for realignment of its
-                  lineage instantly.
+                  Inhale any sigil-glyph or memory URL above — for realignment of
+                  its lineage instantly.
                 </li>
               </ol>
             </div>
