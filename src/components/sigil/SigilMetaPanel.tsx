@@ -1,6 +1,6 @@
 // src/components/sigil/SigilMetaPanel.tsx
 import type * as React from "react";
-import type { SigilPayload } from "../../types/sigil";
+import { chakraDayToLabel, type SigilPayload } from "../../types/sigil";
 
 type PressHandlers = {
   onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => void;
@@ -12,8 +12,8 @@ type Props = {
   payload: SigilPayload | null;
   chakraDay: SigilPayload["chakraDay"];
   steps: number;
-  stepIndex: number;        // kept for compatibility; ignored below
-  stepPctDisplay: number;   // kept for compatibility; ignored below
+  stepIndex: number; // kept for compatibility; ignored below
+  stepPctDisplay: number; // kept for compatibility; ignored below
   isArchived: boolean;
   isFutureSealed: boolean;
   pulsesLeft: number | null;
@@ -32,8 +32,8 @@ type Props = {
 /* ── Exact step math (μpulse-precise; matches ProvenanceList/EternalKlock) ── */
 const HARMONIC_DAY_PULSES_EXACT = 17_491.270421; // exact
 const CHAKRA_BEATS_PER_DAY = 36;
-const PULSES_PER_STEP = 11;                      // 11 breaths per step
-const UPULSES = 1_000_000;                       // μpulses per pulse
+const PULSES_PER_STEP = 11; // 11 breaths per step
+const UPULSES = 1_000_000; // μpulses per pulse
 const MU_PER_DAY = Math.round(HARMONIC_DAY_PULSES_EXACT * UPULSES);
 
 /* ── Kairos Calendar lattice (pure semantic counts) ──
@@ -62,52 +62,54 @@ function muPosInDayFromPulse(pulse: number) {
   return mu;
 }
 function exactStepIndexFromPulse(pulse: number, stepsPerBeat: number): number {
-  const muBeat   = muPerBeat();
-  const muStep   = PULSES_PER_STEP * UPULSES;
+  const muBeat = muPerBeat();
+  const muStep = PULSES_PER_STEP * UPULSES;
   const muInBeat = muPosInDayFromPulse(pulse) % muBeat;
-  const idx = Math.floor(muInBeat / muStep);  // 0..(steps-1)
+  const idx = Math.floor(muInBeat / muStep); // 0..(steps-1)
   return Math.min(Math.max(idx, 0), Math.max(stepsPerBeat - 1, 0));
 }
 function exactPercentIntoStepFromPulse(pulse: number): number {
-  const muBeat   = muPerBeat();
-  const muStep   = PULSES_PER_STEP * UPULSES;
+  const muBeat = muPerBeat();
+  const muStep = PULSES_PER_STEP * UPULSES;
   const muInBeat = muPosInDayFromPulse(pulse) % muBeat;
-  const muInto   = muInBeat % muStep;
+  const muInto = muInBeat % muStep;
   return Math.max(0, Math.min(1, muInto / muStep)); // 0..1
 }
 
 /* ── Kairos Calendar indices (no Chronos) ────────────────────────────────
    Compute absolute Kai-Day since Genesis, then reduce into Y/M/W/D.
    Uses BigInt for exact integer division/mod; converts to number for display. */
-   function kaiCalendarFromPulse(pulse: number) {
-    const pμ = BigInt(Math.trunc(pulse)) * 1_000_000n;      // μpulses since Genesis
-    const N_DAY_μ = BigInt(MU_PER_DAY);                     // μpulses per Kai-Day (exact)
-    const absDayIdxBI = pμ / N_DAY_μ;                       // floor division
-    const absDayIdx   = Number(absDayIdxBI);                // internal 0..∞
-  
-    // Reduce into current Kai-Year
-    const dYear = Number(((absDayIdxBI % BigInt(DAYS_PER_YEAR)) + BigInt(DAYS_PER_YEAR)) % BigInt(DAYS_PER_YEAR)); // 0..335
-    const yearIdx  = Math.floor(absDayIdx / DAYS_PER_YEAR); // 0..∞
-  
-    const monthIdx = Math.floor(dYear / DAYS_PER_MONTH);                     // 0..7
-    const dayInMonth = dYear % DAYS_PER_MONTH + 1;                           // 1..42
-  
-    const weekOfYear = Math.floor(dYear / DAYS_PER_WEEK);                    // 0..55
-    const weekOfMonth = Math.floor(dayInMonth / DAYS_PER_WEEK);              // 0..6
-  
-    const dayOfWeek = dYear % DAYS_PER_WEEK + 1;                             // 1..6
-  
-    return {
-      absDayIdx: absDayIdx + 1,  // 1..∞ (display)
-      yearIdx,      // 0..∞
-      monthIdx,     // 0..7  (08 months/year)
-      weekOfYear,   // 0..55 (56 weeks/year)
-      weekOfMonth,  // 0..6  (07 weeks/month)
-      dayInMonth,   // 1..42 (42 days/month)
-      dayOfWeek,    // 1..6  (06 days/week)
-    };
-  }
-  
+function kaiCalendarFromPulse(pulse: number) {
+  const pμ = BigInt(Math.trunc(pulse)) * 1_000_000n; // μpulses since Genesis
+  const N_DAY_μ = BigInt(MU_PER_DAY); // μpulses per Kai-Day (exact)
+  const absDayIdxBI = pμ / N_DAY_μ; // floor division
+  const absDayIdx = Number(absDayIdxBI); // internal 0..∞
+
+  // Reduce into current Kai-Year
+  const dYear = Number(
+    ((absDayIdxBI % BigInt(DAYS_PER_YEAR)) + BigInt(DAYS_PER_YEAR)) %
+      BigInt(DAYS_PER_YEAR)
+  ); // 0..335
+  const yearIdx = Math.floor(absDayIdx / DAYS_PER_YEAR); // 0..∞
+
+  const monthIdx = Math.floor(dYear / DAYS_PER_MONTH); // 0..7
+  const dayInMonth = (dYear % DAYS_PER_MONTH) + 1; // 1..42
+
+  const weekOfYear = Math.floor(dYear / DAYS_PER_WEEK); // 0..55
+  const weekOfMonth = Math.floor(dayInMonth / DAYS_PER_WEEK); // 0..6
+
+  const dayOfWeek = (dYear % DAYS_PER_WEEK) + 1; // 1..6
+
+  return {
+    absDayIdx: absDayIdx + 1, // 1..∞ (display)
+    yearIdx, // 0..∞
+    monthIdx, // 0..7  (08 months/year)
+    weekOfYear, // 0..55 (56 weeks/year)
+    weekOfMonth, // 0..6  (07 weeks/month)
+    dayInMonth, // 1..42 (42 days/month)
+    dayOfWeek, // 1..6  (06 days/week)
+  };
+}
 
 /* UI helpers */
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -139,8 +141,14 @@ export default function SigilMetaPanel({
   const k = payload ? kaiCalendarFromPulse(payload.pulse) : null;
 
   // ✅ φ-spiral level (matches SigilModal semantics)
-  const phiSpiralLevel =
-    payload ? Math.floor(Math.log(Math.max(payload.pulse, 1)) / Math.log(PHI)) : 0;
+  const phiSpiralLevel = payload
+    ? Math.floor(Math.log(Math.max(payload.pulse, 1)) / Math.log(PHI))
+    : 0;
+
+  // ✅ UI label (Crown -> Krown) while keeping internal ChakraDay unchanged
+  const label = payload
+    ? chakraDayToLabel(payload.chakraDay)
+    : chakraDayToLabel(chakraDay);
 
   return (
     <div className="sp-card" role="region" aria-label="Sigil details">
@@ -187,7 +195,7 @@ export default function SigilMetaPanel({
             {/* ── Kai-Klok structural data ───────────────────────────── */}
             <div className="sp-meta-row">
               <span className="lbl">Day:</span>
-              <span>{chakraDay}</span>
+              <span>{label}</span>
             </div>
             <div className="sp-meta-row">
               <span className="lbl">Beat:</span>
@@ -197,7 +205,9 @@ export default function SigilMetaPanel({
             <div className="sp-meta-row">
               <span className="lbl">Step:</span>
               {/* ZERO-BASED step display, derived exactly from pulse */}
-              <span>{pad2(derivedStepIndex)} / {steps}</span>
+              <span>
+                {pad2(derivedStepIndex)} / {steps}
+              </span>
             </div>
             <div className="sp-meta-row">
               <span className="lbl">% to Next Step:</span>
@@ -220,27 +230,38 @@ export default function SigilMetaPanel({
 
                 <div className="sp-meta-row">
                   <span className="lbl">Month:</span>
-                  <span>{pad2(k.monthIdx + 1)} / {pad2(MONTHS_PER_YEAR)}</span>
+                  <span>
+                    {pad2(k.monthIdx + 1)} / {pad2(MONTHS_PER_YEAR)}
+                  </span>
                 </div>
 
                 <div className="sp-meta-row">
                   <span className="lbl">Week (Year):</span>
-                  <span>{pad2(k.weekOfYear + 1)} / {pad2(DAYS_PER_YEAR / DAYS_PER_WEEK)}</span>
+                  <span>
+                    {pad2(k.weekOfYear + 1)} /{" "}
+                    {pad2(DAYS_PER_YEAR / DAYS_PER_WEEK)}
+                  </span>
                 </div>
 
                 <div className="sp-meta-row">
                   <span className="lbl">Week (Month):</span>
-                  <span>{pad2(k.weekOfMonth + 1)} / {pad2(WEEKS_PER_MONTH)}</span>
+                  <span>
+                    {pad2(k.weekOfMonth + 1)} / {pad2(WEEKS_PER_MONTH)}
+                  </span>
                 </div>
 
                 <div className="sp-meta-row">
                   <span className="lbl">Day (Week):</span>
-                  <span>{pad2(k.dayOfWeek)} / {pad2(DAYS_PER_WEEK)}</span>
+                  <span>
+                    {pad2(k.dayOfWeek)} / {pad2(DAYS_PER_WEEK)}
+                  </span>
                 </div>
 
                 <div className="sp-meta-row">
                   <span className="lbl">Day (Month):</span>
-                  <span>{pad2(k.dayInMonth)} / {pad2(DAYS_PER_MONTH)}</span>
+                  <span>
+                    {pad2(k.dayInMonth)} / {pad2(DAYS_PER_MONTH)}
+                  </span>
                 </div>
 
                 <div className="sp-meta-row">
@@ -275,12 +296,15 @@ export default function SigilMetaPanel({
               </div>
             )}
 
-            {!isFutureSealed && !isArchived && pulsesLeft !== null && pulsesLeft > 0 && (
-              <div className="sp-meta-row">
-                <span className="lbl">Next Breath:</span>
-                <span>{nextPulseSeconds}s</span>
-              </div>
-            )}
+            {!isFutureSealed &&
+              !isArchived &&
+              pulsesLeft !== null &&
+              pulsesLeft > 0 && (
+                <div className="sp-meta-row">
+                  <span className="lbl">Next Breath:</span>
+                  <span>{nextPulseSeconds}s</span>
+                </div>
+              )}
 
             <div className="sp-meta-row">
               <span className="lbl">Sync:</span>
