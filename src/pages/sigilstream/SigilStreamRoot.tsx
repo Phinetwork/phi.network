@@ -3,7 +3,13 @@
 
 /**
  * SigilStreamRoot — Memory Stream Shell
- * v7.5.1 — FIX: Remember/KOPY copies /stream/p link (not /p~) to avoid 404 on hosts without /p~ rewrite
+ * v7.6.0 — FIX: KKS-1.0 deterministic Kai display for payload
+ *
+ * ✅ Critical fix:
+ *    - payload.pulse is already correct (authoritative)
+ *    - beat:step, weekday, and chakra MUST be derived from pulse using KKS-1.0
+ *    - uses 17,491.270421 breaths per day (continuous), not 17,424 grid pulses
+ *    - preserves 36 beats/day + 44 steps/beat (beat/step are computed by day-fraction)
  *
  * ✅ Keeps v7 features:
  *    - extractPayloadTokenFromLocation (ALL token forms)
@@ -31,6 +37,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/sigilstream.css";
+
 import { useLocation } from "react-router-dom";
 
 /* Toasts */
@@ -74,8 +81,6 @@ import {
 /* Explorer bridge: register any stream/sigil URL */
 import { registerSigilUrl } from "../../utils/sigilRegistry";
 
-
-
 /* Attachments (single source of truth) */
 import { AttachmentGallery } from "./attachments/gallery";
 import {
@@ -92,12 +97,37 @@ import { autoAddVisitedPayloadToPhiStream } from "./core/phiStreamAutoAdd";
 type Source = { url: string };
 
 /* ────────────────────────────────────────────────────────────────
-   Kai display helpers (deterministic fallbacks)
+   Kai display helpers (KKS-1.0 authoritative, derived from pulse)
 ──────────────────────────────────────────────────────────────── */
 
-const WEEKDAYS: readonly string[] = ["Solhara", "Aquaris", "Flamora", "Verdari", "Sonari", "Kaelith"] as const;
+/**
+ * KKS-1.0 constants (authoritative)
+ * - Continuous breaths per day (NOT the 36*44*11 grid count)
+ * - beat/step are computed by day-fraction to preserve 36 beats/day + 44 steps/beat
+ */
+const KKS_PULSES_PER_DAY = 17491.270421;
+const KKS_BEATS_PER_DAY = 36;
+const KKS_STEPS_PER_BEAT = 44;
+const KKS_STEPS_PER_DAY = KKS_BEATS_PER_DAY * KKS_STEPS_PER_BEAT; // 1584
 
-const CHAKRAS: readonly string[] = ["Root", "Sacral", "Solar", "Heart", "Throat", "Third Eye", "Crown"] as const;
+const WEEKDAYS: readonly string[] = [
+  "Solhara",
+  "Aquaris",
+  "Flamora",
+  "Verdari",
+  "Sonari",
+  "Kaelith",
+] as const;
+
+const CHAKRAS: readonly string[] = [
+  "Root",
+  "Sacral",
+  "Solar",
+  "Heart",
+  "Throat",
+  "Third Eye",
+  "Crown",
+] as const;
 
 function normalizeWeekdayLabel(s: string): string {
   const t = s.trim();
@@ -112,7 +142,7 @@ function normalizeChakraLabel(s: string): string {
   if (!t) return t;
   const u = t.toLowerCase();
   if (u === "third-eye" || u === "third eye" || u === "ajna") return "Third Eye";
-  if (u === "solar plexus" || u === "solar-plexus") return "Solar";
+  if (u === "solar plexus" || u === "solar-plexus" || u === "solar") return "Solar";
   if (u === "root") return "Root";
   if (u === "sacral") return "Sacral";
   if (u === "heart") return "Heart";
@@ -134,29 +164,64 @@ function safeModulo(n: number, m: number): number {
   return r < 0 ? r + m : r;
 }
 
-function pulseToBeatStep(pulse: number): { beat: number; step: number } {
-  const PULSES_PER_STEP = 11;
-  const STEPS_PER_BEAT = 44;
-  const BEATS_PER_DAY = 36;
-  const GRID_PULSES_PER_DAY = PULSES_PER_STEP * STEPS_PER_BEAT * BEATS_PER_DAY; // 17424
-  const PULSES_PER_BEAT = PULSES_PER_STEP * STEPS_PER_BEAT; // 484
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
 
-  const gp = safeModulo(pulse, GRID_PULSES_PER_DAY);
-  const beat = Math.floor(gp / PULSES_PER_BEAT);
-  const step = Math.floor((gp % PULSES_PER_BEAT) / PULSES_PER_STEP);
+/** Finite-safe pulse read (payload.pulse is expected to be a number). */
+function readPulse(pulse: number): number {
+  return Number.isFinite(pulse) ? pulse : 0;
+}
+
+/** KKS day index (0-based) from continuous pulse count. */
+function pulseToDayIndex(pulse: number): number {
+  const p = readPulse(pulse);
+  // floor() is correct for negative too (creates consistent day bins)
+  return Math.floor(p / KKS_PULSES_PER_DAY);
+}
+
+/** Position within the KKS day in [0, KKS_PULSES_PER_DAY). */
+function pulseToPulseOfDay(pulse: number): number {
+  const p = readPulse(pulse);
+  const day = pulseToDayIndex(p);
+  const start = day * KKS_PULSES_PER_DAY;
+  const within = p - start;
+
+  // Guard float edge: ensure within is always [0, dayLen)
+  const mod = within % KKS_PULSES_PER_DAY;
+  const pos = mod < 0 ? mod + KKS_PULSES_PER_DAY : mod;
+
+  // If float math ever yields dayLen exactly, clamp down.
+  return pos >= KKS_PULSES_PER_DAY ? 0 : pos;
+}
+
+/**
+ * KKS beat/step derived from pulse (authoritative):
+ * - Compute day progress using continuous breaths/day (17491.270421)
+ * - Quantize into 1584 steps/day (36*44)
+ * - Derive beat and step from that quantized step-of-day
+ */
+function pulseToBeatStep(pulse: number): { beat: number; step: number } {
+  const pod = pulseToPulseOfDay(pulse);
+  const frac = clamp01(pod / KKS_PULSES_PER_DAY); // [0,1)
+  const stepOfDay = Math.floor(frac * KKS_STEPS_PER_DAY); // 0..1583
+
+  const beat = Math.floor(stepOfDay / KKS_STEPS_PER_BEAT); // 0..35
+  const step = stepOfDay % KKS_STEPS_PER_BEAT; // 0..43
+
   return { beat, step };
 }
 
 function pulseToWeekday(pulse: number): string {
-  const GRID_PULSES_PER_DAY = 17424;
-  const day = Math.floor(pulse / GRID_PULSES_PER_DAY);
+  const day = pulseToDayIndex(pulse);
   return WEEKDAYS[safeModulo(day, WEEKDAYS.length)] ?? "Kaelith";
 }
 
-function stepToChakra(step: number): string {
-  const STEPS_PER_BEAT = 44;
-  const idx = Math.min(CHAKRAS.length - 1, Math.max(0, Math.floor((step / STEPS_PER_BEAT) * CHAKRAS.length)));
-  return CHAKRAS[idx] ?? "Crown";
+/** Chakra-of-day (7-cycle) derived from day index, not from step. */
+function pulseToChakraDay(pulse: number): string {
+  const day = pulseToDayIndex(pulse);
+  return CHAKRAS[safeModulo(day, CHAKRAS.length)] ?? "Crown";
 }
 
 /* ────────────────────────────────────────────────────────────────
@@ -171,7 +236,9 @@ function sessionTokenKey(token: string): string {
 function canonicalizeCurrentStreamUrl(token: string): string {
   const origin = globalThis.location?.origin ?? "https://kaiklok.com";
   const base = origin.replace(/\/+$/, "");
-  return token.length <= TOKEN_HARD_LIMIT ? `${base}/stream/p/${encodeURIComponent(token)}` : `${base}/stream#t=${token}`;
+  return token.length <= TOKEN_HARD_LIMIT
+    ? `${base}/stream/p/${encodeURIComponent(token)}`
+    : `${base}/stream#t=${token}`;
 }
 
 function shortAliasUrl(token: string): string {
@@ -192,7 +259,13 @@ function normalizeIncomingToken(raw: string): string {
     const u = new URL(t);
     const h = new URLSearchParams(u.hash.startsWith("#") ? u.hash.slice(1) : u.hash);
     const s = new URLSearchParams(u.search);
-    const got = h.get("t") ?? h.get("p") ?? h.get("token") ?? s.get("t") ?? s.get("p") ?? s.get("token");
+    const got =
+      h.get("t") ??
+      h.get("p") ??
+      h.get("token") ??
+      s.get("t") ??
+      s.get("p") ??
+      s.get("token");
     if (got) t = got;
     else if (/\/p~/.test(u.pathname)) t = u.pathname.split("/p~")[1] ?? t;
     else if (/\/stream\/p\//.test(u.pathname)) t = u.pathname.split("/stream/p/")[1] ?? t;
@@ -550,8 +623,7 @@ async function tryUnsealWithPostSealModule(args: {
   if (!isFunction(fnUnknown)) throw new Error("postSeal module is missing an unseal function.");
 
   const fnName =
-    (isRecord(mod) && Object.entries(mod).find(([, v]) => v === fnUnknown)?.[0]) ??
-    "unseal";
+    (isRecord(mod) && Object.entries(mod).find(([, v]) => v === fnUnknown)?.[0]) ?? "unseal";
 
   // If module exposes unsealEnvelopeV1(env, creds), pass creds extracted from meta.
   if (fnName === "unsealEnvelopeV1") {
@@ -678,19 +750,11 @@ function PayloadCard(props: {
     onUnseal();
   }, [canUnseal, onUnseal, promptGate]);
 
-  const pulse = payload.pulse;
+  // ✅ KKS-1.0 authoritative display derived ONLY from pulse (payload pulse is correct)
+  const pulse = readPulse(payload.pulse);
   const { beat, step } = pulseToBeatStep(pulse);
-
-  const payloadWeekdayRaw =
-    pickString(payload, ["weekday", "weekdayName", "dayName"]) ??
-    pickString((payload as unknown as { kai?: unknown }).kai, ["weekday", "day", "weekdayName", "dayName"]);
-
-  const payloadChakraRaw =
-    pickString(payload, ["chakra", "chakraName"]) ??
-    pickString((payload as unknown as { kai?: unknown }).kai, ["chakra", "chakraName"]);
-
-  const weekday = normalizeWeekdayLabel(payloadWeekdayRaw ?? pulseToWeekday(pulse));
-  const chakra = normalizeChakraLabel(payloadChakraRaw ?? stepToChakra(step));
+  const weekday = normalizeWeekdayLabel(pulseToWeekday(pulse));
+  const chakra = normalizeChakraLabel(pulseToChakraDay(pulse));
 
   const phiKey =
     pickString(payload, ["userPhiKey", "phiKey", "phikey", "authorPhiKey"]) ??
@@ -746,7 +810,7 @@ function PayloadCard(props: {
         <span>☤Kai: {pulse}</span>
         <span className="sf-muted"> · </span>
         <span className="sf-kai-label">
-          Kairos {beat}:{step} — {weekday}
+          Kai-Klok {beat}:{step} — {weekday}
         </span>
         <span className="sf-muted"> · </span>
         <span className="sf-kai-label">{chakra}</span>
@@ -1028,23 +1092,13 @@ function SigilStreamInner(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc.pathname, loc.search, loc.hash, refreshPayloadFromLocation]);
 
-  /** ---------- Derived Kai attrs for theming ---------- */
+  /** ---------- Derived Kai attrs for theming (KKS-1.0 from pulse) ---------- */
   const kaiTheme = useMemo(() => {
     if (!payload) return { weekday: undefined as string | undefined, chakra: undefined as string | undefined };
 
-    const pulse = payload.pulse;
-    const { step } = pulseToBeatStep(pulse);
-
-    const payloadWeekdayRaw =
-      pickString(payload, ["weekday", "weekdayName", "dayName"]) ??
-      pickString((payload as unknown as { kai?: unknown }).kai, ["weekday", "day", "weekdayName", "dayName"]);
-
-    const payloadChakraRaw =
-      pickString(payload, ["chakra", "chakraName"]) ??
-      pickString((payload as unknown as { kai?: unknown }).kai, ["chakra", "chakraName"]);
-
-    const weekday = normalizeWeekdayLabel(payloadWeekdayRaw ?? pulseToWeekday(pulse));
-    const chakra = normalizeChakraLabel(payloadChakraRaw ?? stepToChakra(step));
+    const pulse = readPulse(payload.pulse);
+    const weekday = normalizeWeekdayLabel(pulseToWeekday(pulse));
+    const chakra = normalizeChakraLabel(pulseToChakraDay(pulse));
 
     return { weekday, chakra };
   }, [payload]);
@@ -1106,8 +1160,14 @@ function SigilStreamInner(): React.JSX.Element {
     authLike.svgText,
   ]);
 
-  const composerPhiKey = useMemo(() => (composerMeta ? readStringProp(composerMeta, "userPhiKey") : undefined), [composerMeta]);
-  const composerKaiSig = useMemo(() => (composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined), [composerMeta]);
+  const composerPhiKey = useMemo(
+    () => (composerMeta ? readStringProp(composerMeta, "userPhiKey") : undefined),
+    [composerMeta],
+  );
+  const composerKaiSig = useMemo(
+    () => (composerMeta ? readStringProp(composerMeta, "kaiSignature") : undefined),
+    [composerMeta],
+  );
 
   /** ---------- Optional sigil tint vars (if present in meta) ---------- */
   type CSSVarStyle = React.CSSProperties & { [key: `--${string}`]: string };
@@ -1330,9 +1390,9 @@ function SigilStreamInner(): React.JSX.Element {
           </div>
         ) : (
           <p className="sf-sub">
-            Open a payload link at <code>/stream/p/&lt;token&gt;</code> (or <code>/stream#t=&lt;token&gt;</code>). Replies are Kai-sealed and thread
-            via <code>?add=</code>. Short alias accepted: <code>/p~&lt;token&gt;</code> (and legacy <code>/p#t=</code>, <code>/p?t=</code>,{" "}
-            <code>/stream?p=</code>).
+            Open a payload link at <code>/stream/p/&lt;token&gt;</code> (or <code>/stream#t=&lt;token&gt;</code>).
+            Replies are Kai-sealed and thread via <code>?add=</code>. Short alias accepted: <code>/p~&lt;token&gt;</code>{" "}
+            (and legacy <code>/p#t=</code>, <code>/p?t=</code>, <code>/stream?p=</code>).
           </p>
         )}
 
@@ -1378,7 +1438,8 @@ function SigilStreamInner(): React.JSX.Element {
       <section className="sf-list">
         {urls.length === 0 ? (
           <div className="sf-empty">
-            No items yet. Paste a link above or open a <code>/stream/p/&lt;payload&gt;</code> link and reply to start a thread.
+            No items yet. Paste a link above or open a <code>/stream/p/&lt;payload&gt;</code> link and reply to start a
+            thread.
           </div>
         ) : (
           <StreamList urls={urls} />
