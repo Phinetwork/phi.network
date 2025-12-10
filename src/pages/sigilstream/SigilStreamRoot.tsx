@@ -109,6 +109,22 @@ const KKS_PULSES_PER_DAY = 17491.270421;
 const KKS_BEATS_PER_DAY = 36;
 const KKS_STEPS_PER_BEAT = 44;
 const KKS_STEPS_PER_DAY = KKS_BEATS_PER_DAY * KKS_STEPS_PER_BEAT; // 1584
+const KKS_DAYS_PER_WEEK = 6;
+const KKS_WEEKS_PER_MONTH = 7;
+const KKS_MONTHS_PER_YEAR = 8;
+
+const KKS_DAYS_PER_MONTH = KKS_DAYS_PER_WEEK * KKS_WEEKS_PER_MONTH; // 42
+const KKS_DAYS_PER_YEAR = KKS_DAYS_PER_MONTH * KKS_MONTHS_PER_YEAR; // 336
+
+function pulseToDMY(pulse: number): { d: number; m: number; y: number } {
+  const day = pulseToDayIndex(pulse); // absolute day index (0-based)
+  const y = Math.floor(day / KKS_DAYS_PER_YEAR); // base-0 year
+  const dayOfYear = safeModulo(day, KKS_DAYS_PER_YEAR); // 0..335 (euclidean)
+  const m0 = Math.floor(dayOfYear / KKS_DAYS_PER_MONTH); // 0..7
+  const d0 = dayOfYear % KKS_DAYS_PER_MONTH; // 0..41
+  return { d: d0 + 1, m: m0 + 1, y };
+}
+
 
 const WEEKDAYS: readonly string[] = [
   "Solhara",
@@ -177,6 +193,7 @@ function readPulse(pulse: number): number {
 /** KKS day index (0-based) from continuous pulse count. */
 function pulseToDayIndex(pulse: number): number {
   const p = readPulse(pulse);
+  
   // floor() is correct for negative too (creates consistent day bins)
   return Math.floor(p / KKS_PULSES_PER_DAY);
 }
@@ -757,6 +774,7 @@ function PayloadCard(props: {
   // ✅ KKS-1.0 authoritative display derived ONLY from pulse (payload pulse is correct)
   const pulse = readPulse(payload.pulse);
   const { beat, step } = pulseToBeatStep(pulse);
+  const { d, m, y } = pulseToDMY(pulse);
   const weekday = normalizeWeekdayLabel(pulseToWeekday(pulse));
   const chakra = normalizeChakraLabel(pulseToChakraDay(pulse));
 
@@ -818,7 +836,10 @@ function PayloadCard(props: {
 </span>
 
         <span className="sf-muted"> · </span>
-        <span className="sf-kai-label">{chakra}</span>
+        <span className="sf-kai-label">{chakra} · </span>
+<span className="sf-kai-label">
+  D{d}/M{m}/Y{y}
+</span>
       </div>
 
       {isSealed ? (
