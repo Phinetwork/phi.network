@@ -3,20 +3,32 @@
 
 /**
  * KaiStatus — Atlantean μpulse Bar
- * v4.6 — SLIM TIMELINE MODE
+ * v4.7 — SLIM TIMELINE + D/M/Y (KKS-1.0)
  *
  * Goals (per your screenshot):
- * - TOP line is the timeline: Beat:Step • Day • Ark (ALWAYS one line)
+ * - TOP line is the timeline: Beat:Step • Day • Ark • D/M/Y (ALWAYS one line)
  * - Countdown sits slightly below (full length, never squeezes the top line)
  * - Pulse stays visible always:
- *    - Wide/Tight: Pulse stays on the TOP line after Ark
+ *    - Wide/Tight: Pulse stays on the TOP line after Ark/DMY
  *    - Tiny/Nano: Pulse drops to the lower row (left of countdown, or above if nano)
  * - Never ellipsis, never abbreviate
+ * - Adds D#/M#/Y# derived EXACTLY from μpulses (FeedCard parity):
+ *    - Day:   1..42
+ *    - Month: 1..8
+ *    - Year:  0.. (zero-based)
  */
 
 import * as React from "react";
 import { useAlignedKaiTicker, useKaiPulseCountdown } from "../core/ticker";
 import { pad2 } from "../core/utils";
+import {
+  epochMsFromPulse,
+  microPulsesSinceGenesis,
+  N_DAY_MICRO,
+  DAYS_PER_MONTH,
+  DAYS_PER_YEAR,
+  MONTHS_PER_YEAR,
+} from "../../../utils/kai_pulse";
 import "./KaiStatus.css";
 
 const DEFAULT_PULSE_DUR_S = 3 + Math.sqrt(5); // 5.2360679…
@@ -90,7 +102,7 @@ function uiScaleFor(layout: LayoutMode): number {
     case "nano":
       return 0.84;
     case "tiny":
-      return 0.90;
+      return 0.9;
     case "tight":
       return 0.95;
     default:
@@ -148,6 +160,52 @@ function arkFromBeat(beat: number): ArkName {
   return ARK_NAMES[idx];
 }
 
+/* ─────────────────────────────────────────────────────────────
+   KKS-1.0: D/M/Y from μpulses (exact, deterministic) — FeedCard parity
+   dayOfMonth: 1..42
+   month:      1..8
+   year:       0.. (zero-based)
+   ───────────────────────────────────────────────────────────── */
+
+/** Euclidean mod (always 0..m-1) */
+const modE = (a: bigint, m: bigint): bigint => {
+  const r = a % m;
+  return r >= 0n ? r : r + m;
+};
+
+/** Euclidean floor division (toward −∞) */
+const floorDivE = (a: bigint, d: bigint): bigint => {
+  if (d === 0n) throw new Error("Division by zero");
+  const q = a / d;
+  const r = a % d;
+  return r === 0n ? q : a >= 0n ? q : q - 1n;
+};
+
+const toSafeNumber = (x: bigint): number => {
+  const MAX = BigInt(Number.MAX_SAFE_INTEGER);
+  const MIN = BigInt(Number.MIN_SAFE_INTEGER);
+  if (x > MAX) return Number.MAX_SAFE_INTEGER;
+  if (x < MIN) return Number.MIN_SAFE_INTEGER;
+  return Number(x);
+};
+
+function kaiDMYFromPulseKKS(pulse: number): { day: number; month: number; year: number } {
+  // Bridge pulse -> epoch ms (φ-exact) -> μpulses (φ-exact) to match engine behavior.
+  const ms = epochMsFromPulse(pulse); // bigint
+  const pμ = microPulsesSinceGenesis(ms); // bigint μpulses
+
+  const dayIdx = floorDivE(pμ, N_DAY_MICRO); // bigint days since genesis (can be negative)
+
+  const monthIdx = floorDivE(dayIdx, BigInt(DAYS_PER_MONTH)); // bigint
+  const yearIdx = floorDivE(dayIdx, BigInt(DAYS_PER_YEAR)); // bigint
+
+  const dayOfMonth = toSafeNumber(modE(dayIdx, BigInt(DAYS_PER_MONTH))) + 1; // 1..42
+  const month = toSafeNumber(modE(monthIdx, BigInt(MONTHS_PER_YEAR))) + 1; // 1..8
+  const year = toSafeNumber(yearIdx); // ✅ zero-based year (0..)
+
+  return { day: dayOfMonth, month, year };
+}
+
 type KaiStatusVars = React.CSSProperties & {
   ["--kai-progress"]?: number;
   ["--kai-ui-scale"]?: number;
@@ -198,7 +256,7 @@ export function KaiStatus(): React.JSX.Element {
   const secsTextFull = secsLeft !== null ? secsLeft.toFixed(6) : "—";
   const secsText = secsLeft !== null ? secsLeft.toFixed(3) : "—";
 
-  const dayFull = String(kaiNow.harmonicDay);
+  const dayNameFull = String(kaiNow.harmonicDay);
 
   const beatNum =
     typeof kaiNow.beat === "number"
@@ -206,6 +264,14 @@ export function KaiStatus(): React.JSX.Element {
       : Number.parseInt(String(kaiNow.beat), 10) || 0;
 
   const arkFull: ArkName = arkFromBeat(beatNum);
+
+  const pulseNum =
+    typeof kaiNow.pulse === "number"
+      ? kaiNow.pulse
+      : Number.parseInt(String(kaiNow.pulse), 10) || 0;
+
+  const dmy = React.useMemo(() => kaiDMYFromPulseKKS(pulseNum), [pulseNum]);
+  const dmyText = `D${dmy.day}/M${dmy.month}/Y${dmy.year}`;
 
   const styleVars: KaiStatusVars = React.useMemo(() => {
     return {
@@ -231,10 +297,10 @@ export function KaiStatus(): React.JSX.Element {
   const PulsePill = (
     <span
       className="kai-pill kai-pill--pulse"
-      title={`Pulse ${kaiNow.pulse}`}
-      aria-label={`Pulse ${kaiNow.pulse}`}
+      title={`Pulse ${pulseNum}`}
+      aria-label={`Pulse ${pulseNum}`}
     >
-      ☤KAI: <strong className="kai-pill__num">{kaiNow.pulse}</strong>
+      ☤KAI: <strong className="kai-pill__num">{pulseNum}</strong>
     </span>
   );
 
@@ -250,9 +316,10 @@ export function KaiStatus(): React.JSX.Element {
       data-bottom={bottomMode}
       data-kai-bsi={beatStepDisp}
       data-kai-ark={arkFull}
+      data-kai-dmy={dmyText}
       style={styleVars}
     >
-      {/* TOP: timeline must stay on ONE line: Beat:Step • Day • Ark (Pulse optionally appended) */}
+      {/* TOP: timeline must stay on ONE line (scrolls horizontally if needed) */}
       <div className="kai-status__top" aria-label="Kai timeline">
         <span className="kai-status__bsiWrap" aria-label={`Beat step ${beatStepDisp}`}>
           <span className="kai-status__kLabel" aria-hidden="true">
@@ -263,8 +330,16 @@ export function KaiStatus(): React.JSX.Element {
           </span>
         </span>
 
-        <span className="kai-pill kai-pill--day" title={dayFull} aria-label={`Day ${dayFull}`}>
-          {dayFull}
+        <span className="kai-pill kai-pill--dmy" title={dmyText} aria-label={`Date ${dmyText}`}>
+          {dmyText}
+        </span>
+
+        <span
+          className="kai-pill kai-pill--day"
+          title={dayNameFull}
+          aria-label={`Day ${dayNameFull}`}
+        >
+          {dayNameFull}
         </span>
 
         <span className="kai-pill kai-pill--ark" title={arkFull} aria-label={`Ark ${arkFull}`}>
