@@ -240,6 +240,23 @@ function pulseToChakraDay(pulse: number): string {
   const day = pulseToDayIndex(pulse);
   return CHAKRAS[safeModulo(day, CHAKRAS.length)] ?? "Crown";
 }
+const KKS_MONTH_NAMES: readonly string[] = [
+  "Aethon",
+  "Virelai",
+  "Solari",
+  "Amarin",
+  "Kaelus",
+  "Umbriel",
+  "Noktura",
+  "Liora",
+] as const;
+
+function pulseToMonthName(pulse: number): string {
+  const day = pulseToDayIndex(pulse);
+  const dayOfYear = safeModulo(day, KKS_DAYS_PER_YEAR); // 0..335
+  const m0 = Math.floor(dayOfYear / KKS_DAYS_PER_MONTH); // 0..7
+  return KKS_MONTH_NAMES[m0] ?? `Month ${m0 + 1}`;
+}
 
 /* ────────────────────────────────────────────────────────────────
    URL helpers
@@ -775,6 +792,7 @@ function PayloadCard(props: {
   const pulse = readPulse(payload.pulse);
   const { beat, step } = pulseToBeatStep(pulse);
   const { d, m, y } = pulseToDMY(pulse);
+  const monthName = pulseToMonthName(pulse);
   const weekday = normalizeWeekdayLabel(pulseToWeekday(pulse));
   const chakra = normalizeChakraLabel(pulseToChakraDay(pulse));
 
@@ -832,13 +850,13 @@ function PayloadCard(props: {
         <span>☤Kai: {pulse}</span>
         <span className="sf-muted"> · </span>
       <span className="sf-kai-label">
-  Kai-Klok {pad2(beat)}:{pad2(step)} — {weekday}
+  {pad2(beat)}:{pad2(step)} — D{d}/M{m}/Y{y} · {weekday}
 </span>
 
         <span className="sf-muted"> · </span>
-        <span className="sf-kai-label">{chakra} · </span>
+        <span className="sf-kai-label">{chakra} · {monthName} </span>
 <span className="sf-kai-label">
-  D{d}/M{m}/Y{y}
+ 
 </span>
       </div>
 
