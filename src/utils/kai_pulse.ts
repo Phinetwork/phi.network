@@ -860,7 +860,7 @@ export async function buildKaiKlockResponse(utc?: string | Date | bigint) {
   const eternalSeal = `${kairosSeal} • ${solarSeal} • Eternal Pulse:${kaiPulseEternal}`;
 
   const kaiMomentSummary =
-    `Kai:${kaiPulseEternal} • B:${beat}/${BEATS_PER_DAY} S:${stepIndex}/${STEPS_PER_BEAT} (${pct(stepPercent)}%) • ` +
+    `☤KAI:${kaiPulseEternal} • B:${beat}/${BEATS_PER_DAY} S:${stepIndex}/${STEPS_PER_BEAT} (${pct(stepPercent)}%) • ` +
     `${eternalWeekday}, ${ARC_SEAL_NAMES[arcName]} • D${eternal.dayOfMonth}/M${eternal.monthIndex + 1} • Y${eternal.yearIndex + 1}`;
 
   const harmonicTimestampDescription =
