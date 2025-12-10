@@ -1,15 +1,44 @@
+/* ---------- Payload banner ---------- */
 /* src/pages/sigilstream/payload/PayloadBanner.css
    PayloadBanner — Atlantean Glass Beacon
-   - Breath-shimmer (Kai pulse synced)
+   φ-timed • Golden Breath-locked (5.2360679s)
+   - Breath-shimmer (pulse synced)
    - Frosted krystal layers + rune grid
    - Premium pills + living button
    - Motion-safe + mobile-safe
 */
 
 .sf-payload{
+  /* ───────── Kai φ timing core ───────── */
   --phi: 1.61803398875;
+  --invphi: 0.61803398875;            /* 1/φ */
+  --phi2: 2.61803398875;              /* φ² */
+  --phi3: 4.2360679775;               /* φ³ */
+
+  /* golden breath (canonical) */
   --pulse-dur: 5.2360679s;
 
+  /* optional: set this from your ticker to phase-lock ALL shimmer */
+  --pulse-offset: 0s;
+
+  /* φ-ease (fast-in / slow-out, golden) */
+  --ease-phi: cubic-bezier(0.61803398875, 0, 0.38196601125, 1);
+
+  /* breath-derived time ladder (ALL animations/transitions pull from these) */
+  --t-breath: var(--pulse-dur);                           /* 1 breath */
+  --t-phi: calc(var(--pulse-dur) * var(--phi));          /* 1.618 breaths */
+  --t-phi2: calc(var(--pulse-dur) * var(--phi2));        /* 2.618 breaths */
+  --t-phi3: calc(var(--pulse-dur) * var(--phi3));        /* 4.236 breaths */
+
+  /* micro timings (φ⁻n breaths) */
+  --t-micro: calc(var(--pulse-dur) * 0.02128623625);     /* φ⁻8 ≈ 0.111s */
+  --t-snap:  calc(var(--pulse-dur) * 0.03444185375);     /* φ⁻7 ≈ 0.180s */
+  --t-soft:  calc(var(--pulse-dur) * 0.05572809);        /* φ⁻6 ≈ 0.292s */
+  --t-calm:  calc(var(--pulse-dur) * 0.09016994375);     /* φ⁻5 ≈ 0.472s */
+  --t-flow:  calc(var(--pulse-dur) * 0.14589803375);     /* φ⁻4 ≈ 0.764s */
+  --t-glide: calc(var(--pulse-dur) * 0.2360679775);      /* φ⁻3 ≈ 1.236s */
+
+  /* ───────── palette / ink ───────── */
   --ink: rgba(240, 246, 255, 0.96);
   --muted: rgba(195, 210, 235, 0.85);
   --ring: rgba(255, 255, 255, 0.14);
@@ -42,7 +71,7 @@
   transform: translateZ(0);
 }
 
-/* “living edge” shimmer */
+/* “living edge” shimmer (1 breath) */
 .sf-payload::before{
   content:"";
   position:absolute;
@@ -59,10 +88,144 @@
       rgba(110, 255, 210, 0.26),
       rgba(140, 220, 255, 0.0)
     );
-  animation: sf-kai-shimmer var(--pulse-dur) linear infinite;
+  will-change: transform, opacity;
+  animation: sf-kai-shimmer var(--t-breath) linear infinite;
+  animation-delay: var(--pulse-offset);
+}
+/* DROP-IN: replace the rotating shimmer + glow with non-rotating breath shimmer */
+
+/* 1) EDGE SHIMMER — remove rotation, use drifting sheen + gentle scale */
+.sf-payload::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  z-index:-1;
+  opacity: 0.75;
+  filter: blur(14px);
+
+  /* keep your conic look, but animate via position/scale instead of rotate */
+  background:
+    conic-gradient(
+      from 240deg,
+      rgba(140, 220, 255, 0.0),
+      rgba(140, 220, 255, 0.38),
+      rgba(200, 150, 255, 0.20),
+      rgba(110, 255, 210, 0.26),
+      rgba(140, 220, 255, 0.0)
+    );
+
+  will-change: transform, opacity, filter;
+  animation: sf-edge-breathe var(--t-breath) var(--ease-phi) infinite;
+  animation-delay: var(--pulse-offset);
 }
 
-/* rune grid / etched film */
+@keyframes sf-edge-breathe{
+  0%{
+    opacity: 0.52;
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1.015);
+    filter: blur(15px);
+  }
+  38%{
+    opacity: 0.78;
+    transform: translate3d( 0.9%, -0.2%, 0) scale(1.045);
+    filter: blur(13px);
+  }
+  62%{
+    opacity: 0.66;
+    transform: translate3d(-0.4%,  0.6%, 0) scale(1.030);
+    filter: blur(14px);
+  }
+  100%{
+    opacity: 0.52;
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1.015);
+    filter: blur(15px);
+  }
+}
+
+/* Optional (nicer): add a subtle “moving highlight” without rotation using background-position */
+.sf-payload::before{
+  background-size: 180% 180%;
+  background-position: 20% 20%;
+}
+
+@keyframes sf-edge-breathe{
+  0%{
+    opacity: 0.52;
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1.015);
+    filter: blur(15px);
+    background-position: 18% 22%;
+  }
+  38%{
+    opacity: 0.78;
+    transform: translate3d( 0.9%, -0.2%, 0) scale(1.045);
+    filter: blur(13px);
+    background-position: 54% 30%;
+  }
+  62%{
+    opacity: 0.66;
+    transform: translate3d(-0.4%,  0.6%, 0) scale(1.030);
+    filter: blur(14px);
+    background-position: 36% 54%;
+  }
+  100%{
+    opacity: 0.52;
+    transform: translate3d(-1.2%, -0.8%, 0) scale(1.015);
+    filter: blur(15px);
+    background-position: 18% 22%;
+  }
+}
+
+/* 2) BUTTON GLOW — remove rotate, make it “breath shimmer” (soft bloom + drift) */
+.sf-btn__glow{
+  position:absolute;
+  inset:-2px;
+  border-radius: inherit;
+  pointer-events:none;
+
+  opacity: 0.14;
+
+  /* swap conic feel for layered radials = shimmer/bloom, no spin */
+  background:
+    radial-gradient(140px 90px at 18% 40%, rgba(140,220,255,0.22), transparent 62%),
+    radial-gradient(160px 110px at 78% 34%, rgba(200,150,255,0.18), transparent 64%),
+    radial-gradient(220px 140px at 50% 72%, rgba(110,255,210,0.16), transparent 68%);
+
+  filter: blur(10px);
+  will-change: opacity, transform, filter, background-position;
+
+  animation: sf-glow-shimmer var(--t-phi) var(--ease-phi) infinite;
+  animation-delay: var(--pulse-offset);
+  transition: opacity var(--t-soft) var(--ease-phi);
+}
+
+@keyframes sf-glow-shimmer{
+  0%{
+    opacity: 0.08;
+    transform: translate3d(-0.6%, -0.3%, 0) scale(1.00);
+    filter: blur(11px);
+  }
+  50%{
+    opacity: 0.22;
+    transform: translate3d( 0.8%,  0.2%, 0) scale(1.04);
+    filter: blur(9px);
+  }
+  100%{
+    opacity: 0.08;
+    transform: translate3d(-0.6%, -0.3%, 0) scale(1.00);
+    filter: blur(11px);
+  }
+}
+
+/* keep hover behavior, just don’t “spin” anything */
+.sf-btn:hover .sf-btn__glow{
+  opacity: 0.85;
+  animation: sf-glow-shimmer var(--t-flow) var(--ease-phi) infinite;
+}
+
+/* 3) If you also want the film to avoid any “rotation-like” feel, keep as-is (it’s already drift+opacity) */
+/* (no change needed to sf-film-breathe) */
+
+/* rune grid / etched film (breath + φ² drift) */
 .sf-payload::after{
   content:"";
   position:absolute;
@@ -75,12 +238,23 @@
     repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 18px),
     radial-gradient(700px 240px at 30% 40%, rgba(255,255,255,0.08), transparent 60%);
   mix-blend-mode: overlay;
+
+  will-change: transform, opacity;
+  animation: sf-film-breathe var(--t-phi2) var(--ease-phi) infinite;
+  animation-delay: var(--pulse-offset);
 }
 
 @keyframes sf-kai-shimmer{
   0%   { transform: translate3d(-2%, -2%, 0) rotate(0deg) scale(1.02); }
   50%  { transform: translate3d( 2%,  1%, 0) rotate(180deg) scale(1.05); }
   100% { transform: translate3d(-2%, -2%, 0) rotate(360deg) scale(1.02); }
+}
+
+@keyframes sf-film-breathe{
+  0%   { opacity: 0.16; transform: translate3d(0,0,0) scale(1); }
+  38%  { opacity: 0.22; transform: translate3d(0.4%, -0.2%, 0) scale(1.01); }
+  62%  { opacity: 0.18; transform: translate3d(-0.2%, 0.3%, 0) scale(1.005); }
+  100% { opacity: 0.16; transform: translate3d(0,0,0) scale(1); }
 }
 
 /* content sits above overlays */
@@ -140,7 +314,9 @@
       rgba(255,255,255,0.00)
     );
   transform: translateX(-60%);
-  animation: sf-pill-sheen calc(var(--pulse-dur) * 2) ease-in-out infinite;
+  will-change: transform, opacity;
+  animation: sf-pill-sheen var(--t-phi) var(--ease-phi) infinite;
+  animation-delay: var(--pulse-offset);
 }
 
 @keyframes sf-pill-sheen{
@@ -241,7 +417,22 @@
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  /* φ-timed interactions */
+  transition:
+    transform var(--t-snap) var(--ease-phi),
+    border-color var(--t-snap) var(--ease-phi),
+    box-shadow var(--t-snap) var(--ease-phi);
+
+  /* subtle idle breath (no layout shift, only light) */
+  animation: sf-btn-breathe var(--t-breath) var(--ease-phi) infinite;
+  animation-delay: var(--pulse-offset);
+}
+
+@keyframes sf-btn-breathe{
+  0%   { border-color: rgba(255,255,255,0.14); box-shadow: 0 14px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12); }
+  38%  { border-color: rgba(255,255,255,0.18); box-shadow: 0 16px 36px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.14); }
+  62%  { border-color: rgba(255,255,255,0.16); box-shadow: 0 15px 33px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.13); }
+  100% { border-color: rgba(255,255,255,0.14); box-shadow: 0 14px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.12); }
 }
 
 .sf-btn__glow{
@@ -249,7 +440,9 @@
   inset:-2px;
   border-radius: inherit;
   pointer-events:none;
-  opacity: 0.0;
+
+  /* idle glow breath (φ) */
+  opacity: 0.14;
   background:
     conic-gradient(
       from 180deg,
@@ -260,7 +453,18 @@
       rgba(140,220,255,0.0)
     );
   filter: blur(10px);
-  transition: opacity 200ms ease;
+  will-change: opacity, transform;
+
+  animation: sf-glow-breathe var(--t-phi) var(--ease-phi) infinite;
+  animation-delay: var(--pulse-offset);
+
+  transition: opacity var(--t-soft) var(--ease-phi);
+}
+
+@keyframes sf-glow-breathe{
+  0%   { opacity: 0.08; transform: rotate(0deg) scale(1); }
+  50%  { opacity: 0.20; transform: rotate(180deg) scale(1.03); }
+  100% { opacity: 0.08; transform: rotate(360deg) scale(1); }
 }
 
 .sf-btn__text{
@@ -280,7 +484,10 @@
     inset 0 1px 0 rgba(255,255,255,0.12);
 }
 
-.sf-btn:hover .sf-btn__glow{ opacity: 0.85; }
+.sf-btn:hover .sf-btn__glow{
+  opacity: 0.85;
+  animation: none; /* hover takes over */
+}
 
 .sf-btn:active{
   transform: translateY(0px) scale(0.99);
@@ -316,10 +523,14 @@
 /* Motion safety */
 @media (prefers-reduced-motion: reduce){
   .sf-payload::before,
-  .sf-pill::after{
+  .sf-payload::after,
+  .sf-pill::after,
+  .sf-btn,
+  .sf-btn__glow{
     animation: none !important;
   }
-  .sf-btn{
+  .sf-btn,
+  .sf-btn__glow{
     transition: none;
   }
 }
