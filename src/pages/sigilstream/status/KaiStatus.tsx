@@ -255,7 +255,7 @@ export function KaiStatus(): React.JSX.Element {
           title={`Absolute pulse ${kaiNow.pulse}`}
           aria-label={`Absolute pulse ${kaiNow.pulse}`}
         >
-          ☤Kai: <strong className="kai-pill__num">{kaiNow.pulse}</strong>
+          ☤KAI: <strong className="kai-pill__num">{kaiNow.pulse}</strong>
         </span>
       </div>
 
