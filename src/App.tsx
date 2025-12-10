@@ -624,7 +624,7 @@ function AppChrome(): React.JSX.Element {
                     <span className="mono">ΦNet</span> • Sovereign Gate
                   </div>
                   <div className="panel-foot__right">
-                    <span className="mono">V</span> <span className="mono">25.0</span>
+                    <span className="mono">V</span> <span className="mono">25.1</span>
                   </div>
                 </footer>
               </section>
