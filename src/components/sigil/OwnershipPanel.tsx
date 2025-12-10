@@ -76,7 +76,7 @@ export default function OwnershipPanel({
             void open();
           }}
         >
-          {busy ? "Opening…" : "Verify"}
+          {busy ? "Inhaling…" : "Inhale"}
         </button>
       </div>
 

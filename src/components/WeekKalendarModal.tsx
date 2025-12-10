@@ -1,17 +1,13 @@
 // src/components/WeekKalendarModal.tsx
 /* ────────────────────────────────────────────────────────────────
    WeekKalendarModal.tsx · Atlantean Lumitech “Kairos Kalendar”
-   v9.4.1 · FIX: DOM timer typing (no NodeJS.Timeout)
-   ────────────────────────────────────────────────────────────────
-   • DayDetailModal sits ABOVE both Note box and NoteModal
-   • Notes Dock is fixed, scrollable, and persists until user clears
-   • No note counters on weekday labels
-   • Notes saved in Day modal map to the exact Beat:Step moment
-   • Fully offline (pure Kai math), μpulse-aligned scheduler
-   • ✅ No synchronous setState in effect bodies:
-       - notes + hiddenIds load via useState initializers (not effects)
-       - scheduler effect only schedules timers; setState happens in timer/event callbacks
-       - external DOM sync (CSS vars, framer motion value) done in effects (no React state)
+   v9.4.2 · FIX: modal must NEVER close from “outside click”
+   ----------------------------------------------------------------
+   ✅ Hard rule: WeekKalendarModal only closes via the ✕ button.
+   - Clicking Month tab must NOT close the week modal.
+   - Clicking any day ring must NOT close the week modal.
+   - Fix implemented by stopping *pointer/mouse/touch* events from
+     escaping to document-level “outside click” listeners.
 ───────────────────────────────────────────────────────────────── */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -94,6 +90,15 @@ const DAY_COLOR: Record<Day, string> = {
 
 /* ══════════════ helpers ══════════════ */
 const stopBubble = (e: React.SyntheticEvent) => {
+  e.stopPropagation();
+};
+
+/**
+ * ✅ IMPORTANT (the fix):
+ * Many apps close modals via document-level listeners (mousedown/pointerdown/touchstart).
+ * Stopping only `onClick` is NOT enough. We must stop the *down* events too.
+ */
+const stopAll = (e: React.SyntheticEvent) => {
   e.stopPropagation();
 };
 
@@ -428,14 +433,13 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
   /* ── μpulse-aligned scheduler (NO setState in effect body) ── */
   type TimeoutHandle = ReturnType<typeof window.setTimeout>; // ✅ DOM timer handle (number)
   const timeoutRef = useRef<TimeoutHandle | null>(null);
-  const targetBoundaryRef = useRef<number>(0);
 
   const epochNow = () => performance.timeOrigin + performance.now();
 
   const computeNextBoundary = (nowEpochMs: number) => {
     const elapsed = nowEpochMs - GENESIS_TS;
-    const periods = Math.ceil(elapsed / PULSE_MS_EXACT);
-    return GENESIS_TS + periods * PULSE_MS_EXACT;
+    const k = Math.floor(elapsed / PULSE_MS_EXACT) + 1; // next pulse boundary
+    return GENESIS_TS + k * PULSE_MS_EXACT;
   };
 
   const clearAlignedTimer = useCallback(() => {
@@ -449,9 +453,15 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
   const armAlignedTimer = useCallback(() => {
     clearAlignedTimer();
 
-    // schedule first boundary in the future
-    targetBoundaryRef.current = computeNextBoundary(epochNow());
+    const nowEpoch = epochNow();
+    const next = computeNextBoundary(nowEpoch);
+    const delay = Math.max(0, next - nowEpoch);
 
+    timeoutRef.current = window.setTimeout(() => {
+      // callback from external system: allowed to setState
+      setNowMs(Date.now());
+      armAlignedTimer();
+    }, delay);
   }, [clearAlignedTimer]);
 
   useEffect(() => {
@@ -575,10 +585,21 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
   );
 
   /* ── render ── */
-  const root = container ?? document.body;
+  const root = container ?? (typeof document !== "undefined" ? document.body : null);
+  if (!root) return null;
 
   return createPortal(
-    <>
+    // ✅ Global “event firewall” for this portal:
+    // stops mousedown/pointerdown/touchstart from reaching document-level outside-click closers
+    <div
+      className="wk-root"
+      onClick={stopAll}
+      onMouseDown={stopAll}
+      onPointerDown={stopAll}
+      onTouchStart={stopAll}
+      aria-hidden={false}
+      style={{ position: "fixed", inset: 0, zIndex: Z_INDEX }}
+    >
       {/* WEEK modal backdrop */}
       <AnimatePresence>
         <motion.div
@@ -590,16 +611,21 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
           transition={{ duration: 0.26 }}
           style={{ zIndex: Z_INDEX }}
           onClick={stopBubble}
-          aria-hidden={false}
+          onMouseDown={stopBubble}
+          onPointerDown={stopBubble}
+          onTouchStart={stopBubble}
         >
           <div
             className="wk-container"
             role="dialog"
             aria-modal="true"
             onClick={stopBubble}
+            onMouseDown={stopBubble}
+            onPointerDown={stopBubble}
+            onTouchStart={stopBubble}
             style={{ zIndex: dayDetail || noteModal.open ? Z_INDEX + 6 : undefined }}
           >
-            {/* ✕ close button */}
+            {/* ✕ close button — ONLY WAY OUT */}
             <button
               ref={closeBtnRef}
               type="button"
@@ -628,6 +654,7 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
                   aria-selected={!monthOpen}
                   className={!monthOpen ? "active" : ""}
                   onClick={() => {
+                    // ✅ NEVER close WeekKalendarModal here. Only toggle view.
                     setMO(false);
                     setDD(null);
                   }}
@@ -640,6 +667,7 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
                   aria-selected={monthOpen}
                   className={monthOpen ? "active" : ""}
                   onClick={() => {
+                    // ✅ NEVER close WeekKalendarModal here. Only toggle view.
                     setDD(null);
                     setMO(true);
                   }}
@@ -699,6 +727,7 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
                   const { dayOfMonth, monthIndex1 } = selectedDM(idx);
 
                   const openDay = () => {
+                    // ✅ Clicking a day opens DayDetailModal; never closes WeekKalendarModal.
                     const beatStep = localKai.chakraStepString ?? "0:00";
                     const kaiTimestamp = squashSeal(`${beatStep} — D${dayOfMonth}/M${monthIndex1}`);
                     const payload: HarmonicDayInfo = {
@@ -710,7 +739,14 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
                   };
 
                   return (
-                    <g key={day} style={{ cursor: "pointer" }} onClick={openDay}>
+                    <g
+                      key={day}
+                      style={{ cursor: "pointer" }}
+                      onClick={openDay}
+                      onMouseDown={stopBubble}
+                      onPointerDown={stopBubble}
+                      onTouchStart={stopBubble}
+                    >
                       <motion.path
                         d={d}
                         fill="none"
@@ -783,6 +819,9 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
                   pointerEvents: "auto",
                 }}
                 onClick={stopBubble}
+                onMouseDown={stopBubble}
+                onPointerDown={stopBubble}
+                onTouchStart={stopBubble}
               >
                 <DayDetailModal day={dayDetail} onClose={() => setDD(null)} />
               </div>
@@ -801,6 +840,9 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
                   pointerEvents: "auto",
                 }}
                 onClick={stopBubble}
+                onMouseDown={stopBubble}
+                onPointerDown={stopBubble}
+                onTouchStart={stopBubble}
               >
                 <NoteModal
                   pulse={noteModal.pulse}
@@ -828,6 +870,9 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
               pointerEvents: "auto",
             }}
             onClick={stopBubble}
+            onMouseDown={stopBubble}
+            onPointerDown={stopBubble}
+            onTouchStart={stopBubble}
           >
             <div
               className="wk-notes-list"
@@ -900,27 +945,37 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
         </motion.div>
       </AnimatePresence>
 
-      {/* MONTH radial modal */}
+      {/* MONTH radial modal (Week modal must stay mounted underneath) */}
       {monthOpen && (
-        <MonthKalendarModal
-          DAYS={DAYS}
-          notes={notes}
-          initialData={data}
-          onSelectDay={() => {}}
-          onAddNote={(idx) =>
-            setNM({
-              open: true,
-              pulse: idx * DAY_PULSES, // seed; NoteModal computes final beat/step live
-              initialText: notes.find((n) => Math.floor(n.pulse / DAY_PULSES) === idx)?.text || "",
-            })
-          }
-          onClose={() => {
-            setMO(false);
-            setDD(null);
-          }}
-        />
+        <div
+          className="wk-month-wrap"
+          onClick={stopAll}
+          onMouseDown={stopAll}
+          onPointerDown={stopAll}
+          onTouchStart={stopAll}
+          style={{ position: "fixed", inset: 0, zIndex: Z_INDEX + 7 }}
+        >
+          <MonthKalendarModal
+            DAYS={DAYS}
+            notes={notes}
+            initialData={data}
+            onSelectDay={() => {}}
+            onAddNote={(idx) =>
+              setNM({
+                open: true,
+                pulse: idx * DAY_PULSES, // seed; NoteModal computes final beat/step live
+                initialText: notes.find((n) => Math.floor(n.pulse / DAY_PULSES) === idx)?.text || "",
+              })
+            }
+            onClose={() => {
+              // ✅ Month closes; Week stays open.
+              setMO(false);
+              setDD(null);
+            }}
+          />
+        </div>
       )}
-    </>,
+    </div>,
     root,
   );
 };
