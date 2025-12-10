@@ -906,25 +906,28 @@ const WeekKalendarModal: FC<Props> = ({ onClose, container }) => {
       </AnimatePresence>
 
       {/* MONTH radial modal */}
-      {monthOpen && (
-        <MonthKalendarModal
-          DAYS={DAYS}
-          notes={notes}
-          initialData={data}
-          onSelectDay={() => {}}
-          onAddNote={(idx) =>
-            setNM({
-              open: true,
-              pulse: idx * DAY_PULSES, // seed; NoteModal computes final beat/step live
-              initialText: notes.find((n) => Math.floor(n.pulse / DAY_PULSES) === idx)?.text || "",
-            })
-          }
-          onClose={() => {
-            setMO(false);
-            setDD(null);
-          }}
-        />
-      )}
+   {monthOpen && (
+  <MonthKalendarModal
+    container={root}
+    DAYS={DAYS}
+    notes={notes}
+    initialData={data}
+    onSelectDay={() => {}}
+    onAddNote={(idx) =>
+      setNM({
+        open: true,
+        pulse: idx * DAY_PULSES,
+        initialText:
+          notes.find((n) => Math.floor(n.pulse / DAY_PULSES) === idx)?.text || "",
+      })
+    }
+    onClose={() => {
+      setMO(false);
+      setDD(null);
+    }}
+  />
+)}
+
     </>,
     root,
   );
