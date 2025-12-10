@@ -74,6 +74,8 @@ import {
 /* Explorer bridge: register any stream/sigil URL */
 import { registerSigilUrl } from "../../utils/sigilRegistry";
 
+
+
 /* Attachments (single source of truth) */
 import { AttachmentGallery } from "./attachments/gallery";
 import {

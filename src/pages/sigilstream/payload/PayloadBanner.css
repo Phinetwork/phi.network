@@ -1,0 +1,334 @@
+/* src/pages/sigilstream/payload/PayloadBanner.css
+   PayloadBanner — Atlantean Glass Beacon
+   - Breath-shimmer (Kai pulse synced)
+   - Frosted krystal layers + rune grid
+   - Premium pills + living button
+   - Motion-safe + mobile-safe
+*/
+
+.sf-payload{
+  --phi: 1.61803398875;
+  --pulse-dur: 5.2360679s;
+
+  --ink: rgba(240, 246, 255, 0.96);
+  --muted: rgba(195, 210, 235, 0.85);
+  --ring: rgba(255, 255, 255, 0.14);
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+
+  margin: 10px 12px 0;
+  padding: 14px 14px 16px;
+
+  border-radius: 22px;
+  border: 1px solid var(--ring);
+  color: var(--ink);
+
+  background:
+    radial-gradient(1200px 420px at 12% 10%, rgba(120, 220, 255, 0.14), transparent 62%),
+    radial-gradient(900px 360px at 92% 22%, rgba(190, 140, 255, 0.12), transparent 58%),
+    radial-gradient(1200px 500px at 60% 110%, rgba(90, 255, 200, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(14, 18, 28, 0.70), rgba(10, 12, 18, 0.42));
+
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(16px) saturate(1.2);
+
+  box-shadow:
+    0 18px 50px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    inset 0 -1px 0 rgba(255,255,255,0.06);
+
+  transform: translateZ(0);
+}
+
+/* “living edge” shimmer */
+.sf-payload::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  z-index:-1;
+  opacity: 0.75;
+  filter: blur(14px);
+  background:
+    conic-gradient(
+      from 240deg,
+      rgba(140, 220, 255, 0.0),
+      rgba(140, 220, 255, 0.38),
+      rgba(200, 150, 255, 0.20),
+      rgba(110, 255, 210, 0.26),
+      rgba(140, 220, 255, 0.0)
+    );
+  animation: sf-kai-shimmer var(--pulse-dur) linear infinite;
+}
+
+/* rune grid / etched film */
+.sf-payload::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  z-index: 0;
+  opacity: 0.20;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0 1px, transparent 1px 18px),
+    radial-gradient(700px 240px at 30% 40%, rgba(255,255,255,0.08), transparent 60%);
+  mix-blend-mode: overlay;
+}
+
+@keyframes sf-kai-shimmer{
+  0%   { transform: translate3d(-2%, -2%, 0) rotate(0deg) scale(1.02); }
+  50%  { transform: translate3d( 2%,  1%, 0) rotate(180deg) scale(1.05); }
+  100% { transform: translate3d(-2%, -2%, 0) rotate(360deg) scale(1.02); }
+}
+
+/* content sits above overlays */
+.sf-payload > *{ position: relative; z-index: 1; }
+
+/* Pills row */
+.sf-payload-line{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items:center;
+
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Pills */
+.sf-pill{
+  position: relative;
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+
+  padding: 7px 10px;
+  border-radius: 999px;
+
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+
+  color: rgba(240,246,255,0.94);
+  border: 1px solid rgba(255,255,255,0.14);
+
+  background:
+    radial-gradient(140px 44px at 18% 30%, rgba(255,255,255,0.12), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+
+  box-shadow:
+    0 8px 22px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.10);
+}
+
+.sf-pill::after{
+  content:"";
+  position:absolute;
+  inset:-1px;
+  border-radius: inherit;
+  pointer-events:none;
+  opacity: 0.55;
+  background:
+    linear-gradient(90deg,
+      rgba(255,255,255,0.00),
+      rgba(255,255,255,0.18),
+      rgba(255,255,255,0.00)
+    );
+  transform: translateX(-60%);
+  animation: sf-pill-sheen calc(var(--pulse-dur) * 2) ease-in-out infinite;
+}
+
+@keyframes sf-pill-sheen{
+  0%   { transform: translateX(-60%); opacity: 0.0; }
+  15%  { opacity: 0.55; }
+  50%  { transform: translateX(60%); opacity: 0.30; }
+  100% { transform: translateX(60%); opacity: 0.0; }
+}
+
+/* Variants (subtle signature tint) */
+.sf-pill--source{ border-color: rgba(140,220,255,0.22); }
+.sf-pill--author{ border-color: rgba(200,150,255,0.22); }
+.sf-pill--sigil { border-color: rgba(110,255,210,0.22); }
+.sf-pill--phikey{ border-color: rgba(255,220,140,0.20); }
+
+/* Core line */
+.sf-payload-core{
+  margin-top: 10px;
+  line-height: 1.4;
+  font-size: 14px;
+
+  word-break: break-word;
+  overflow-wrap: anywhere;
+
+  color: rgba(240,246,255,0.95);
+}
+
+.sf-pulse{
+  display:inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 14px;
+
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+
+.sf-pulse__k{
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  font-size: 11px;
+  opacity: 0.92;
+}
+
+.sf-pulse__v{
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.sf-kai-label{
+  color: rgba(205, 224, 248, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-caption{
+  color: rgba(195, 210, 235, 0.92);
+  opacity: 0.98;
+}
+
+/* Actions */
+.sf-actions{
+  margin-top: 10px;
+  display:flex;
+  gap: 10px;
+  align-items:center;
+}
+
+/* Button (Atlantean “sigil switch”) */
+.sf-btn{
+  position: relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 14px;
+
+  color: rgba(245, 250, 255, 0.96);
+  border: 1px solid rgba(255,255,255,0.16);
+  background:
+    radial-gradient(220px 80px at 18% 30%, rgba(140,220,255,0.22), transparent 60%),
+    radial-gradient(200px 70px at 82% 28%, rgba(200,150,255,0.18), transparent 58%),
+    linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05));
+
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+
+  box-shadow:
+    0 14px 30px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.sf-btn__glow{
+  position:absolute;
+  inset:-2px;
+  border-radius: inherit;
+  pointer-events:none;
+  opacity: 0.0;
+  background:
+    conic-gradient(
+      from 180deg,
+      rgba(140,220,255,0.0),
+      rgba(140,220,255,0.25),
+      rgba(110,255,210,0.18),
+      rgba(200,150,255,0.20),
+      rgba(140,220,255,0.0)
+    );
+  filter: blur(10px);
+  transition: opacity 200ms ease;
+}
+
+.sf-btn__text{
+  position: relative;
+  z-index: 1;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.sf-btn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.22);
+  box-shadow:
+    0 18px 44px rgba(0,0,0,0.40),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+.sf-btn:hover .sf-btn__glow{ opacity: 0.85; }
+
+.sf-btn:active{
+  transform: translateY(0px) scale(0.99);
+}
+
+.sf-btn:focus-visible{
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(140,220,255,0.24),
+    0 18px 44px rgba(0,0,0,0.40),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+/* Attachments wrapper gives it “nested chamber” depth */
+.sf-attachments-wrap{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+}
+
+/* Error */
+.sf-error{
+  margin: 10px 12px 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 120, 120, 0.28);
+  background: rgba(40, 10, 12, 0.35);
+  color: rgba(255, 220, 220, 0.95);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* Motion safety */
+@media (prefers-reduced-motion: reduce){
+  .sf-payload::before,
+  .sf-pill::after{
+    animation: none !important;
+  }
+  .sf-btn{
+    transition: none;
+  }
+}
+
+/* Mobile tightening */
+@media (max-width: 420px){
+  .sf-payload{ padding: 12px 12px 14px; border-radius: 20px; }
+  .sf-pill{ font-size: 10px; padding: 6px 9px; }
+  .sf-payload-core{ font-size: 13px; }
+  .sf-btn{ width: 100%; }
+  .sf-actions{ width: 100%; }
+}
