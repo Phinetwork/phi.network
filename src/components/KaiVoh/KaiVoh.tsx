@@ -1351,7 +1351,7 @@ export default function KaiVoh({ initialCaption = "", initialAuthor = "", onExha
 
   const attachmentsPanel = (
     <div className="attachments">
-      <h3 className="attachments-title">Attachments</h3>
+      <h3 className="attachments-title">Seals</h3>
 
       <div className="composer">
         <label className="composer-label">Record a memory</label>
@@ -1395,7 +1395,7 @@ export default function KaiVoh({ initialCaption = "", initialAuthor = "", onExha
       </div>
 
       <div className="composer">
-        <label className="composer-label">Add any URL</label>
+        <label className="composer-label">Seal any URL</label>
         <div className="composer-input-row">
           <input
             className="composer-input"
@@ -1408,7 +1408,7 @@ export default function KaiVoh({ initialCaption = "", initialAuthor = "", onExha
             spellCheck={false}
           />
           <button type="button" className="composer-aux" onClick={addExtraUrl} title="Add URL">
-            Add
+            Seal
           </button>
         </div>
 
@@ -1428,7 +1428,7 @@ export default function KaiVoh({ initialCaption = "", initialAuthor = "", onExha
 
       <div ref={dropRef} className="dropzone" onDragOver={onDragOver} onDrop={onDrop} aria-label="Drop files or folders here">
         <div className="dropzone-inner">
-          <div className="dz-title">Seal documents or folders</div>
+          <div className="dz-title">Seal files or folders</div>
           <div className="dz-sub">
             Tiny files get inlined; large files become cache-backed refs.
             {privateOn ? (
@@ -1656,9 +1656,9 @@ export default function KaiVoh({ initialCaption = "", initialAuthor = "", onExha
           onClick={onGenerate}
           className="composer-submit"
           disabled={disableGenerate}
-          title={disableGenerate ? "Fix sealing requirements / attachments to proceed" : "Exhale Stream URL"}
+          title={disableGenerate ? "Fix sealing requirements / attachments to proceed" : "Exhale Stream"}
         >
-          {busy ? `Exhaling…${stage ? ` (${stage})` : ""}` : privateOn ? "Exhale Sealed Stream URL" : "Exhale Stream URL"}
+          {busy ? `Exhaling…${stage ? ` (${stage})` : ""}` : privateOn ? "Exhale Sealed Stream" : "Exhale Stream"}
         </button>
         <button type="button" className="composer-reset" onClick={onReset}>
           Reset
