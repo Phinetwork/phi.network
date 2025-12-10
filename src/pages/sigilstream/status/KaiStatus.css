@@ -1,0 +1,269 @@
+/* src/pages/sigilstream/status/KaiStatus.css
+   KaiStatus — Slim μpulse Bar (v2.0)
+   Single-line, refined, no stacking.
+   - Shimmer/spark phase-lock: --pulse-dur / --pulse-offset
+   - Progress fill: --kai-progress (0..1) from TSX
+*/
+
+.kai-feed-status{
+  --pulse-dur: 5.2360679s;
+  --pulse-offset: 0s;
+  --kai-progress: 0;
+
+  --r: 16px;
+  --ring: rgba(255,255,255,0.14);
+  --ink: rgba(240,246,255,0.96);
+  --muted: rgba(198,212,235,0.82);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  height: 56px;                 /* slim bar height */
+  padding: 10px 12px;
+  margin: 8px 12px 10px;
+
+  border-radius: var(--r);
+  border: 1px solid var(--ring);
+
+  background:
+    radial-gradient(120% 180% at 12% -20%,
+      rgba(120,190,255,0.12),
+      rgba(255,255,255,0.00) 55%),
+    radial-gradient(140% 220% at 92% 120%,
+      rgba(255,180,245,0.10),
+      rgba(255,255,255,0.00) 62%),
+    linear-gradient(135deg,
+      rgba(255,255,255,0.075),
+      rgba(255,255,255,0.030)),
+    rgba(255,255,255,0.040);
+
+  box-shadow:
+    0 14px 44px rgba(0,0,0,0.42),
+    inset 0 1px 0 rgba(255,255,255,0.10);
+
+  backdrop-filter: blur(14px) saturate(1.18);
+  -webkit-backdrop-filter: blur(14px) saturate(1.18);
+
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* subtle phase-locked shimmer */
+.kai-feed-status::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  pointer-events:none;
+
+  background:
+    linear-gradient(115deg,
+      rgba(255,255,255,0.00) 0%,
+      rgba(255,255,255,0.10) 22%,
+      rgba(255,255,255,0.00) 44%,
+      rgba(255,255,255,0.08) 66%,
+      rgba(255,255,255,0.00) 88%);
+  opacity: 0.45;
+  transform: translate3d(-34%, 0, 0);
+  mix-blend-mode: overlay;
+
+  animation: kai-status-shimmer var(--pulse-dur) linear infinite;
+  animation-delay: calc(-1 * var(--pulse-offset));
+}
+
+@keyframes kai-status-shimmer{
+  0%   { transform: translate3d(-36%, 0, 0); }
+  100% { transform: translate3d( 36%, 0, 0); }
+}
+
+/* boundary flash */
+.kai-feed-status--flash{
+  animation: kai-status-flash 200ms ease-out;
+}
+@keyframes kai-status-flash{
+  0%   { filter: brightness(1); }
+  35%  { filter: brightness(1.08); }
+  100% { filter: brightness(1); }
+}
+
+/* LEFT: all inline, no stacking */
+.kai-feed-status__left{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kai-feed-status__kLabel{
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
+.kai-feed-status__bsi{
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 820;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+}
+
+/* Pills: compact + thin */
+.kai-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(255,255,255,0.085), rgba(255,255,255,0.025));
+  color: rgba(236,244,255,0.92);
+
+  font-size: 12px;
+  line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 10px 22px rgba(0,0,0,0.18);
+}
+
+.kai-pill--pulse{
+  background:
+    radial-gradient(120% 180% at 18% 0%,
+      rgba(180,230,255,0.12),
+      rgba(255,255,255,0.02) 70%),
+    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+}
+
+.kai-pill__num{
+  font-weight: 850;
+  letter-spacing: 0.01em;
+}
+
+/* RIGHT: inline, no stacking */
+.kai-feed-status__right{
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.kai-feed-status__nLabel{
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.kai-feed-status__nVal{
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+}
+
+.kai-feed-status__nUnit{
+  margin-left: 4px;
+  color: rgba(210,224,245,0.9);
+  font-size: 12px;
+  letter-spacing: 0.10em;
+}
+
+/* Thin progress line pinned to the bottom INSIDE the bar */
+.kai-feed-status__bar{
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 9px;
+
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
+  pointer-events: none;
+}
+
+.kai-feed-status__barFill{
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(var(--kai-progress));
+
+  background:
+    radial-gradient(140% 220% at 20% 0%,
+      rgba(170,230,255,0.52),
+      rgba(255,255,255,0.00) 60%),
+    linear-gradient(90deg,
+      rgba(255,255,255,0.16),
+      rgba(255,255,255,0.04));
+  will-change: transform;
+}
+
+/* phase-locked spark (subtle) */
+.kai-feed-status__barSpark{
+  position:absolute;
+  top: -16px;
+  left: -30%;
+  width: 26%;
+  height: 38px;
+
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255,255,255,0.18),
+    rgba(255,255,255,0.00) 60%);
+
+  mix-blend-mode: screen;
+  opacity: 0.75;
+
+  animation: kai-bar-spark var(--pulse-dur) linear infinite;
+  animation-delay: calc(-1 * var(--pulse-offset));
+}
+
+@keyframes kai-bar-spark{
+  0%   { transform: translateX(0);   opacity: 0.0; }
+  10%  { opacity: 0.8; }
+  100% { transform: translateX(520%); opacity: 0.0; }
+}
+
+/* Small screens: keep single bar by hiding least-critical labels */
+@media (max-width: 520px){
+  .kai-feed-status{ height: 54px; }
+  .kai-feed-status__kLabel{ display:none; }
+  .kai-feed-status__nLabel{ display:none; }
+  .kai-pill--chakra{ display:none; }
+}
+
+@media (max-width: 420px){
+  .kai-pill--day{ display:none; }
+  .kai-feed-status__bsi{ font-size: 17px; }
+  .kai-feed-status__nVal{ font-size: 17px; }
+}
+
+/* Motion safety */
+@media (prefers-reduced-motion: reduce){
+  .kai-feed-status::before,
+  .kai-feed-status__barSpark{
+    animation: none !important;
+  }
+  .kai-feed-status--flash{
+    animation: none !important;
+  }
+}
+
+/* Backdrop fallback */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .kai-feed-status{
+    background: linear-gradient(135deg, rgba(40,52,78,0.70), rgba(20,26,40,0.65));
+  }
+}
