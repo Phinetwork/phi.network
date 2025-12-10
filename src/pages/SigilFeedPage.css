@@ -296,28 +296,6 @@ button {
 
   transform: translateZ(0);
 }
-
-/* “living edge” shimmer (1 breath) */
-.sf-payload::before{
-  content:"";
-  position:absolute;
-  inset:-2px;
-  z-index:-1;
-  opacity: 0.75;
-  filter: blur(14px);
-  background:
-    conic-gradient(
-      from 240deg,
-      rgba(140, 220, 255, 0.0),
-      rgba(140, 220, 255, 0.38),
-      rgba(200, 150, 255, 0.20),
-      rgba(110, 255, 210, 0.26),
-      rgba(140, 220, 255, 0.0)
-    );
-  will-change: transform, opacity;
-  animation: sf-kai-shimmer var(--t-breath) linear infinite;
-  animation-delay: var(--pulse-offset);
-}
 /* DROP-IN: replace the rotating shimmer + glow with non-rotating breath shimmer */
 
 /* 1) EDGE SHIMMER — remove rotation, use drifting sheen + gentle scale */
@@ -450,6 +428,7 @@ button {
 
 /* 3) If you also want the film to avoid any “rotation-like” feel, keep as-is (it’s already drift+opacity) */
 /* (no change needed to sf-film-breathe) */
+
 
 /* rune grid / etched film (breath + φ² drift) */
 .sf-payload::after{
