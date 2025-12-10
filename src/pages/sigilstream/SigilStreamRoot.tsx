@@ -227,6 +227,10 @@ function pulseToChakraDay(pulse: number): string {
 /* ────────────────────────────────────────────────────────────────
    URL helpers
 ──────────────────────────────────────────────────────────────── */
+function pad2(n: number): string {
+  const v = Number.isFinite(n) ? Math.trunc(n) : 0;
+  return String(v).padStart(2, "0");
+}
 
 function sessionTokenKey(token: string): string {
   if (token.length <= 140) return token;
@@ -809,9 +813,10 @@ function PayloadCard(props: {
       <div className="sf-payload-core">
         <span>☤Kai: {pulse}</span>
         <span className="sf-muted"> · </span>
-        <span className="sf-kai-label">
-          Kai-Klok {beat}:{step} — {weekday}
-        </span>
+      <span className="sf-kai-label">
+  Kai-Klok {pad2(beat)}:{pad2(step)} — {weekday}
+</span>
+
         <span className="sf-muted"> · </span>
         <span className="sf-kai-label">{chakra}</span>
       </div>
