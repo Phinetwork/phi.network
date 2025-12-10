@@ -115,7 +115,7 @@ function normalizeChakraLabel(s: string): string {
   if (u === "sacral") return "Sacral";
   if (u === "heart") return "Heart";
   if (u === "throat") return "Throat";
-  if (u === "crown") return "Crown";
+  if (u === "crown") return "Krown";
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -741,7 +741,7 @@ function PayloadCard(props: {
       </div>
 
       <div className="sf-payload-core">
-        <span>Pulse {pulse}</span>
+        <span>☤Kai: {pulse}</span>
         <span className="sf-muted"> · </span>
         <span className="sf-kai-label">
           Kairos {beat}:{step} — {weekday}

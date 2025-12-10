@@ -1,9 +1,9 @@
 /* src/pages/sigilstream/status/KaiStatus.css
-   KaiStatus — Atlantean μpulse Bar (v3.0)
+   KaiStatus — Atlantean μpulse Bar (v3.1)
    Single-line, zero-overlap, glass-frost krystal tech.
    - Phase-lock: --pulse-dur / --pulse-offset
    - Progress:  --kai-progress (0..1) from TSX
-   - Layout:    data-layout="full|compact|micro" (set by TSX; collapses sooner than media queries)
+   - Layout:    data-layout="full|compact|micro" (set by TSX)
 */
 
 .kai-feed-status{
@@ -27,7 +27,7 @@
   --shadow: 0 18px 54px rgba(0,0,0,0.48);
   --inner: inset 0 1px 0 rgba(255,255,255,0.10);
 
-  /* -------- aurora accents (can be overridden by parent theme) -------- */
+  /* -------- aurora accents -------- */
   --a1: rgba(120,190,255,0.14);
   --a2: rgba(255,180,245,0.12);
   --a3: rgba(170,230,255,0.10);
@@ -44,7 +44,6 @@
   border-radius: var(--r);
   border: 1px solid var(--ring);
 
-  /* krystal frost stack */
   background:
     radial-gradient(120% 180% at 10% -30%,
       var(--a1),
@@ -69,7 +68,6 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 
-  /* keep layout stable under rapid updates */
   contain: layout paint;
 }
 
@@ -147,6 +145,7 @@
   overflow: hidden;
 }
 
+/* label */
 .kai-feed-status__kLabel{
   color: var(--muted);
   font-size: 11px;
@@ -155,12 +154,12 @@
   opacity: 0.92;
 }
 
+/* beat:step */
 .kai-feed-status__bsi{
   color: var(--ink);
   font-size: 18px;
   font-weight: 860;
   letter-spacing: 0.02em;
-
   text-shadow: 0 1px 0 rgba(0,0,0,0.25);
 }
 
@@ -191,7 +190,6 @@
     inset 0 1px 0 rgba(255,255,255,0.10),
     0 10px 22px rgba(0,0,0,0.18);
 
-  /* prevent squeeze artifacts */
   flex: 0 0 auto;
 }
 
@@ -315,6 +313,26 @@
   100% { transform: translateX(560%); opacity: 0.0; }
 }
 
+/* ====== Layout modes (from TSX) ====== */
+.kai-feed-status[data-layout="compact"]{
+  height: 54px;
+}
+
+.kai-feed-status[data-layout="compact"] .kai-feed-status__kLabel{
+  display: none;
+}
+.kai-feed-status[data-layout="compact"] .kai-feed-status__nLabel{
+  display: none;
+}
+.kai-feed-status[data-layout="compact"] .kai-pill{
+  height: 25px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+.kai-feed-status[data-layout="compact"] .kai-feed-status__left{
+  gap: 9px;
+}
+
 .kai-feed-status[data-layout="micro"]{
   height: 52px;
   --padX: 10px;
@@ -323,28 +341,27 @@
 .kai-feed-status[data-layout="micro"] .kai-feed-status__kLabel{
   display: none;
 }
-
 .kai-feed-status[data-layout="micro"] .kai-feed-status__nLabel{
   display: none;
 }
 
 /* tighter spacing so Day + Pulse always fit */
 .kai-feed-status[data-layout="micro"] .kai-feed-status__left{
-  gap: 8px;
+  gap: 7px;
 }
 
 /* micro-chip sizing */
 .kai-feed-status[data-layout="micro"] .kai-pill{
   height: 24px;
-  padding: 0 8px;
+  padding: 0 7px;
   font-size: 11px;
 }
 
-/* ✅ keep Day visible on mobile */
+/* ✅ Day MUST be full — NEVER ellipsis */
 .kai-feed-status[data-layout="micro"] .kai-pill--day{
-  max-width: 96px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /* hide least critical first */
@@ -353,40 +370,45 @@
 }
 
 .kai-feed-status[data-layout="micro"] .kai-feed-status__right{
-  gap: 8px;
+  gap: 7px;
+  margin-left: 8px;
 }
 
 .kai-feed-status[data-layout="micro"] .kai-feed-status__bsi{
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .kai-feed-status[data-layout="micro"] .kai-feed-status__nVal{
-  font-size: 17px;
+  font-size: 16px;
+}
+
+.kai-feed-status[data-layout="micro"] .kai-feed-status__nUnit{
+  margin-left: 3px;
+  font-size: 11px;
 }
 
 .kai-feed-status[data-layout="micro"] .kai-feed-status__bar{
   bottom: 8px;
 }
 
-
-/* ====== Media fallback (in case data-layout isn’t present) ====== */
+/* ====== Media fallback (if data-layout isn’t present) ====== */
 @media (max-width: 520px){
   .kai-feed-status{ height: 54px; }
   .kai-feed-status__kLabel{ display:none; }
   .kai-feed-status__nLabel{ display:none; }
   .kai-pill--chakra{ display:none; }
 }
+
 @media (max-width: 420px){
   .kai-pill--chakra{ display:none; }
-  .kai-feed-status__bsi{ font-size: 17px; }
-  .kai-feed-status__nVal{ font-size: 17px; }
+  .kai-feed-status__bsi{ font-size: 16px; }
+  .kai-feed-status__nVal{ font-size: 16px; }
   .kai-pill{
     height: 24px;
-    padding: 0 8px;
+    padding: 0 7px;
     font-size: 11px;
   }
 }
-
 
 /* ====== Motion safety ====== */
 @media (prefers-reduced-motion: reduce){
