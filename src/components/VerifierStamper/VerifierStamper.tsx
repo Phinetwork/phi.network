@@ -2,7 +2,8 @@
 
 // src/components/verifier/VerifierStamper.tsx
 // VerifierStamper.tsx · Divine Sovereign Transfer Gate (mobile-first)
-// v25.0 — value strip positioned under Pulse/Beat/Step/Day (above Presence/Stewardship/Memory tabs),
+// v25.1 — NO-ZOOM SEND INPUT (iOS Safari-safe wrapper + hooks)
+//         value strip positioned under Pulse/Beat/Step/Day (above Presence/Stewardship/Memory tabs),
 //         breath-synced trend pills (▲ green / ▼ red / none on flat),
 //         + click-to-open LiveChart popover (Φ/$ pills), μΦ-locked exhale parity + ChakraGate surfacing,
 //         child-lock + valuation parity
@@ -101,6 +102,23 @@ import LiveChart from "../valuation/chart/LiveChart";
 import type { ChartPoint } from "../valuation/series";
 import InhaleUploadIcon from "../InhaleUploadIcon";
 
+/* ───────── Event typing for Φ movement success ───────── */
+type PhiMoveMode = "send" | "receive";
+
+type PhiMoveSuccessDetail = {
+  mode: PhiMoveMode;
+  /** e.g. "Φ 1.2345" for display */
+  amountPhiDisplay?: string;
+  /** optional generic formatted amount string */
+  amountDisplay?: string;
+  /** raw numeric Φ amount (optional) */
+  amountPhi?: number;
+  /** optional download URL for a receipt/sigil */
+  downloadUrl?: string;
+  downloadLabel?: string;
+  /** optional human-readable message */
+  message?: string;
+};
 /* ─────────── Shared inline styles / tiny components to shrink markup ─────────── */
 const S = {
   full: {
@@ -1870,15 +1888,19 @@ const VerifierStamperInner: React.FC = () => {
   }, [initialGlyph, headerPhi]);
 
   return (
-    <div className="verifier-stamper" role="application" style={{ maxWidth: "100vw", overflowX: "hidden" }}>
+    <div
+      className="verifier-stamper"
+      role="application"
+      style={{ maxWidth: "100vw", overflowX: "hidden" }}
+    >
       {/* Top toolbar — Stream + ΦKey on the same row, with live Kai pulse */}
       <div className="toolbar">
         <div className="toolbar-main">
           <div className="brand-lockup" aria-label="Kairos live status">
             <div className="brand-text">
               <div className="live-pulse">
-              <span className="now">LIVE</span>
-              <span className="pulse-number"> ☤KAI {pulseNow}</span>
+                <span className="now">LIVE</span>
+                <span className="pulse-number"> ☤KAI {pulseNow}</span>
               </div>
             </div>
           </div>
@@ -1889,13 +1911,12 @@ const VerifierStamperInner: React.FC = () => {
               onClick={() => svgInput.current?.click()}
               type="button"
             >
-           <InhaleUploadIcon color="#37FFE4" />
+              <InhaleUploadIcon color="#37FFE4" />
 
               <span className="phikey-label" aria-label="PhiKey">
-  <img className="phikey-mark" src="/phi.svg" alt="Φ" />
-  <span className="phikey-text">Key</span>
-</span>
-
+                <img className="phikey-mark" src="/phi.svg" alt="Φ" />
+                <span className="phikey-text">Key</span>
+              </span>
             </button>
           </div>
         </div>
@@ -2367,7 +2388,19 @@ const VerifierStamperInner: React.FC = () => {
                   )}
 
                   {(uiState === "readySend" || uiState === "verified") && (
-                    <>
+                    <div
+                      className="send-row no-zoom-input"
+                      data-nozoom="true"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        flex: "1 1 auto",
+                        minWidth: 0,
+                        fontSize: 16, // iOS Safari: ≥16px prevents zoom-on-focus
+                        WebkitTextSizeAdjust: "100%",
+                      }}
+                    >
                       <SendPhiAmountField
                         amountMode={amountMode}
                         setAmountMode={setAmountMode}
@@ -2388,7 +2421,7 @@ const VerifierStamperInner: React.FC = () => {
                         disabled={!canExhale}
                         path="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"
                       />
-                    </>
+                    </div>
                   )}
 
                   <IconBtn

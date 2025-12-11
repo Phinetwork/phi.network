@@ -16,28 +16,25 @@
   width: 100%;
   min-width: 0;
 
-  /* Reserve lane for Send + Attach in the outer footer row */
-  max-width: calc(100% - 120px); /* ~ room for two round buttons */
+  /* Fill the lane: bar stretches as wide as parent allows */
+  max-width: 100%;
 
   isolation: isolate;
   color: var(--ink);
 }
 
-/* ─────────────────────────────────────────────
-   Inner row: [Φ input capsule] + [side column]
-   side column = converted amount (top) + unit toggle (bottom)
-   ───────────────────────────────────────────── */
+/* Focus state accent */
 
-.phi-send-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;          /* never wrap; keep a single breathing row */
-  width: 100%;
-  min-width: 0;
+.phi-send-field[data-state="focus"] .phi-send-inputShell {
+  border-color: color-mix(in srgb, var(--accent) 60%, rgba(255, 255, 255, 0.25));
+  box-shadow:
+    0 0 10px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 14px 28px rgb(0 0 0 / 0.9);
 }
 
-/* label stack (sits above the row) */
+/* ─────────────────────────────────────────────
+   Label stack (sits above the bar)
+   ───────────────────────────────────────────── */
 
 .phi-send-label {
   display: flex;
@@ -77,8 +74,20 @@
 }
 
 /* ─────────────────────────────────────────────
-   Φ input capsule — glass instrument
+   Inner bar (single row)
+   [ Φ / $ input ] | [ live conversion ] | [ unit toggle + attach ]
    ───────────────────────────────────────────── */
+
+.phi-send-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;          /* never wrap; stay a single breathing row */
+  width: 100%;
+  min-width: 0;
+}
+
+/* Φ input capsule — glass instrument */
 
 .phi-send-inputShell {
   position: relative;
@@ -101,10 +110,10 @@
   padding: 10px 12px;
   min-height: 44px;
   min-width: 0;
-  flex: 1 1 auto;            /* main flexible element that shrinks first */
+  flex: 1 1 0%;               /* main flexible element */
 }
 
-/* prefix "Φ" glyph */
+/* prefix glyph ("Φ" or "$") */
 
 .phi-prefix {
   font-size: 0.8rem;
@@ -117,7 +126,9 @@
   line-height: 1;
 }
 
-/* the sacred input itself */
+/* the sacred input itself
+   NOTE: font-size >= 16px to prevent iOS zoom-on-focus.
+*/
 
 .phi-send-input {
   appearance: none;
@@ -126,7 +137,7 @@
   outline: 0;
   color: var(--ink);
 
-  font-size: 0.9rem;
+  font-size: 16px; /* iOS zoom guard */
   font-weight: 600;
   line-height: 1.2;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -137,6 +148,10 @@
     0 0 8px color-mix(in srgb, var(--accent) 60%, transparent),
     0 0 1px rgb(255 255 255 / 1);
   caret-color: color-mix(in srgb, var(--accent) 90%, white 10%);
+
+  /* Feel native, no accidental zooms / double-tap quirks */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* remove iOS number spinner ghosts */
@@ -170,20 +185,8 @@
 }
 
 /* ─────────────────────────────────────────────
-   Side column: converted amount (top) + unit toggle (bottom)
+   Middle: live conversion text
    ───────────────────────────────────────────── */
-
-.phi-unit-column {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 4px;
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-/* Live conversion text */
 
 .phi-conv-right,
 .convert-readout {
@@ -191,9 +194,23 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--ink);
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: right;
+  flex: 0 0 auto;
+}
+
+/* ─────────────────────────────────────────────
+   Right cluster: unit toggle + optional attachment
+   ───────────────────────────────────────────── */
+
+.phi-send-controls {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 /* Unit toggle */
@@ -204,11 +221,11 @@
   gap: 4px;
   padding: 3px;
   border-radius: 999px;
-  border: 1px solid var(--border, rgba(255,255,255,.18));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.18));
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
   box-shadow:
-    0 2px 10px rgba(0,0,0,0.35),
+    0 2px 10px rgba(0, 0, 0, 0.35),
     0 0 18px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
@@ -227,12 +244,12 @@
   font-weight: 600;
   cursor: pointer;
   opacity: 0.6;
-  transition: opacity .18s, transform .08s ease;
+  transition: opacity 0.18s, transform 0.08s ease;
 }
 
 .phi-mode-btn.is-active {
   opacity: 1;
-  background: color-mix(in srgb, var(--accent) 35%, rgba(0,0,0,0.6));
+  background: color-mix(in srgb, var(--accent) 35%, rgba(0, 0, 0, 0.6));
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent),
     0 0 12px color-mix(in srgb, var(--accent) 40%, transparent);
@@ -243,7 +260,61 @@
 }
 
 .phi-mode-btn:active {
-  transform: translateY(0.5px) scale(.97);
+  transform: translateY(0.5px) scale(0.97);
+}
+
+/* Attachment button (optional, in-line with toggle) */
+
+.phi-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(0, 255, 255, 0.16), transparent 60%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.75));
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.55),
+    0 0 12px color-mix(in srgb, var(--accent) 20%, transparent);
+  opacity: 0.88;
+  white-space: nowrap;
+}
+
+.phi-attach-btn:hover {
+  opacity: 1;
+}
+
+.phi-attach-btn:active {
+  transform: translateY(0.5px) scale(0.97);
+}
+
+.phi-attach-btn.is-active {
+  border-color: color-mix(in srgb, var(--accent) 60%, rgba(255, 255, 255, 0.2));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent),
+    0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 42%, rgba(0, 0, 0, 0.9)), rgba(0, 0, 0, 0.9));
+}
+
+.phi-attach-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.phi-attach-label {
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 /* ─────────────────────────────────────────────
@@ -270,6 +341,7 @@
 
 /* ─────────────────────────────────────────────
    Compact tweak for ultra-thin screens
+   (keep font >= 16px to avoid zoom)
    ───────────────────────────────────────────── */
 
 @media (max-width: 380px) {
@@ -283,7 +355,7 @@
   }
 
   .phi-send-input {
-    font-size: 0.8rem;
+    font-size: 16px; /* do not shrink below 16px */
   }
 
   .phi-send-label .label-main {
@@ -296,6 +368,13 @@
 
   .phi-mode-toggle {
     transform: scale(0.9);
+  }
+}
+
+/* Extra guard for iOS: keep text at or above 16px on touch devices */
+@supports (-webkit-touch-callout: none) {
+  .phi-send-input {
+    font-size: 16px;
   }
 }
 
@@ -324,31 +403,31 @@
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--error, #ff4d4f) 18%, rgba(0,0,0,0)) 0%,
-      rgba(0,0,0,0.55) 100%
+      color-mix(in srgb, var(--error, #ff4d4f) 18%, rgba(0, 0, 0, 0)) 0%,
+      rgba(0, 0, 0, 0.55) 100%
     );
   backdrop-filter: blur(14px) saturate(180%);
   -webkit-backdrop-filter: blur(14px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--error, #ff4d4f) 30%, rgba(255,255,255,0.14));
+  border: 1px solid color-mix(in srgb, var(--error, #ff4d4f) 30%, rgba(255, 255, 255, 0.14));
 
   box-shadow:
-    0 2px 8px rgba(0,0,0,0.35),
-    0 18px 36px rgba(0,0,0,0.45),
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 18px 36px rgba(0, 0, 0, 0.45),
     0 0 28px color-mix(in srgb, var(--error, #ff4d4f) 36%, transparent);
 }
 
 .phi-error-card .badge {
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
   font-weight: 700;
   font-size: 10px;
   padding: 3px 6px;
   border-radius: 999px;
   color: white;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.08));
-  border: 1px solid rgba(255,255,255,0.22);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
     0 0 14px color-mix(in srgb, var(--error, #ff4d4f) 40%, transparent);
 }
 
@@ -358,11 +437,263 @@
   font-size: 12.5px;
   font-weight: 600;
   text-shadow:
-    0 0 8px rgba(0,0,0,0.7),
-    0 0 1px rgba(255,255,255,0.9);
+    0 0 8px rgba(0, 0, 0, 0.7),
+    0 0 1px rgba(255, 255, 255, 0.9);
 }
 
 @keyframes phiToastIn {
-  from { transform: translate(-50%, 8px); opacity: 0; }
-  to   { transform: translate(-50%, 0);   opacity: 1; }
+  from {
+    transform: translate(-50%, 8px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Φ move success overlay — heartbeat + download
+   ───────────────────────────────────────────── */
+
+.phi-send-success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+
+  background:
+    radial-gradient(circle at 8% 0%, rgba(0, 255, 255, 0.2), transparent 60%),
+    radial-gradient(circle at 90% 100%, rgba(155, 82, 255, 0.25), rgba(0, 0, 0, 0.9));
+
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+}
+
+.phi-send-success-card {
+  position: relative;
+  max-width: min(420px, 100%);
+  width: 100%;
+  padding: 20px 18px 16px;
+  border-radius: 18px;
+
+  background:
+    linear-gradient(145deg, rgba(0, 0, 0, 0.85), rgba(0, 0, 20, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.85),
+    0 0 32px color-mix(in srgb, var(--accent, #00ffff) 40%, transparent);
+
+  color: var(--ink, #f9feff);
+  overflow: hidden;
+  animation: phiSuccessIn 160ms ease-out;
+}
+
+/* Orb pulse behind the text */
+
+.phi-success-orb {
+  position: absolute;
+  inset: -40%;
+  opacity: 0.7;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(0, 255, 255, 0.32), transparent 60%),
+    radial-gradient(circle at 80% 80%, rgba(155, 82, 255, 0.38), transparent 65%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.phi-success-orb-inner {
+  position: absolute;
+  inset: 18%;
+  border-radius: 999px;
+  box-shadow:
+    0 0 40px rgba(0, 255, 255, 0.35),
+    0 0 80px rgba(155, 82, 255, 0.35);
+  opacity: 0.9;
+  animation: phiSuccessHeartbeat 1.1s ease-in-out infinite;
+}
+
+/* Header row: pill + close button */
+
+.phi-success-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.phi-success-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fdfdfd;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow:
+    0 0 16px rgba(0, 255, 255, 0.4),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  position: relative;
+  z-index: 1;
+}
+
+.phi-success-close {
+  position: relative;
+  z-index: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #fefefe;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 2px 4px;
+}
+
+.phi-success-close:hover {
+  opacity: 1;
+}
+
+/* Title + body */
+
+.phi-success-title {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  margin-bottom: 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-shadow:
+    0 0 12px rgba(0, 0, 0, 0.85),
+    0 0 1px rgba(255, 255, 255, 0.9);
+}
+
+.phi-success-amount {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  opacity: 0.92;
+}
+
+.phi-success-amount .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.phi-success-body {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 14px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  opacity: 0.96;
+}
+
+/* Download CTA */
+
+.phi-send-success-download {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+
+  background:
+    radial-gradient(circle at 0% 0%, rgba(0, 255, 255, 0.24), transparent 60%),
+    linear-gradient(180deg, rgba(10, 10, 30, 0.9), rgba(0, 0, 0, 0.95));
+  color: #fdfdfd;
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+
+  box-shadow:
+    0 3px 14px rgba(0, 0, 0, 0.7),
+    0 0 20px rgba(0, 255, 255, 0.35);
+}
+
+.phi-send-success-download-icon {
+  font-size: 0.9rem;
+}
+
+.phi-send-success-download-text {
+  white-space: nowrap;
+}
+
+/* OK button */
+
+.phi-success-ok {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  border-radius: 999px;
+  border: none;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.7));
+  color: var(--ink, #fdfdfd);
+
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.6),
+    0 0 16px rgba(0, 255, 255, 0.28);
+}
+
+.phi-success-ok:active {
+  transform: translateY(0.5px) scale(0.99);
+}
+
+/* Animations */
+
+@keyframes phiSuccessIn {
+  from {
+    transform: translateY(6px) scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes phiSuccessHeartbeat {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.6;
+  }
+  30% {
+    transform: scale(1.02);
+    opacity: 0.95;
+  }
+  55% {
+    transform: scale(0.98);
+    opacity: 0.8;
+  }
+  80% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.96);
+    opacity: 0.6;
+  }
 }

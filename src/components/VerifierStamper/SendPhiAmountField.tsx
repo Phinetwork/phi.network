@@ -18,6 +18,11 @@ export type Props = {
 
   /** Optional compact formatter (kept for compat; not used while typing). */
   phiFormatter?: (s: string) => string;
+
+  /** Optional attachment control (sits in-line with the segment buttons). */
+  onAttachClick?: () => void;
+  attachmentLabel?: string;
+  attachmentActive?: boolean;
 };
 
 /* Input guards (leading dot allowed, graceful while typing) */
@@ -37,6 +42,129 @@ const ErrorToast: React.FC<{ msg: string | null }> = ({ msg }) => {
   );
 };
 
+type PhiMoveMode = "send" | "receive";
+
+type PhiMoveSuccessDetail = {
+  mode: PhiMoveMode;
+  amountPhiDisplay?: string;
+  amountDisplay?: string;
+  amountPhi?: number;
+  downloadUrl?: string;
+  downloadLabel?: string;
+  message?: string;
+};
+
+type PhiMoveSuccessState = {
+  mode: PhiMoveMode;
+  amountDisplay?: string;
+  downloadUrl?: string;
+  downloadLabel?: string;
+  message?: string;
+};
+
+/** Double-tap heartbeat haptic for important Φ moves */
+const HEARTBEAT_PATTERN: number[] = [26, 70, 38];
+
+const triggerHeartbeatHaptic = (): void => {
+  if (typeof window === "undefined") return;
+
+  const nav = window.navigator as Navigator & {
+    vibrate?: (pattern: number | number[]) => boolean;
+  };
+
+  if (typeof nav.vibrate !== "function") return;
+
+  try {
+    nav.vibrate(HEARTBEAT_PATTERN);
+  } catch {
+    // noop — haptics are best-effort only
+  }
+};
+
+/** Success overlay: Φ movement sealed + fancy download CTA */
+const PhiMoveSuccessPopup: React.FC<{
+  state: PhiMoveSuccessState;
+  onClose: () => void;
+}> = ({ state, onClose }) => {
+  const title =
+    state.mode === "receive" ? "Φ Inhale Complete" : "Φ Exhale Complete";
+  const pill = state.mode === "receive" ? "RECEIVED" : "SENT";
+  const body =
+    state.message ??
+    (state.mode === "receive"
+      ? "You just inhaled Φ into your Sovereign field. This moment is sealed."
+      : "You just exhaled Φ from your Sovereign field. This moment is sealed.");
+
+  return (
+    <div
+      className="phi-send-success-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Φ move complete"
+      onClick={onClose}
+    >
+      <div
+        className="phi-send-success-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="phi-success-orb" aria-hidden="true">
+          <div className="phi-success-orb-inner" />
+        </div>
+
+        <div className="phi-success-header">
+          <span className="phi-success-pill">{pill}</span>
+          <button
+            type="button"
+            className="phi-success-close"
+            onClick={onClose}
+            aria-label="Close confirmation"
+          >
+            ✕
+          </button>
+        </div>
+
+        <h2 className="phi-success-title">{title}</h2>
+
+        {state.amountDisplay && (
+          <p className="phi-success-amount">
+            <span className="mono">{state.amountDisplay}</span>
+          </p>
+        )}
+
+        <p className="phi-success-body">{body}</p>
+
+        {state.downloadUrl && (
+          <a
+            className="phi-send-success-download"
+            href={state.downloadUrl}
+            download={state.downloadLabel || "phi-receipt"}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span
+              className="phi-send-success-download-icon"
+              aria-hidden="true"
+            >
+              ⬇︎
+            </span>
+            <span className="phi-send-success-download-text">
+              Download sealed receipt
+            </span>
+          </a>
+        )}
+
+        <button
+          type="button"
+          className="phi-success-ok"
+          onClick={onClose}
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const SendPhiAmountField: React.FC<Props> = ({
   amountMode,
   setAmountMode,
@@ -47,19 +175,64 @@ const SendPhiAmountField: React.FC<Props> = ({
   convDisplayRight,
   remainingPhiDisplay4,
   canonicalContext,
+  onAttachClick,
+  attachmentLabel,
+  attachmentActive,
 }) => {
   const isChild = canonicalContext === "derivative"; // send-sigil (uploaded) view
 
   const [toast, setToast] = useState<string | null>(null);
   const [focused, setFocused] = useState<boolean>(false);
+  const [success, setSuccess] = useState<PhiMoveSuccessState | null>(null);
 
+  // Ephemeral error toast auto-dismiss
   useEffect(() => {
     if (!toast || isChild) return;
     const id = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(id);
   }, [toast, isChild]);
 
-  const showError = (m: string) => {
+  // Global success listener for send / receive
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePhiMoveSuccess = (event: Event): void => {
+      const customEvent = event as CustomEvent<PhiMoveSuccessDetail>;
+      const detail = customEvent.detail;
+
+      if (!detail) {
+        return;
+      }
+
+      const mode: PhiMoveMode =
+        detail.mode === "receive" ? "receive" : "send";
+
+      triggerHeartbeatHaptic();
+
+      const amountDisplay =
+        detail.amountPhiDisplay ??
+        detail.amountDisplay ??
+        (typeof detail.amountPhi === "number"
+          ? String(detail.amountPhi)
+          : undefined);
+
+      setSuccess({
+        mode,
+        amountDisplay,
+        downloadUrl: detail.downloadUrl,
+        downloadLabel: detail.downloadLabel,
+        message: detail.message,
+      });
+    };
+
+    window.addEventListener("kk:phi-move-success", handlePhiMoveSuccess);
+
+    return () => {
+      window.removeEventListener("kk:phi-move-success", handlePhiMoveSuccess);
+    };
+  }, []);
+
+  const showError = (m: string): void => {
     setToast(m);
     try {
       window.dispatchEvent(
@@ -84,7 +257,7 @@ const SendPhiAmountField: React.FC<Props> = ({
   const ariaLabel =
     amountMode === "USD" ? "Dollar amount to exhale" : "Phi amount to exhale";
 
-  const handleChange = (raw: string) => {
+  const handleChange = (raw: string): void => {
     const v = raw.replace(/\s+/g, "");
     if (amountMode === "USD") {
       if (USD2.test(v)) setUsdInput(v);
@@ -120,9 +293,21 @@ const SendPhiAmountField: React.FC<Props> = ({
     }
   };
 
-  // Child (upload) view: no amount field
+  const showAttachment = typeof onAttachClick === "function";
+
+  // Child (upload) view: no amount field, but still host toasts / success overlay
   if (isChild) {
-    return <ErrorToast msg={toast} />;
+    return (
+      <>
+        <ErrorToast msg={toast} />
+        {success && (
+          <PhiMoveSuccessPopup
+            state={success}
+            onClose={() => setSuccess(null)}
+          />
+        )}
+      </>
+    );
   }
 
   return (
@@ -140,11 +325,11 @@ const SendPhiAmountField: React.FC<Props> = ({
           </span>
         </div>
 
-        {/* ONE INNER ROW:
-            [Φ input capsule]  +  [side column: converted amount (top) + unit toggle (bottom)]
+        {/* SINGLE THIN BAR:
+            [ Φ input ] | [ live conversion ] | [ unit toggle + attachment ]
         */}
-        <div className="phi-send-row">
-          {/* Glass capsule input */}
+        <div className="phi-send-bar">
+          {/* Left: glass capsule input */}
           <div className="phi-send-inputShell" aria-live="polite">
             <span className="phi-prefix" aria-hidden="true">
               {unitGlyph}
@@ -163,28 +348,30 @@ const SendPhiAmountField: React.FC<Props> = ({
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               aria-invalid={toast ? true : undefined}
+              autoComplete="off"
+              enterKeyHint="send"
             />
 
             <i aria-hidden="true" className="phi-input-glow" />
           </div>
 
-          {/* Side column: converted amount ON TOP of the unit selector */}
-          <div className="phi-unit-column">
-            {/* Live conversion readout (e.g., "≈ Φ 0.1234" or "$ 12.34") */}
-            <div
-              className="phi-conv-right convert-readout"
-              aria-live="polite"
-            >
-              {convDisplayRight}
-            </div>
+          {/* Middle: conversion readout */}
+          <div
+            className="phi-conv-right convert-readout"
+            aria-live="polite"
+          >
+            {convDisplayRight}
+          </div>
 
-            {/* Unit switch — below the amount */}
+          {/* Right: unit toggle + optional attachment, aligned as one segment cluster */}
+          <div className="phi-send-controls">
             <div
               role="tablist"
               aria-label="Amount unit"
               className="phi-mode-toggle seg"
             >
               <button
+                type="button"
                 role="tab"
                 aria-selected={amountMode === "USD"}
                 className={`phi-mode-btn ${
@@ -196,6 +383,7 @@ const SendPhiAmountField: React.FC<Props> = ({
                 $
               </button>
               <button
+                type="button"
                 role="tab"
                 aria-selected={amountMode === "PHI"}
                 className={`phi-mode-btn ${
@@ -207,11 +395,38 @@ const SendPhiAmountField: React.FC<Props> = ({
                 Φ
               </button>
             </div>
+
+            {showAttachment && (
+              <button
+                type="button"
+                className={`phi-attach-btn ${
+                  attachmentActive ? "is-active" : ""
+                }`}
+                onClick={onAttachClick}
+                title={attachmentLabel || "Attach sigil / note"}
+              >
+                <span className="phi-attach-icon" aria-hidden="true">
+                  📎
+                </span>
+                {attachmentLabel && (
+                  <span className="phi-attach-label">
+                    {attachmentLabel}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       <ErrorToast msg={toast} />
+
+      {success && (
+        <PhiMoveSuccessPopup
+          state={success}
+          onClose={() => setSuccess(null)}
+        />
+      )}
     </>
   );
 };
