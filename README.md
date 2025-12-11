@@ -1188,3 +1188,4 @@ reach out through official **Phi Network / KaiOS / Kai-Klok** channels as publis
 > **https://phi.network**
 
 ---
+Proof of Breath™ is a sovereign, cryptographic time protocol that deterministically seals identity, authorship, and value to the exact breath-indexed lattice of reality — not clock time.
