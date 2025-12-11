@@ -644,6 +644,4 @@ You may **not**:
 
 For partnership or licensing, reach out through KaiOS / Kai-Klok channels.
 
----
 
-If you want, next step I can give you a **short “What is Φ Network?” blurb** for GitHub description / Twitter bio that matches this README perfectly.
