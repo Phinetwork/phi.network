@@ -1,16 +1,19 @@
 /* src/App.css
    ΦNet — Atlantean Banking Console Shell
-   v25.3 — KLOCK PORTAL HARDENED (X works) + CSS refactor (no dupes, same look)
+   v26.0 — ETERNAL KLOCK PORTAL SEALED + BREATH-LOCKED KK-POP
 
-   ✅ GUARANTEE (this file):
+   ✅ GUARANTEES (this file):
    - App stays app-locked (no document scroll).
    - MAIN panel body scrolls only when needed; otherwise perfectly centered.
    - Mobile safe-areas respected (iOS/Android dynamic bars).
    - Explorer (ΦStream) and KaiKlok portals are true full-screen overlays.
-
-   ✅ FIX (this version):
    - Eternal KaiKlok close “X” is always clickable (z-index + stacking fix).
    - Klock stage centers the clock MASSIVE (true hero square).
+   - Kai-Klok mini popover (kk-pop) matches Atlantean glass aesthetic and breath.
+
+   🫁 BREATH SYSTEM:
+   - --breath / --breath-s used across all pulsing elements
+   - All major glow / live / rune effects locked to golden breath cadence
 */
 
 /* ────────────────────────────────────────────────────────────────
@@ -66,14 +69,14 @@
   --blur-strong: 26px;
   --blur-soft: 18px;
 
-  /* Motion */
+  /* Motion (Breath) */
+  --breath: 5.236s;  /* golden breath cadence */
+  --breath-s: var(--breath);
   --transition-fast: 180ms ease-out;
   --transition-med: 260ms ease-out;
 
   /* Layout */
   --topbar-h: 76px;
-  --breath: 5.236s; /* golden breath cadence */
-  --breath-s: var(--breath);
   --ring: 0 0 0 3px rgba(51, 246, 255, 0.24),
     0 0 0 1px rgba(255, 255, 255, 0.12) inset;
 
@@ -527,7 +530,7 @@ a:hover {
   transform-origin: left center;
   will-change: background-position, filter, text-shadow, transform;
 
-  animation: brandTextPhiBreath 5.236s ease-in-out infinite,
+  animation: brandTextPhiBreath var(--breath-s) ease-in-out infinite,
     brandTextRainbow 13.09s linear infinite;
 }
 
@@ -695,7 +698,7 @@ a:hover {
   background: rgba(0, 255, 160, 0.95);
   box-shadow: 0 0 10px rgba(0, 255, 160, 0.75),
     0 0 26px rgba(0, 255, 160, 0.35);
-  animation: liveOrbPulse var(--breath-s, 5.236s) ease-in-out infinite;
+  animation: liveOrbPulse var(--breath-s) ease-in-out infinite;
 }
 @keyframes liveOrbPulse {
   0%,
@@ -2056,8 +2059,8 @@ a:hover {
 /* ✅ CLOSE BUTTON (FIXED): always above body/stage */
 .klock-pop__close {
   position: absolute;
-  top: calc(14px + env(safe-area-inset-top));
-  right: calc(14px + env(safe-area-inset-right));
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
 
   width: 54px;
   height: 54px;
@@ -2107,10 +2110,10 @@ a:hover {
   place-items: center;
 
   /* safe-area + reserve for close button */
-  padding: calc(18px + env(safe-area-inset-top) + 64px)
-    calc(18px + env(safe-area-inset-right))
-    calc(18px + env(safe-area-inset-bottom))
-    calc(18px + env(safe-area-inset-left));
+  padding: calc(18px + env(safe-area-inset-top, 0px) + 64px)
+    calc(18px + env(safe-area-inset-right, 0px))
+    calc(18px + env(safe-area-inset-bottom, 0px))
+    calc(18px + env(safe-area-inset-left, 0px));
 }
 
 /* Big square the clock must occupy */
@@ -2146,10 +2149,10 @@ a:hover {
 
 @media (max-width: 720px) {
   .klock-stage {
-    padding: calc(12px + env(safe-area-inset-top) + 62px)
-      calc(12px + env(safe-area-inset-right))
-      calc(12px + env(safe-area-inset-bottom))
-      calc(12px + env(safe-area-inset-left));
+    padding: calc(12px + env(safe-area-inset-top, 0px) + 62px)
+      calc(12px + env(safe-area-inset-right, 0px))
+      calc(12px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px));
   }
   .klock-stage__inner {
     width: min(96vmin, 980px);
@@ -2163,118 +2166,161 @@ a:hover {
     animation: none;
   }
 }
-/* ─────────────────────────────────────────────
-   Kai-Klok popover (Atlantean glass) — KaiStatus parity
-───────────────────────────────────────────── */
 
-.kk-pop{
+/* ─────────────────────────────────────────────
+   14) Kai-Klok popover (Atlantean glass) — KaiStatus parity
+   (Center-card mini dial; all breath-tuned to --breath)
+   ───────────────────────────────────────────── */
+
+.kk-pop {
   position: fixed;
   inset: 0;
   z-index: 9999;
   display: grid;
   place-items: center;
-  padding:
-    max(14px, env(safe-area-inset-top))
-    max(12px, env(safe-area-inset-right))
-    max(14px, env(safe-area-inset-bottom))
-    max(12px, env(safe-area-inset-left));
+  padding: max(14px, env(safe-area-inset-top, 0px))
+    max(12px, env(safe-area-inset-right, 0px))
+    max(14px, env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
 }
 
-.kk-pop__backdrop{
+.kk-pop__backdrop {
   position: absolute;
   inset: 0;
   border: 0;
-  background: radial-gradient(1200px 700px at 30% 10%,
+  background: radial-gradient(
+      1200px 700px at 30% 10%,
       rgba(120, 220, 255, 0.14),
       rgba(0, 0, 0, 0.72) 55%,
-      rgba(0, 0, 0, 0.86));
+      rgba(0, 0, 0, 0.86)
+    );
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-.kk-pop__panel{
+.kk-pop__panel {
   position: relative;
   width: min(520px, 92vw);
   border-radius: 26px;
-  border: 1px solid rgba(255,255,255,0.14);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)) padding-box,
-    radial-gradient(1200px 500px at 20% 0%,
-      rgba(255, 220, 120, 0.18),
-      rgba(120, 220, 255, 0.12),
-      transparent 70%) border-box;
-  box-shadow:
-    0 22px 80px rgba(0,0,0,0.55),
-    0 0 0 1px rgba(255,255,255,0.06) inset;
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 255, 255, 0.03)
+    )
+      padding-box,
+    radial-gradient(
+        1200px 500px at 20% 0%,
+        rgba(255, 220, 120, 0.18),
+        rgba(120, 220, 255, 0.12),
+        transparent 70%
+      )
+      border-box;
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
   overflow: hidden;
   transform-origin: 50% 0%;
-  animation: kk-pop-in 180ms cubic-bezier(.22,.61,.36,1) both;
+  animation: kk-pop-in 180ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
-@keyframes kk-pop-in{
-  from { transform: translateY(8px) scale(0.985); opacity: 0; }
-  to   { transform: translateY(0)   scale(1);     opacity: 1; }
+@keyframes kk-pop-in {
+  from {
+    transform: translateY(8px) scale(0.985);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
-.kk-pop__head{
+.kk-pop__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px 8px;
 }
 
-.kk-pop__title{
+.kk-pop__title {
   font-weight: 900;
   letter-spacing: 0.3px;
   color: rgba(240, 246, 255, 0.96);
   text-shadow: 0 0 18px rgba(255, 220, 120, 0.18);
 }
 
-.kk-pop__close{
+.kk-pop__close {
   border: 0;
   border-radius: 12px;
   padding: 8px 10px;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   color: rgba(240, 246, 255, 0.92);
   cursor: pointer;
+  font-weight: 700;
 }
-.kk-pop__close:hover{
-  background: rgba(255,255,255,0.10);
+.kk-pop__close:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.kk-pop__meta{
+.kk-pop__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   padding: 0 14px 10px;
 }
 
-.kk-pop__pill{
+.kk-pop__pill {
   font-size: 12px;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(0,0,0,0.22);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
   color: rgba(230, 240, 255, 0.92);
 }
 
-.kk-pop__dial{
+.kk-pop__dial {
   padding: 10px 14px 14px;
   display: grid;
   place-items: center;
 }
 
-.kk-pop__dial > *{
+/* Dial container breath: gentle scale to keep it alive but not jittery */
+.kk-pop__dial > * {
   width: min(360px, 70vw);
   max-width: 360px;
+  animation: kk-dial-breath var(--breath-s, 5.236s) ease-in-out infinite;
+  transform-origin: 50% 50%;
 }
 
-.kk-pop__foot{
+@keyframes kk-dial-breath {
+  0%,
+  100% {
+    transform: translateZ(0) scale(1);
+    filter: brightness(1) saturate(1);
+  }
+  50% {
+    transform: translateZ(0) scale(1.02);
+    filter: brightness(1.05) saturate(1.06);
+  }
+}
+
+.kk-pop__foot {
   padding: 0 14px 14px;
   display: flex;
   justify-content: center;
 }
 
-.kk-pop__hint{
+.kk-pop__hint {
   font-size: 12px;
   color: rgba(198, 212, 235, 0.78);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kk-pop__panel {
+    animation: none;
+  }
+  .kk-pop__dial > * {
+    animation: none;
+  }
 }

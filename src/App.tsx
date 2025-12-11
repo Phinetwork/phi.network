@@ -1,4 +1,33 @@
-// src/App.tsx
+/* ──────────────────────────────────────────────────────────────────────────────
+   App.tsx · ΦNet Sovereign Gate Shell (KaiOS-style PWA)
+   v26.4.0 · Viewport Lock + Native-App Popovers + GitHub Footer Link
+   ──────────────────────────────────────────────────────────────────────────────
+   ✅ New: useDisableZoom()
+      - Blocks pinch-zoom (multi-touch)
+      - Blocks double-tap zoom
+      - Blocks CTRL/⌘ + / - / 0 zoom shortcuts
+      - Sets touch-action: manipulation on <html> and <body>
+      - Paired with CSS (16px+ inputs) so tapping inputs only opens the keyboard,
+        NEVER zooms the viewport — behaves like a native app shell.
+
+   ✅ ExplorerPopover / KlockPopover
+      - Properly typed function components (no extra parameter list)
+      - Fullscreen fixed overlays using visualViewport for height
+      - Background scroll locked while open
+      - Click-outside to close, ESC to close, no click-through bugs
+
+   ✅ Atrium & Footer
+      - Footer version bumped to 26.4 and linked to GitHub repo:
+        https://github.com/kojibai/verify.kai
+      - Linter-safe: no implicit any, no unused renames, no bogus overload sigs
+
+   NOTE:
+   - CSS should ensure:
+       html, body { overscroll-behavior: none; }
+       input, textarea, select, button { font-size: 16px; }
+     to fully eliminate iOS zoom-on-focus while still feeling crisp.
+────────────────────────────────────────────────────────────────────────────── */
+
 import React, {
   useCallback,
   useEffect,
@@ -35,7 +64,7 @@ import {
 import HomePriceChartCard from "./components/HomePriceChartCard";
 import SovereignDeclarations from "./components/SovereignDeclarations";
 
-// ✅ IMPORTANT: use the ACTUAL explorer file (it lives in /pages)
+// ✅ IMPORTANT: use the ACTUAL explorer file (it lives in /components here)
 import SigilExplorer from "./components/SigilExplorer";
 
 // ✅ NEW: Eternal KaiKlok module (popover content)
@@ -75,6 +104,19 @@ type KlockPopoverStyle = CSSProperties & {
   ["--klock-border-strong"]?: string;
   ["--klock-ring"]?: string;
   ["--klock-scale"]?: string;
+};
+
+// Explicit prop types for popovers
+type ExplorerPopoverProps = {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+};
+
+type KlockPopoverProps = {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
 };
 
 // ✅ router state shape for auto-opening details on KaiKlok launch
@@ -202,6 +244,88 @@ function formatDMYLabel(v: BeatStepDMY): string {
   return `D${v.day}/M${v.month}/Y${v.year}`;
 }
 
+/**
+ * 🔒 useDisableZoom — lock viewport like a native app
+ *
+ * - Blocks pinch-zoom (multi-touch)
+ * - Blocks double-tap zoom
+ * - Blocks CTRL/⌘ +/- / 0 zoom shortcuts
+ * - Sets touch-action: manipulation on <html> and <body>
+ *
+ * NOTE: Pair this with CSS:
+ *   input, textarea, select, button { font-size: 16px; }
+ * to stop iOS from auto-zooming when focusing form controls.
+ */
+function useDisableZoom(): void {
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+
+    let lastTouchEnd = 0;
+
+    const onTouchEnd = (e: TouchEvent): void => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        // prevent double-tap zoom
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    };
+
+    const onTouchMove = (e: TouchEvent): void => {
+      // Block pinch-zoom (2+ fingers moving)
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    const onWheel = (e: WheelEvent): void => {
+      // Disable ctrl/⌘ + wheel zoom while preserving scrolling
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+
+    const onKeydown = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      const k = e.key;
+      if (k === "+" || k === "-" || k === "=" || k === "_" || k === "0") {
+        // CTRL/⌘ + / - / 0 zoom shortcuts
+        e.preventDefault();
+      }
+    };
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    const prevHtmlTouchAction = html.style.touchAction;
+    const prevBodyTouchAction = body.style.touchAction;
+    const prevTextSizeAdjust =
+      (html.style as unknown as { webkitTextSizeAdjust?: string }).webkitTextSizeAdjust;
+
+    html.style.touchAction = "manipulation";
+    body.style.touchAction = "manipulation";
+    (html.style as unknown as { webkitTextSizeAdjust?: string }).webkitTextSizeAdjust =
+      "100%";
+
+    document.addEventListener("touchend", onTouchEnd, { passive: false });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("keydown", onKeydown);
+
+    return () => {
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("keydown", onKeydown);
+
+      html.style.touchAction = prevHtmlTouchAction;
+      body.style.touchAction = prevBodyTouchAction;
+      (html.style as unknown as { webkitTextSizeAdjust?: string }).webkitTextSizeAdjust =
+        prevTextSizeAdjust;
+    };
+  }, []);
+}
+
 function useVisualViewportSize(): { width: number; height: number } {
   const read = useCallback((): { width: number; height: number } => {
     const vv = window.visualViewport;
@@ -241,13 +365,11 @@ function useVisualViewportSize(): { width: number; height: number } {
   return size;
 }
 
-function ExplorerPopover(props: {
-  open: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}): React.JSX.Element | null {
-  const { open, onClose, children } = props;
-
+function ExplorerPopover({
+  open,
+  onClose,
+  children,
+}: ExplorerPopoverProps): React.JSX.Element | null {
   const isClient = typeof document !== "undefined";
   const vvSize = useVisualViewportSize();
 
@@ -374,13 +496,11 @@ function ExplorerPopover(props: {
   );
 }
 
-function KlockPopover(props: {
-  open: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}): React.JSX.Element | null {
-  const { open, onClose, children } = props;
-
+function KlockPopover({
+  open,
+  onClose,
+  children,
+}: KlockPopoverProps): React.JSX.Element | null {
   const isClient = typeof document !== "undefined";
   const vvSize = useVisualViewportSize();
 
@@ -605,6 +725,9 @@ function KlockRoute(): React.JSX.Element {
 function AppChrome(): React.JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // 🔒 Lock viewport zoom globally (acts like a native KaiOS app shell)
+  useDisableZoom();
 
   // Canonical Golden Breath
   const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
@@ -889,12 +1012,12 @@ function AppChrome(): React.JSX.Element {
         >
           <span className="live-orb" aria-hidden="true" />
           <div className="live-text">
-  {/* ✅ KAI uses the SAME wrapper as pulse, so it matches pulse size */}
-  <div className="live-meta">
-    <span className="mono" style={neonTextStyle}>
-      ☤KAI
-    </span>
-  </div>
+            {/* ✅ KAI uses the SAME wrapper as pulse, so it matches pulse size */}
+            <div className="live-meta">
+              <span className="mono" style={neonTextStyle}>
+                ☤KAI
+              </span>
+            </div>
 
             <div className="live-meta">
               <span className="mono" style={neonTextStyle}>
@@ -1007,26 +1130,25 @@ function AppChrome(): React.JSX.Element {
                   </div>
                 </div>
 
-              <footer className="panel-foot" aria-label="Footer">
-  <div className="panel-foot__left">
-    <span className="mono">ΦNet</span> • Sovereign Gate
-  </div>
+                <footer className="panel-foot" aria-label="Footer">
+                  <div className="panel-foot__left">
+                    <span className="mono">ΦNet</span> • Sovereign Gate
+                  </div>
 
-  <div className="panel-foot__right">
-    <span className="mono">V</span>{" "}
-    <a
-      className="mono"
-      href="https://github.com/kojibai/verify.kai"
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Version 26.3 (opens GitHub)"
-      title="Open GitHub"
-    >
-      26.3
-    </a>
-  </div>
-</footer>
-
+                  <div className="panel-foot__right">
+                    <span className="mono">V</span>{" "}
+                    <a
+                      className="mono"
+                      href="https://github.com/kojibai/verify.kai"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Version 26.4 (opens GitHub)"
+                      title="Open GitHub"
+                    >
+                      26.4
+                    </a>
+                  </div>
+                </footer>
               </section>
             </div>
           </div>
