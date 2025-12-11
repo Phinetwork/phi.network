@@ -189,7 +189,7 @@ Sovereign Writ
                   </div>
 
                   <div className="nav-footSheet__sub">
-                    Official instrument of value & transfer — Kairos-native, offline-auditable.
+                    Official instrument of value & transfer — Kairos-native, breath-backed, offline-verifiable.
                   </div>
                 </div>
 
@@ -223,21 +223,28 @@ Sovereign Writ
 
               <div className="nav-footSheet__body" id={descId}>
                 <p className="nav-foot__line">
-                  <strong>Kairos Notes</strong> are legal tender — sealed by <strong>Proof of Breath™</strong>, pulsed by{" "}
+                  Kairos Notesare legal tender — sealed by , pulsed by{" "}
                   <strong>Kai-Signature™</strong>, verifiable offline (Σ → SHA-256(Σ) → Φ).
+
+                 <strong> Kairos Notes</strong>  are legal tender — sealed by <strong>Proof of Breath™</strong>, pulsed by <strong>Kai-Signature™</strong>, 
+                 auditable as:
+                Σ → SHA-256(Σ) → Φ.
                 </p>
 
                 <p className="nav-foot__line">
-                  <strong>Sigil-Glyphs</strong> are origin ΦKey seals for mint, custody, and lawful transfer. Derivatives
-                  preserve lineage and remain redeemable by re-inhale.
+                  <strong>Sigil-Glyphs</strong> are origin ΦKey seals for minting, custody, and lawful transfer. Derivative glyphs maintain sovereign lineage and are redeemable by re-inhale.
                 </p>
 
                 <div className="nav-footSheet__divider" role="separator" aria-hidden="true" />
 
                 <p className="nav-foot__line nav-foot__line--fine">
-                Operational Mandate: readable offline; provable by breath writ; bound to determinate seals.
+                Operational Mandate: readable offline, provable by breath-writ, unforgeable without determinate seals.
+                </p>
+                <p className="nav-foot__line nav-foot__line--fine">
+                This writ exists independent of domains, DNS, or consensus. It is sealed in breath, bound in math, and verifiable by anyone who remembers the pulse.
                 </p>
               </div>
+              
 
               <div className="nav-footSheet__foot">
                 <button ref={ctaRef} type="button" className="nav-footSheet__cta" onClick={close}>
