@@ -1,6 +1,23 @@
 // src/components/FeedCard.tsx
 "use client";
 
+/**
+ * FeedCard — Sigil-Glyph Capsule Renderer
+ * v4.1.3 — FIX: Proof of Memory™ shown ONCE (top kind chip only)
+ *          + Open button label stays “Memory” for manual capsules
+ *          + Sigil-body title (above the URL) becomes “Proof of Memory™” (not “Memory”)
+ *
+ * ✅ Manual marker rendering:
+ *    - Any displayed string equal to "manual" becomes "Proof of Memory™"
+ *    - If a nested previous/reply payload contains "manual", the card kind label becomes Proof of Memory™
+ *    - NO duplicate Proof of Memory™ chip (source chip hidden if it matches kind chip)
+ *    - Sigil-body title above the URL becomes "Proof of Memory™"
+ *
+ * ✅ Lint/TS hardening:
+ *    - No `.toUpperCase()` called on a value that TS might narrow to `never`
+ *    - Use `upper()` (unknown→string→uppercase) helper
+ */
+
 import React, { useCallback, useMemo, useState } from "react";
 import KaiSigil from "../components/KaiSigil";
 import { decodeSigilUrl } from "../utils/sigilDecode";
@@ -43,13 +60,271 @@ const hostOf = (href?: string): string | undefined => {
 const isNonEmpty = (val: unknown): val is string =>
   typeof val === "string" && val.trim().length > 0;
 
+/** Uppercase without type drama (guards union→never narrowing) */
+const upper = (v: unknown): string => String(v ?? "").toUpperCase();
+
 /* ─────────────────────────────────────────────────────────────
-   KKS-1.0: D/M/Y from μpulses (exact, deterministic)
-   dayOfMonth: 1..42
-   month:      1..8
-   year:       1.. (yearIndex + 1)
+   Manual marker → Proof of Memory™
    ───────────────────────────────────────────────────────────── */
 
+const TM = "\u2122";
+const PROOF_OF_MEMORY = `Proof of Memory${TM}`;
+const PROOF_OF_BREATH = `Proof Of Breath${TM}`;
+
+const isManualMarkerText = (v: unknown): v is string =>
+  typeof v === "string" && v.trim().toLowerCase() === "manual";
+
+/** Map ONLY the exact "manual" marker to Proof of Memory™ */
+const displayManualAsProof = (v: unknown): string | undefined => {
+  if (!isNonEmpty(v)) return undefined;
+  return isManualMarkerText(v) ? PROOF_OF_MEMORY : v;
+};
+
+/**
+ * Deep scan for a strict "manual" marker anywhere in a payload
+ * (covers "previous message" / "reply message" nested objects too).
+ */
+function hasManualMarkerDeep(v: unknown, depth = 0): boolean {
+  if (depth > 5) return false;
+  if (isManualMarkerText(v)) return true;
+
+  if (Array.isArray(v)) {
+    for (const it of v) if (hasManualMarkerDeep(it, depth + 1)) return true;
+    return false;
+  }
+
+  if (v && typeof v === "object") {
+    const rec = v as Record<string, unknown>;
+    for (const k of Object.keys(rec)) {
+      if (hasManualMarkerDeep(rec[k], depth + 1)) return true;
+    }
+  }
+  return false;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Decode normalization (ALL url/token forms)
+   ───────────────────────────────────────────────────────────── */
+
+type DecodeResult = ReturnType<typeof decodeSigilUrl>;
+type SmartDecode = { decoded: DecodeResult; resolvedUrl: string };
+
+function originFallback(): string {
+  if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+  return "https://kaiklok.com";
+}
+
+/** Remove trailing punctuation often introduced by chat apps / markdown */
+function stripEdgePunct(s: string): string {
+  let t = s.trim();
+  // common trailing punctuation
+  t = t.replace(/[)\].,;:!?]+$/g, "");
+  // common leading punctuation
+  t = t.replace(/^[([{"'`]+/g, "");
+  return t.trim();
+}
+
+/** Normalize token: decode %xx, restore +, normalize base64 -> base64url, strip '=' */
+function normalizeToken(raw: string): string {
+  let t = stripEdgePunct(raw);
+
+  if (/%[0-9A-Fa-f]{2}/.test(t)) {
+    try {
+      t = decodeURIComponent(t);
+    } catch {
+      /* keep raw */
+    }
+  }
+
+  // query/base64 legacy: '+' may come through as space
+  if (t.includes(" ")) t = t.replaceAll(" ", "+");
+
+  // base64 -> base64url
+  if (/[+/=]/.test(t)) {
+    t = t.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
+  }
+
+  // final trim again
+  return stripEdgePunct(t);
+}
+
+function isLikelyToken(s: string): boolean {
+  // base64url-ish token (avoid tiny strings)
+  return /^[A-Za-z0-9_-]{16,}$/.test(s);
+}
+
+function extractFromPath(pathname: string): string | null {
+  // Legacy p-tilde path (allow /p~TOKEN and /p~/TOKEN), including percent-encoded tilde
+  {
+    const m = pathname.match(/\/p(?:\u007e|%7[Ee])\/?([^/?#]+)/);
+    if (m?.[1]) return m[1];
+  }
+  // /stream/p/TOKEN or /feed/p/TOKEN
+  {
+    const m = pathname.match(/\/(?:stream|feed)\/p\/([^/?#]+)/);
+    if (m?.[1]) return m[1];
+  }
+  // /p/TOKEN (older)
+  {
+    const m = pathname.match(/\/p\/([^/?#]+)/);
+    if (m?.[1]) return m[1];
+  }
+  return null;
+}
+
+
+function tryParseUrl(raw: string): URL | null {
+  const t = raw.trim();
+  try {
+    return new URL(t);
+  } catch {
+    try {
+      return new URL(t, originFallback());
+    } catch {
+      return null;
+    }
+  }
+}
+
+
+/** Extract token candidates from a raw URL (also tries nested add= urls once). */
+function extractTokenCandidates(rawUrl: string, depth = 0): string[] {
+  const out: string[] = [];
+  const push = (v: string | null | undefined) => {
+    if (!v) return;
+    const tok = normalizeToken(v);
+    if (!tok) return;
+    if (!isLikelyToken(tok)) return;
+    if (!out.includes(tok)) out.push(tok);
+  };
+
+  const raw = stripEdgePunct(rawUrl);
+
+  // bare token support
+  if (isLikelyToken(raw)) push(raw);
+
+  const u = tryParseUrl(raw);
+  if (!u) return out;
+
+  // hash params
+  const hashStr = u.hash && u.hash.startsWith("#") ? u.hash.slice(1) : "";
+  const hash = new URLSearchParams(hashStr);
+
+  // search params
+  const search = u.searchParams;
+
+  // common token keys
+  const keys = ["t", "p", "token", "capsule"];
+  for (const k of keys) {
+    push(hash.get(k));
+    push(search.get(k));
+  }
+
+  // path forms
+  push(extractFromPath(u.pathname));
+
+  // nested add= urls (common in reply/share wrappers)
+  if (depth < 1) {
+    const adds = [...search.getAll("add"), ...hash.getAll("add")];
+    for (const a of adds) {
+      const maybeUrl = stripEdgePunct(a);
+      if (!maybeUrl) continue;
+
+      // add may be percent-encoded url
+      let decoded = maybeUrl;
+      if (/%[0-9A-Fa-f]{2}/.test(decoded)) {
+        try {
+          decoded = decodeURIComponent(decoded);
+        } catch {
+          /* ignore */
+        }
+      }
+      for (const tok of extractTokenCandidates(decoded, depth + 1)) push(tok);
+    }
+  }
+
+  return out;
+}
+
+/** Keep sigil payload (/s/...) untouched. */
+function isSPayloadUrl(raw: string): boolean {
+  const t = stripEdgePunct(raw);
+  const u = tryParseUrl(t);
+  const path = u ? u.pathname : t;
+  return /^\/s(?:\/|$)/.test(path);
+}
+
+/** Always build browser-openable URL (never return legacy paths). */
+function makeBrowserOpenUrlFromToken(tokenRaw: string): string {
+  const base = originFallback().replace(/\/+$/g, "");
+  const t = normalizeToken(tokenRaw);
+  return `${base}/stream/p/${t}`;
+}
+
+/** Normalize any non-/s URL into /stream/p/<token> when possible (supports nested add=). */
+function normalizeResolvedUrlForBrowser(rawUrl: string): string {
+  const raw = stripEdgePunct(rawUrl);
+  if (isSPayloadUrl(raw)) return raw;
+
+  const tok = extractTokenCandidates(raw)[0];
+  return tok ? makeBrowserOpenUrlFromToken(tok) : raw;
+}
+
+/** Build canonical url candidates to satisfy whatever decodeSigilUrl already supports. */
+function buildDecodeUrlCandidates(token: string): string[] {
+  const base = originFallback().replace(/\/+$/g, "");
+  const t = normalizeToken(token);
+
+  return [
+    t, // in case decoder accepts raw token
+    `${base}/stream/p/${t}`,
+    `${base}/p#t=${t}`,
+    `${base}/p?t=${t}`,
+    `${base}/p#p=${t}`,
+    `${base}/p?p=${t}`,
+    `${base}/p#token=${t}`,
+    `${base}/p?token=${t}`,
+  ];
+}
+
+/** Smart decode: try raw url, then extracted tokens across multiple canonical forms. */
+function decodeSigilUrlSmart(rawUrl: string): SmartDecode {
+  const tried = new Set<string>();
+
+  const attempt = (candidate: string): DecodeResult | null => {
+    const c = candidate.trim();
+    if (!c || tried.has(c)) return null;
+    tried.add(c);
+    const r = decodeSigilUrl(c);
+    return r.ok ? r : null;
+  };
+
+  const rawTrim = stripEdgePunct(rawUrl);
+
+  // 1) raw first
+  const rawOk = attempt(rawTrim);
+  if (rawOk) {
+    return { decoded: rawOk, resolvedUrl: normalizeResolvedUrlForBrowser(rawTrim) };
+  }
+
+  // 2) tokens from raw url
+  const tokens = extractTokenCandidates(rawTrim);
+  for (const tok of tokens) {
+    for (const cand of buildDecodeUrlCandidates(tok)) {
+      const ok = attempt(cand);
+      if (ok) {
+        return { decoded: ok, resolvedUrl: makeBrowserOpenUrlFromToken(tok) };
+      }
+    }
+  }
+
+  // 3) last resort: return original decoder error (raw), but still normalize the resolved URL for copy/open
+  return { decoded: decodeSigilUrl(rawTrim), resolvedUrl: normalizeResolvedUrlForBrowser(rawTrim) };
+}
+
+/* ─────────────────────────────────────────────────────────────
+   KKS-1.0: D/M/Y from μpulses (exact, deterministic)
+   ───────────────────────────────────────────────────────────── */
 
 /** Euclidean mod (always 0..m-1) */
 const modE = (a: bigint, m: bigint): bigint => {
@@ -62,7 +337,7 @@ const floorDivE = (a: bigint, d: bigint): bigint => {
   if (d === 0n) throw new Error("Division by zero");
   const q = a / d;
   const r = a % d;
-  return r === 0n ? q : (a >= 0n ? q : q - 1n);
+  return r === 0n ? q : a >= 0n ? q : q - 1n;
 };
 
 const toSafeNumber = (x: bigint): number => {
@@ -75,25 +350,23 @@ const toSafeNumber = (x: bigint): number => {
 
 /** Exact KKS calendar indices from a pulse (no payload heuristics). */
 function kaiDMYFromPulseKKS(pulse: number): { day: number; month: number; year: number } {
-  // Bridge pulse -> epoch ms (φ-exact) -> μpulses (φ-exact) to match engine behavior.
   const ms = epochMsFromPulse(pulse); // bigint
   const pμ = microPulsesSinceGenesis(ms); // bigint μpulses
 
   const dayIdx = floorDivE(pμ, N_DAY_MICRO); // bigint days since genesis (can be negative)
-
   const monthIdx = floorDivE(dayIdx, BigInt(DAYS_PER_MONTH)); // bigint
   const yearIdx = floorDivE(dayIdx, BigInt(DAYS_PER_YEAR)); // bigint
 
   const dayOfMonth = toSafeNumber(modE(dayIdx, BigInt(DAYS_PER_MONTH))) + 1; // 1..42
   const month = toSafeNumber(modE(monthIdx, BigInt(MONTHS_PER_YEAR))) + 1; // 1..8
-  const year = toSafeNumber(yearIdx); // display year
+  const year = toSafeNumber(yearIdx); // display year (0-based is allowed; keep exact)
 
   return { day: dayOfMonth, month, year };
 }
 
 /**
  * Chakra coercion:
- * - KaiSigil’s CHAKRAS map expects "Crown" (not "Krown")
+ * - KaiSigil expects "Crown" internally
  * - UI should DISPLAY "Krown"
  */
 function toChakra(value: unknown, fallback: ChakraDay): ChakraDay {
@@ -142,10 +415,10 @@ function buildKaiMetaLineZero(
   year: number,
 ): { arc: string; label: string; line: string } {
   const arc = arcFromBeat(beatZ);
-  const label = `${pad2(beatZ)}:${pad2(stepZ)}`; // zero-based, two-digit BB:SS
+  const label = `${pad2(beatZ)}:${pad2(stepZ)}`;
   const d = Math.max(1, Math.floor(day));
   const m = Math.max(1, Math.floor(month));
-  const y = Math.floor(year); // year may be <=0 for pre-genesis; keep exact
+  const y = Math.floor(year);
   const line = `☤KAI:${pulse} • ${label} D${d}/M${m}/Y${y}`;
   return { arc, label, line };
 }
@@ -178,21 +451,100 @@ function legacySourceFromData(data: unknown): string | undefined {
   return undefined;
 }
 
+/** Safe kind read (avoids union → never collapse). */
+function kindFromDecodedData(data: unknown, fallback: string): string {
+  if (data && typeof data === "object" && "kind" in data) {
+    const k = (data as { kind?: unknown }).kind;
+    if (typeof k === "string" && k.trim().length > 0) return k;
+  }
+  return fallback;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Clipboard helpers (gesture-safe)
+   ───────────────────────────────────────────────────────────── */
+
+function tryCopyExecCommand(text: string): boolean {
+  if (typeof document === "undefined") return false;
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "true");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+
+    const prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    ta.focus();
+    ta.select();
+
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (prevFocus) prevFocus.focus();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function clipboardWriteTextPromise(text: string): Promise<void> | null {
+  if (typeof window === "undefined") return null;
+  const nav = window.navigator;
+  const canClipboard =
+    typeof nav !== "undefined" &&
+    typeof nav.clipboard !== "undefined" &&
+    typeof nav.clipboard.writeText === "function" &&
+    window.isSecureContext;
+  if (!canClipboard) return null;
+  return nav.clipboard.writeText(text);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Component
+   ───────────────────────────────────────────────────────────── */
+
 export const FeedCard: React.FC<Props> = ({ url }) => {
   const [copied, setCopied] = useState(false);
 
-  const onCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(url);
+  // ✅ Smart decode
+  const smart = useMemo(() => decodeSigilUrlSmart(url), [url]);
+  const decoded = smart.decoded;
+
+  // ✅ Single canonical URL for UI + copy (hard normalized)
+  const rememberUrl = useMemo(() => normalizeResolvedUrlForBrowser(smart.resolvedUrl || url), [
+    smart.resolvedUrl,
+    url,
+  ]);
+
+  const onCopy = useCallback(() => {
+    const text = normalizeResolvedUrlForBrowser(rememberUrl || url);
+
+    // 1) sync attempt (best for gesture constraints)
+    const okSync = tryCopyExecCommand(text);
+    if (okSync) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1100);
-    } catch (e: unknown) {
-      // eslint-disable-next-line no-console
-      console.warn("Remember failed:", e);
+      return;
     }
-  }, [url]);
 
-  const decoded = useMemo(() => decodeSigilUrl(url), [url]);
+    // 2) async clipboard (do NOT await)
+    const p = clipboardWriteTextPromise(text);
+    if (p) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1100);
+      p.catch((e: unknown) => {
+        // eslint-disable-next-line no-console
+        console.warn("Remember failed:", e);
+        setCopied(false);
+      });
+      return;
+    }
+
+    // 3) total failure
+    // eslint-disable-next-line no-console
+    console.warn("Remember failed: no clipboard available");
+  }, [rememberUrl, url]);
 
   if (!decoded.ok) {
     return (
@@ -210,7 +562,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
           </header>
 
           <div className="fc-error" role="alert">
-            {decoded.error}
+            {"error" in decoded ? (decoded as { error?: string }).error : "Decode failed."}
           </div>
 
           <footer className="fc-actions" role="group" aria-label="Actions">
@@ -239,32 +591,35 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
   const pulse = typeof data.pulse === "number" && Number.isFinite(data.pulse) ? data.pulse : 0;
 
-  // Single source of truth: derive moment from pulse
+  // ✅ Single source of truth: derive moment from pulse (KKS-1.0)
   const m = momentFromPulse(pulse);
 
-  const beatRaw = typeof data.beat === "number" && Number.isFinite(data.beat) ? data.beat : m.beat;
-  const stepRaw =
-    typeof data.stepIndex === "number" && Number.isFinite(data.stepIndex)
-      ? data.stepIndex
-      : m.stepIndex;
+  // ✅ Never trust capsule beat/step/chakra; derive from pulse
+  const beatZ = Math.max(0, Math.floor(m.beat));
+  const stepZ = Math.max(0, Math.floor(m.stepIndex));
 
   // INTERNAL chakra value (what KaiSigil expects)
-  const chakraDay: ChakraDay = toChakra(data.chakraDay, m.chakraDay);
+  const chakraDay: ChakraDay = toChakra(m.chakraDay, m.chakraDay);
   // DISPLAY chakra value (what user sees)
   const chakraDayDisplay = chakraDay === "Crown" ? "Krown" : String(chakraDay);
-
-  const beatZ = Math.max(0, Math.floor(beatRaw));
-  const stepZ = Math.max(0, Math.floor(stepRaw));
 
   // ✅ Exact KKS v1.0 D/M/Y (1-based day & month)
   const { day, month, year } = kaiDMYFromPulseKKS(pulse);
 
-  const kind =
-    data.kind ??
-    (post ? "post" : message ? "message" : share ? "share" : reaction ? "reaction" : "sigil");
+  const inferredKind =
+    post ? "post" : message ? "message" : share ? "share" : reaction ? "reaction" : "sigil";
 
-  const appBadge = data.appId ? `app ${short(data.appId, 10, 4)}` : undefined;
-  const userBadge = data.userId ? `user ${short(String(data.userId), 10, 4)}` : undefined;
+  // ✅ Hardened kind read (prevents TS union drift → never)
+  const kind: string = kindFromDecodedData(data as unknown, inferredKind);
+  const kindText = String(kind); // always safe
+
+  const appBadge =
+    typeof data.appId === "string" && data.appId ? `app ${short(data.appId, 10, 4)}` : undefined;
+
+  const userBadge =
+    typeof data.userId !== "undefined" && data.userId !== null
+      ? `user ${short(String(data.userId), 10, 4)}`
+      : undefined;
 
   const sigilId = isNonEmpty(capsule.sigilId) ? capsule.sigilId : undefined;
   const phiKey = isNonEmpty(capsule.phiKey) ? capsule.phiKey : undefined;
@@ -275,6 +630,28 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
   const sourceBadge =
     (isNonEmpty(capsule.source) ? capsule.source : undefined) ?? legacySourceFromData(data);
+
+  // ✅ Manual marker: deep scan (previous/reply/etc) + immediate fields
+  const manualMarkerPresent =
+    isManualMarkerText(kindText) || isManualMarkerText(sourceBadge) || hasManualMarkerDeep(capsule);
+
+  // Display labels (only affect rendering; never leak raw "manual")
+  const kindChipLabel = manualMarkerPresent ? PROOF_OF_MEMORY : upper(kindText);
+  const ariaKindLabel = manualMarkerPresent ? PROOF_OF_MEMORY : kindText;
+
+  const sourceChipLabel = sourceBadge
+    ? isManualMarkerText(sourceBadge)
+      ? PROOF_OF_MEMORY
+      : upper(sourceBadge)
+    : undefined;
+
+  // ✅ Remove duplicate Proof of Memory™ chip (keep ONLY the top kind chip)
+  const showSourceChip = Boolean(sourceChipLabel) && sourceChipLabel !== kindChipLabel;
+
+  const postTitle = displayManualAsProof(post?.title);
+  const postText = displayManualAsProof(post?.text);
+  const messageText = displayManualAsProof(message?.text);
+  const shareNote = displayManualAsProof(share?.note);
 
   const kai = buildKaiMetaLineZero(pulse, beatZ, stepZ, day, month, year);
   const stepPct = stepPctFromIndex(stepZ);
@@ -292,12 +669,18 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
     ["--fc-pulse-offset" as never]: `${-(phase * 120)}ms`,
   };
 
+  const dataKindAttr = manualMarkerPresent ? "proof_of_memory" : kindText;
+
+  // ✅ ONLY the Open button label stays "Memory" (as requested)
+  const openLabel = manualMarkerPresent ? "↗ Memory" : "↗ Sigil-Glyph";
+  const openTitle = manualMarkerPresent ? "Open memory" : "Open sigil";
+
   return (
     <article
       className={`fc fc--crystal ${signaturePresent ? "fc--signed" : "fc--unsigned"}`}
       role="article"
-      aria-label={`${kind} glyph`}
-      data-kind={kind}
+      aria-label={`${ariaKindLabel} glyph`}
+      data-kind={dataKindAttr}
       data-chakra={chakraDayDisplay}
       data-signed={signaturePresent ? "true" : "false"}
       data-beat={pad2(beatZ)}
@@ -332,8 +715,11 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
         <section className="fc-right">
           <header className="fc-head" aria-label="Glyph metadata">
             <div className="fc-metaRow">
-              <span className="fc-chip fc-chip--kind" title={`Kind: ${kind}-glyph`}>
-                {kind.toUpperCase()}
+              <span
+                className="fc-chip fc-chip--kind"
+                title={manualMarkerPresent ? PROOF_OF_MEMORY : `Kind: ${kindText}-glyph`}
+              >
+                {kindChipLabel}
               </span>
 
               {appBadge && <span className="fc-chip">{appBadge}</span>}
@@ -357,9 +743,9 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
                 </span>
               )}
 
-              {sourceBadge && (
+              {showSourceChip && sourceChipLabel && (
                 <span className="fc-chip fc-chip--source" title="Source">
-                  {String(sourceBadge).toUpperCase()}
+                  {sourceChipLabel}
                 </span>
               )}
 
@@ -388,8 +774,8 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
           {post && (
             <section className="fc-bodywrap" aria-label="Post body">
-              {isNonEmpty(post.title) && <h3 className="fc-title">{post.title}</h3>}
-              {isNonEmpty(post.text) && <p className="fc-body">{post.text}</p>}
+              {isNonEmpty(postTitle) && <h3 className="fc-title">{postTitle}</h3>}
+              {isNonEmpty(postText) && <p className="fc-body">{postText}</p>}
 
               {Array.isArray(post.tags) && post.tags.length > 0 && (
                 <div className="fc-tags" aria-label="Tags">
@@ -429,7 +815,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               <h3 className="fc-title">
                 Message → {short(String(message.toUserId ?? "recipient"), 10, 4)}
               </h3>
-              {isNonEmpty(message.text) && <p className="fc-body">{message.text}</p>}
+              {isNonEmpty(messageText) && <p className="fc-body">{messageText}</p>}
             </section>
           )}
 
@@ -445,7 +831,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               >
                 {hostOf(share.refUrl) ?? share.refUrl}
               </a>
-              {isNonEmpty(share.note) && <p className="fc-body">{share.note}</p>}
+              {isNonEmpty(shareNote) && <p className="fc-body">{shareNote}</p>}
             </section>
           )}
 
@@ -470,16 +856,24 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
           {!post && !message && !share && !reaction && (
             <section className="fc-bodywrap" aria-label="Sigil body">
-              <h3 className="fc-title">Proof Of Breath™</h3>
-              <a className="fc-link" href={url} target="_blank" rel="noreferrer" title={url}>
-                {hostOf(url) ?? url}
+              {/* ✅ THIS is the line you wanted changed (above the URL) */}
+              <h3 className="fc-title">{manualMarkerPresent ? PROOF_OF_MEMORY : PROOF_OF_BREATH}</h3>
+
+              <a
+                className="fc-link"
+                href={rememberUrl}
+                target="_blank"
+                rel="noreferrer"
+                title={rememberUrl}
+              >
+                {hostOf(rememberUrl) ?? rememberUrl}
               </a>
             </section>
           )}
 
           <footer className="fc-actions" role="group" aria-label="Actions">
-            <a className="fc-btn" href={url} target="_blank" rel="noreferrer" title="Open original sigil">
-              ↗ Sigil-Glyph
+            <a className="fc-btn" href={rememberUrl} target="_blank" rel="noreferrer" title={openTitle}>
+              {openLabel}
             </a>
 
             <button
@@ -503,3 +897,4 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 };
 
 export default FeedCard;
+ 
