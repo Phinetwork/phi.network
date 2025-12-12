@@ -3,21 +3,19 @@
 
 /**
  * FeedCard — Sigil-Glyph Capsule Renderer
- * v4.0.0 — FIX: flawless decode for ALL token/url forms + KKS-1.0 pulse-authoritative display
+ * v4.1.3 — FIX: Proof of Memory™ shown ONCE (top kind chip only)
+ *          + Open button label stays “Memory” for manual capsules
+ *          + Sigil-body title (above the URL) becomes “Proof of Memory™” (not “Memory”)
  *
- * ✅ Decode hardening:
- *    - Accepts /p#t=<token>, /p?t=<token>, /p#p=<token>, /p?p=<token>
- *    - Accepts /stream/p/<token>, /stream#t=<token>, /stream?p=<token>
- *    - Accepts full URLs, relative URLs, or bare tokens
- *    - Strips trailing punctuation, decodes %xx, normalizes base64 -> base64url (-/_ no '=')
- *    - If a “wrapper” link contains add=… (nested URLs), will also try decoding those
+ * ✅ Manual marker rendering:
+ *    - Any displayed string equal to "manual" becomes "Proof of Memory™"
+ *    - If a nested previous/reply payload contains "manual", the card kind label becomes Proof of Memory™
+ *    - NO duplicate Proof of Memory™ chip (source chip hidden if it matches kind chip)
+ *    - Sigil-body title above the URL becomes "Proof of Memory™"
  *
- * ✅ KKS-1.0 correctness:
- *    - pulse is authoritative
- *    - beat/step/chakra are derived from pulse (never trust payload heuristics)
- *
- * ✅ Copy hardening:
- *    - Sync copy attempt first; async clipboard write without awaiting (gesture-safe)
+ * ✅ Lint/TS hardening:
+ *    - No `.toUpperCase()` called on a value that TS might narrow to `never`
+ *    - Use `upper()` (unknown→string→uppercase) helper
  */
 
 import React, { useCallback, useMemo, useState } from "react";
@@ -61,6 +59,48 @@ const hostOf = (href?: string): string | undefined => {
 
 const isNonEmpty = (val: unknown): val is string =>
   typeof val === "string" && val.trim().length > 0;
+
+/** Uppercase without type drama (guards union→never narrowing) */
+const upper = (v: unknown): string => String(v ?? "").toUpperCase();
+
+/* ─────────────────────────────────────────────────────────────
+   Manual marker → Proof of Memory™
+   ───────────────────────────────────────────────────────────── */
+
+const TM = "\u2122";
+const PROOF_OF_MEMORY = `Proof of Memory${TM}`;
+const PROOF_OF_BREATH = `Proof Of Breath${TM}`;
+
+const isManualMarkerText = (v: unknown): v is string =>
+  typeof v === "string" && v.trim().toLowerCase() === "manual";
+
+/** Map ONLY the exact "manual" marker to Proof of Memory™ */
+const displayManualAsProof = (v: unknown): string | undefined => {
+  if (!isNonEmpty(v)) return undefined;
+  return isManualMarkerText(v) ? PROOF_OF_MEMORY : v;
+};
+
+/**
+ * Deep scan for a strict "manual" marker anywhere in a payload
+ * (covers "previous message" / "reply message" nested objects too).
+ */
+function hasManualMarkerDeep(v: unknown, depth = 0): boolean {
+  if (depth > 5) return false;
+  if (isManualMarkerText(v)) return true;
+
+  if (Array.isArray(v)) {
+    for (const it of v) if (hasManualMarkerDeep(it, depth + 1)) return true;
+    return false;
+  }
+
+  if (v && typeof v === "object") {
+    const rec = v as Record<string, unknown>;
+    for (const k of Object.keys(rec)) {
+      if (hasManualMarkerDeep(rec[k], depth + 1)) return true;
+    }
+  }
+  return false;
+}
 
 /* ─────────────────────────────────────────────────────────────
    Decode normalization (ALL url/token forms)
@@ -409,6 +449,15 @@ function legacySourceFromData(data: unknown): string | undefined {
   return undefined;
 }
 
+/** Safe kind read (avoids union → never collapse). */
+function kindFromDecodedData(data: unknown, fallback: string): string {
+  if (data && typeof data === "object" && "kind" in data) {
+    const k = (data as { kind?: unknown }).kind;
+    if (typeof k === "string" && k.trim().length > 0) return k;
+  }
+  return fallback;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Clipboard helpers (gesture-safe)
    ───────────────────────────────────────────────────────────── */
@@ -555,12 +604,20 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
   // ✅ Exact KKS v1.0 D/M/Y (1-based day & month)
   const { day, month, year } = kaiDMYFromPulseKKS(pulse);
 
-  const kind =
-    data.kind ??
-    (post ? "post" : message ? "message" : share ? "share" : reaction ? "reaction" : "sigil");
+  const inferredKind =
+    post ? "post" : message ? "message" : share ? "share" : reaction ? "reaction" : "sigil";
 
-  const appBadge = data.appId ? `app ${short(data.appId, 10, 4)}` : undefined;
-  const userBadge = data.userId ? `user ${short(String(data.userId), 10, 4)}` : undefined;
+  // ✅ Hardened kind read (prevents TS union drift → never)
+  const kind: string = kindFromDecodedData(data as unknown, inferredKind);
+  const kindText = String(kind); // always safe
+
+  const appBadge =
+    typeof data.appId === "string" && data.appId ? `app ${short(data.appId, 10, 4)}` : undefined;
+
+  const userBadge =
+    typeof data.userId !== "undefined" && data.userId !== null
+      ? `user ${short(String(data.userId), 10, 4)}`
+      : undefined;
 
   const sigilId = isNonEmpty(capsule.sigilId) ? capsule.sigilId : undefined;
   const phiKey = isNonEmpty(capsule.phiKey) ? capsule.phiKey : undefined;
@@ -571,6 +628,28 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
   const sourceBadge =
     (isNonEmpty(capsule.source) ? capsule.source : undefined) ?? legacySourceFromData(data);
+
+  // ✅ Manual marker: deep scan (previous/reply/etc) + immediate fields
+  const manualMarkerPresent =
+    isManualMarkerText(kindText) || isManualMarkerText(sourceBadge) || hasManualMarkerDeep(capsule);
+
+  // Display labels (only affect rendering; never leak raw "manual")
+  const kindChipLabel = manualMarkerPresent ? PROOF_OF_MEMORY : upper(kindText);
+  const ariaKindLabel = manualMarkerPresent ? PROOF_OF_MEMORY : kindText;
+
+  const sourceChipLabel = sourceBadge
+    ? isManualMarkerText(sourceBadge)
+      ? PROOF_OF_MEMORY
+      : upper(sourceBadge)
+    : undefined;
+
+  // ✅ Remove duplicate Proof of Memory™ chip (keep ONLY the top kind chip)
+  const showSourceChip = Boolean(sourceChipLabel) && sourceChipLabel !== kindChipLabel;
+
+  const postTitle = displayManualAsProof(post?.title);
+  const postText = displayManualAsProof(post?.text);
+  const messageText = displayManualAsProof(message?.text);
+  const shareNote = displayManualAsProof(share?.note);
 
   const kai = buildKaiMetaLineZero(pulse, beatZ, stepZ, day, month, year);
   const stepPct = stepPctFromIndex(stepZ);
@@ -588,12 +667,18 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
     ["--fc-pulse-offset" as never]: `${-(phase * 120)}ms`,
   };
 
+  const dataKindAttr = manualMarkerPresent ? "proof_of_memory" : kindText;
+
+  // ✅ ONLY the Open button label stays "Memory" (as requested)
+  const openLabel = manualMarkerPresent ? "↗ Memory" : "↗ Sigil-Glyph";
+  const openTitle = manualMarkerPresent ? "Open memory" : "Open sigil";
+
   return (
     <article
       className={`fc fc--crystal ${signaturePresent ? "fc--signed" : "fc--unsigned"}`}
       role="article"
-      aria-label={`${kind} glyph`}
-      data-kind={kind}
+      aria-label={`${ariaKindLabel} glyph`}
+      data-kind={dataKindAttr}
       data-chakra={chakraDayDisplay}
       data-signed={signaturePresent ? "true" : "false"}
       data-beat={pad2(beatZ)}
@@ -628,8 +713,11 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
         <section className="fc-right">
           <header className="fc-head" aria-label="Glyph metadata">
             <div className="fc-metaRow">
-              <span className="fc-chip fc-chip--kind" title={`Kind: ${kind}-glyph`}>
-                {kind.toUpperCase()}
+              <span
+                className="fc-chip fc-chip--kind"
+                title={manualMarkerPresent ? PROOF_OF_MEMORY : `Kind: ${kindText}-glyph`}
+              >
+                {kindChipLabel}
               </span>
 
               {appBadge && <span className="fc-chip">{appBadge}</span>}
@@ -653,9 +741,9 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
                 </span>
               )}
 
-              {sourceBadge && (
+              {showSourceChip && sourceChipLabel && (
                 <span className="fc-chip fc-chip--source" title="Source">
-                  {String(sourceBadge).toUpperCase()}
+                  {sourceChipLabel}
                 </span>
               )}
 
@@ -684,8 +772,8 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
           {post && (
             <section className="fc-bodywrap" aria-label="Post body">
-              {isNonEmpty(post.title) && <h3 className="fc-title">{post.title}</h3>}
-              {isNonEmpty(post.text) && <p className="fc-body">{post.text}</p>}
+              {isNonEmpty(postTitle) && <h3 className="fc-title">{postTitle}</h3>}
+              {isNonEmpty(postText) && <p className="fc-body">{postText}</p>}
 
               {Array.isArray(post.tags) && post.tags.length > 0 && (
                 <div className="fc-tags" aria-label="Tags">
@@ -725,7 +813,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               <h3 className="fc-title">
                 Message → {short(String(message.toUserId ?? "recipient"), 10, 4)}
               </h3>
-              {isNonEmpty(message.text) && <p className="fc-body">{message.text}</p>}
+              {isNonEmpty(messageText) && <p className="fc-body">{messageText}</p>}
             </section>
           )}
 
@@ -741,7 +829,7 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
               >
                 {hostOf(share.refUrl) ?? share.refUrl}
               </a>
-              {isNonEmpty(share.note) && <p className="fc-body">{share.note}</p>}
+              {isNonEmpty(shareNote) && <p className="fc-body">{shareNote}</p>}
             </section>
           )}
 
@@ -766,7 +854,9 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
 
           {!post && !message && !share && !reaction && (
             <section className="fc-bodywrap" aria-label="Sigil body">
-              <h3 className="fc-title">Proof Of Breath™</h3>
+              {/* ✅ THIS is the line you wanted changed (above the URL) */}
+              <h3 className="fc-title">{manualMarkerPresent ? PROOF_OF_MEMORY : PROOF_OF_BREATH}</h3>
+
               <a
                 className="fc-link"
                 href={rememberUrl}
@@ -780,14 +870,8 @@ export const FeedCard: React.FC<Props> = ({ url }) => {
           )}
 
           <footer className="fc-actions" role="group" aria-label="Actions">
-            <a
-              className="fc-btn"
-              href={rememberUrl}
-              target="_blank"
-              rel="noreferrer"
-              title="Open sigil"
-            >
-              ↗ Sigil-Glyph
+            <a className="fc-btn" href={rememberUrl} target="_blank" rel="noreferrer" title={openTitle}>
+              {openLabel}
             </a>
 
             <button
