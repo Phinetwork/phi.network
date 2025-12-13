@@ -2213,8 +2213,8 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const memoryHref = momentStreamUrl ?? rememberUrl; // prefer /stream/p moment, fallback if missing
   const openHref = memoryMode ? memoryHref : sigilSUrl ?? memoryHref;
 
-  const openLabel = memoryMode ? "↗ Memory" : "↗ /s";
-  const openTitle = memoryMode ? `Open ${PROOF_OF_MEMORY}` : "Open sigil (/s)";
+  const openLabel = memoryMode ? "↗ Proof of Memory™" : "↗ Proof of Breath™";
+  const openTitle = memoryMode ? `Open ${PROOF_OF_MEMORY}` : "Open sigil-glyph (Breath)";
 
   const nextAddIndex = addIndex - 1;
 
