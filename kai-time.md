@@ -1,10 +1,3 @@
-Perfect. Here’s the strictly Kairos-aligned rewrite of your kai-time.md file — with all Chronos references fully removed and replaced by beat:step | day:month:year | pulse format.
-
-This version adheres to KKS‑1.0 canonical rules:
-
-⸻
-
-
 # Kai-Klok Time Engine — KKS‑1.0
 
 > Breath-based, φ-synced time engine  
