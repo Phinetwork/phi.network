@@ -5,21 +5,13 @@
  * KaiStatus — Atlantean μpulse Bar
  * v5.0 — CLICK → Kai-Klok POPOVER (portal modal) + a11y + scroll-lock + ESC close
  *
- * ✅ FIX (ts2322 IntrinsicAttributes):
- * Your KaiKlock component is currently typed as taking NO props ({}), so TS rejects hue/pulse/etc.
- * We strictly type the props here (no `any`) and cast the imported component to ComponentType<KaiKlockProps>.
- * This preserves runtime behavior and restores strict typing in KaiStatus immediately.
+ * ✅ FIX (Day chakra correctness):
+ * Day chakra must follow the weekday (Solhara..Kaelith), not day-of-month segmentation.
+ * - Verdari → Heart (green)
+ * - Sonari  → Throat (blue)
+ * - Kaelith → Crown ("Krown")
  *
- * Keeps v4.9:
- * - 2-ROW TIMELINE (DAY row + MONTH/ARK row)
- * - ARK CHAKRA COLORS (KKS-1.0)
- * - KKS-1.0 D/M/Y from μpulses (deterministic)
- *
- * Adds:
- * - Click / Enter / Space opens KaiKlock
- * - Backdrop click + ESC closes
- * - Scroll locked while open
- * - No `any`
+ * Keeps everything else unchanged.
  */
 
 import * as React from "react";
@@ -246,6 +238,37 @@ function chakraFromMonth(month: number): ChakraName {
   return CHAKRA_SEQ[idx] ?? "Root";
 }
 
+/* ✅ FIX: weekday → chakra (Verdari/Heart, Sonari/Throat, Kaelith/Crown) */
+const WEEKDAY_CHAKRA: Readonly<Record<string, ChakraName>> = {
+  solhara: "Root",
+  aquaris: "Sacral",
+  flamora: "Solar Plexus",
+  verdari: "Heart",
+  sonari: "Throat",
+  kaelith: "Crown",
+  caelith: "Crown", // alias safety
+};
+
+function chakraFromHarmonicDay(harmonicDay: unknown, fallbackDayOfMonth: number): ChakraName {
+  // Prefer string weekday names.
+  if (typeof harmonicDay === "string") {
+    const key = harmonicDay.trim().toLowerCase().replace(/[^a-z]/g, "");
+    const ch = WEEKDAY_CHAKRA[key];
+    if (ch) return ch;
+  }
+
+  // If numeric weekday index sneaks in (0..5), map it.
+  if (typeof harmonicDay === "number" && Number.isFinite(harmonicDay)) {
+    const idx = modIndex(Math.floor(harmonicDay), 6);
+    const keys = ["solhara", "aquaris", "flamora", "verdari", "sonari", "kaelith"] as const;
+    const ch = WEEKDAY_CHAKRA[keys[idx]];
+    if (ch) return ch;
+  }
+
+  // Fallback keeps legacy behavior (never breaks UI).
+  return chakraFromDayOfMonth(fallbackDayOfMonth);
+}
+
 /** Month names (8). Replace labels here if you have canonical names. */
 const KAI_MONTH_NAMES: readonly string[] = [
   "Aethon",
@@ -281,7 +304,6 @@ type KaiStatusVars = React.CSSProperties & {
 
 /* ─────────────────────────────────────────────────────────────
    ✅ KaiKlock props (strict) + typed component binding
-   Fixes: Property 'hue' does not exist on type 'IntrinsicAttributes'.ts(2322)
 ───────────────────────────────────────────────────────────── */
 
 type KaiKlockProps = {
@@ -378,7 +400,12 @@ export function KaiStatus(): React.JSX.Element {
 
   const dmy = React.useMemo(() => kaiDMYFromPulseKKS(pulseNum), [pulseNum]);
 
-  const dayChakra = React.useMemo<ChakraName>(() => chakraFromDayOfMonth(dmy.day), [dmy.day]);
+  /* ✅ FIX: day chakra must track weekday name */
+  const dayChakra = React.useMemo<ChakraName>(
+    () => chakraFromHarmonicDay(kaiNow.harmonicDay, dmy.day),
+    [kaiNow.harmonicDay, dmy.day],
+  );
+
   const monthChakra = React.useMemo<ChakraName>(() => chakraFromMonth(dmy.month), [dmy.month]);
   const monthName = React.useMemo<string>(() => monthNameFromIndex(dmy.month), [dmy.month]);
 
@@ -511,7 +538,7 @@ export function KaiStatus(): React.JSX.Element {
       className="kai-pill kai-pill--ark"
       title={arkFull}
       aria-label={`Ark ${arkFull}`}
-      data-chakra={arkChakra} // ✅ Ignite becomes Root/red
+      data-chakra={arkChakra}
     >
       {arkFull}
     </span>
