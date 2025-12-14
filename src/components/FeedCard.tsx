@@ -54,7 +54,7 @@ import type {
   ReactionPayload,
 } from "../utils/sigilDecode";
 import "./FeedCard.css";
-import { ShortUrlTool } from "./shortner";
+
 
 type Props = {
   url: string;
@@ -2418,16 +2418,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
     {copied ? "Inhaled to Memory" : packed ? "Packed to Memory" : ""}
   </span>
 
-  {/* Add ShortUrlTool below the 'Remember' button */}
-  <div style={{ marginTop: 20 }}>
-    <ShortUrlTool
-      url={openHref}  // Passing the same URL to ShortUrlTool for shortening
-      routePrefix="/go/"
-      title="Shorten and Share This Sigil!"
-      className="fc-btn" // Optional className for styling
-    />
-  </div>
-</footer>
+
 
             {message && (
               <section className="fc-bodywrap" aria-label="Message body">
@@ -2514,6 +2505,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
                 </button>
               ) : null}
 
+</footer>
               <span className="fc-live" aria-live="polite">
                 {copied ? "Inhaled to Memory" : packed ? "Packed to Memory" : ""}
               </span>

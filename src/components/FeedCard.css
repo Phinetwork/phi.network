@@ -790,3 +790,31 @@
   .fc-actions{ display:none !important; }
   .fc-sigilStage{ border-color:#eee !important; background:#fafafa !important; }
 }
+/* actions can wrap cleanly */
+.fc-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 10px;
+  align-items:center;
+  min-width:0;
+}
+
+/* hard line break inside flex row */
+.fc-actions__break{
+  flex-basis: 100%;
+  height: 0;
+}
+
+/* shortener row */
+.fc-shortWrap{
+  flex-basis: 100%;
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* optional: make the shortener button feel “secondary” */
+.fc-shortWrap .fc-btn{
+  width: fit-content;
+}

@@ -1086,3 +1086,52 @@
 .origin-body{
   scrollbar-gutter: stable both-edges;
 }
+/* ─────────────────────────────────────────────────────────────
+   DUCKDUCKGO / ANDROID WEBVIEW FLICKER PATCH (append-only)
+   Goal: zero visual change, just compositor stability.
+   - Avoids fixed-layer + blur/blend flicker inside nested scrollers
+   - Promotes key surfaces to stable GPU layers
+   ───────────────────────────────────────────────────────────── */
+
+@media (hover: none) and (pointer: coarse){
+  /* 1) Keep overlays visually “fixed” (since .sigil-explorer itself doesn’t scroll),
+        but avoid WebView fixed-position flicker path */
+  .sigil-explorer::before,
+  .sigil-explorer::after{
+    position: absolute; /* was fixed */
+  }
+
+  /* 2) Make the animated/filtered layers stable */
+  .sigil-explorer::after{
+    will-change: transform, opacity, filter;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .sigil-explorer::before{
+    will-change: opacity;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* 3) Promote the frequently repainted surfaces (filter animations + sticky) */
+  .kx-toolbar,
+  .origin,
+  .node{
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform, filter;
+  }
+
+  /* 4) Prevent occasional 1px “flash seams” during scroll compositing */
+  .origin,
+  .node{
+    outline: 1px solid transparent;
+  }
+}
