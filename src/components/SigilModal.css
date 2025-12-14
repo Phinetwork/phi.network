@@ -1419,3 +1419,131 @@ details.rich-data[open] > summary::after{
     animation:none !important;
   }
 }
+/* ─────────────────────────────────────────────────────────────
+   ANDROID HARDENING PATCH (append-only)
+   - Keeps the same look where supported
+   - Fixes common Android/WebView glitches:
+     • dvh token invalidating calc()
+     • :has() unsupported (scroll-lock)
+     • background-position animation repaint jank
+     • content-visibility blanking inside fixed overlays
+     • blend/backdrop compositing flicker
+   ───────────────────────────────────────────────────────────── */
+
+/* 1) Viewport stability + dvh-safe fallbacks (don’t rely on var(--dvh) tokens) */
+.sigil-modal-overlay{
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+}
+
+.sigil-modal{
+  /* mirror your existing formula but with vh/svh/dvh fallbacks so calc never invalidates */
+  max-height: calc(100vh - max(28px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  max-height: calc(100svh - max(28px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  max-height: calc(100dvh - max(28px, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+}
+
+/* 2) Compositor stability for fixed + blur + pseudo elements */
+.sigil-modal-overlay,
+.sigil-modal,
+.verifier-bg,
+.verifier-toggle,
+.verifier-exit{
+  transform: translate3d(0,0,0);
+  -webkit-transform: translate3d(0,0,0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.sigil-modal-overlay::before,
+.sigil-modal-overlay::after{
+  transform: translate3d(0,0,0);
+  -webkit-transform: translate3d(0,0,0);
+  will-change: transform, opacity;
+}
+
+/* 3) Backdrop-filter fallback (some Android WebViews flash/flicker it) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .sigil-modal-overlay{
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    /* keep the same scene without depending on blur */
+    background:
+      radial-gradient(1200px 820px at 50% 20%, rgba(0,255,224,.09) 0%, rgba(17,215,255,.07) 28%, transparent 62%),
+      radial-gradient(1000px 860px at 30% 80%, rgba(167,139,250,.08) 0%, transparent 60%),
+      linear-gradient(180deg, #03070b 0%, #02040a 100%);
+  }
+
+  .sigil-modal,
+  .sigil-meta-block{
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* 4) Mask-composite fallback (prevents “missing ring” on some Android builds) */
+@supports not (-webkit-mask-composite: xor){
+  .sigil-modal::before{
+    -webkit-mask: none !important;
+    mask: none !important;
+    background: none !important;
+    padding: 0 !important;
+    border: 1px solid rgba(0,255,224,.26);
+    opacity: .55;
+  }
+}
+
+/* 5) Mobile/Android repaint killer:
+      background-position animations on large multi-layer gradients can stutter/flicker.
+      Keep motion via transform-only drift (already in ::after), disable bg-position drift. */
+@media (pointer: coarse){
+  .sigil-modal-overlay{
+    /* keep fade-in, drop the background-position animator */
+    animation: sigilFadeIn .55s ease-out both !important;
+    will-change: opacity;
+  }
+
+  /* content-visibility can “blank” in fixed modals on some Android WebViews */
+  .sigil-modal{
+    content-visibility: visible !important;
+    contain-intrinsic-size: auto !important;
+  }
+
+  /* blend-mode + blur can glitch on Android; normalize blends (tiny visual difference, huge stability) */
+  .sigil-modal-overlay::before,
+  .sigil-modal::after{
+    mix-blend-mode: normal !important;
+  }
+}
+
+/* 6) Verifier background: same issue (bg-position anim). Make it transform-only on mobile. */
+@media (pointer: coarse){
+  .verifier-bg{
+    animation: none !important;
+  }
+
+  .verifier-bg::after{
+    content:"";
+    position:absolute;
+    inset:-35%;
+    pointer-events:none;
+    background:
+      conic-gradient(from 140deg at 50% 30%, rgba(0,255,224,.10), transparent 72deg),
+      radial-gradient(circle at 20% 15%, rgba(0,255,224,.12) 0 10%, transparent 44%),
+      radial-gradient(circle at 80% 70%, rgba(17,215,255,.14) 0 14%, transparent 52%);
+    filter: blur(22px);
+    opacity: .26;
+    transform: translate3d(0,0,0);
+    animation: verifierDrift 34s linear infinite;
+    will-change: transform;
+  }
+
+  @keyframes verifierDrift{
+    from{ transform: rotate(0deg) scale(1.02); }
+    to  { transform: rotate(360deg) scale(1.02); }
+  }
+}
