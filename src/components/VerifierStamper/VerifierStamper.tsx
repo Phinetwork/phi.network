@@ -2164,7 +2164,7 @@ const VerifierStamperInner: React.FC = () => {
 
                     {frequencyHz && <KV k="Frequency (Hz):" v={frequencyHz} />}
                     {chakraGate && <KV k="Spiral Gate:" v={chakraGate} />}
-                    {liveSig && <KV k="ZK PROOF OF BREATH™:" v={liveSig} wide mono />}
+                    {liveSig && <KV k="PROOF OF BREATH™:" v={liveSig} wide mono />}
                     <KV k="Stewardship Hash:" v={canonical ?? "—"} wide mono />
                     <KV k={canonicalContext === "derivative" ? "Derivative Resonance" : "Resonance "} v={` Φ${remainingPhiDisplay4}`} />
                     <KV k="Exhale key:" v={(meta as SigilMetadataWithOptionals)?.creatorPublicKey ?? "—"} wide mono />
