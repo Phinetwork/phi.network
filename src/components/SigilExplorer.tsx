@@ -1,5 +1,5 @@
 // src/pages/SigilExplorer.tsx
-// v3.10.2 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
+// v3.10.3 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
 //
 // CORE TRUTH (production behavior):
 // ✅ On OPEN: push (inhale) everything you have → API, then pull (exhale) anything new ← API
@@ -11,6 +11,11 @@
 // ✅ Deterministic ordering: Kai-time only (pulse/beat/stepIndex). No Chronos ordering used.
 //
 // NEW (this release):
+// ✅ IKANN API FAILOVER: https://align.kaiklok.com ⇄ http://m.kai (same endpoints, same behavior)
+// ✅ Sticky “last-known-good” API base so it doesn’t ping-pong every request
+// ✅ Failover applies to: /sigils/seal, /sigils/urls, /sigils/inhale (push + pull loop remains identical)
+//
+// KEEP (from v3.10.2):
 // ✅ Parents are ALWAYS /s (post URLs). /s nodes ALWAYS display.
 // ✅ /stream/* nodes are ALWAYS children of their /s parent for the SAME moment.
 // ✅ Multiple /s derivatives for the SAME moment are shown as children under the moment’s /s parent.
@@ -34,6 +39,11 @@ import "./SigilExplorer.css";
    Live base (API + canonical sync target)
 ────────────────────────────────────────────────────────────────────── */
 const LIVE_BASE_URL = "https://align.kaiklok.com";
+
+/* ─────────────────────────────────────────────────────────────────────
+   IKANN backup base (same LAH-MAH-TOR API surface)
+────────────────────────────────────────────────────────────────────── */
+const LIVE_BACKUP_URL = "http://m.kai";
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Types
@@ -163,12 +173,6 @@ const canStorage = hasWindow && typeof window.localStorage !== "undefined";
 /** KKS-1.0 φ-breath pulse cadence (ms). Used ONLY for cadence, never ordering. */
 const PULSE_POLL_MS = 5236;
 
-/** Remote sync endpoints (LAH-MAH-TOR). */
-const API_BASE = LIVE_BASE_URL;
-const API_SEAL = `${API_BASE}/sigils/seal`;
-const API_URLS = `${API_BASE}/sigils/urls`;
-const API_INHALE = `${API_BASE}/sigils/inhale`;
-
 /** Remote pull limits. */
 const URLS_PAGE_LIMIT = 5000;
 const URLS_MAX_PAGES_PER_SYNC = 24; // safety cap (5000*24 = 120k)
@@ -189,6 +193,82 @@ const URL_PROBE_TIMEOUT_MS = 2200;
 
 /** View base (used for canonicalizing *view* URLs). */
 const VIEW_BASE_FALLBACK = "https://phi.network";
+
+/* ─────────────────────────────────────────────────────────────────────
+ *  LAH-MAH-TOR API (Primary + IKANN Failover)
+ *  ───────────────────────────────────────────────────────────────────── */
+const API_BASE_PRIMARY = LIVE_BASE_URL;
+const API_BASE_FALLBACK = LIVE_BACKUP_URL;
+
+const API_SEAL_PATH = "/sigils/seal";
+const API_URLS_PATH = "/sigils/urls";
+const API_INHALE_PATH = "/sigils/inhale";
+
+/** Sticky base: whichever succeeded last is attempted first. */
+let apiBaseHint: string = API_BASE_PRIMARY;
+
+function apiBases(): string[] {
+  return apiBaseHint === API_BASE_FALLBACK
+    ? [API_BASE_FALLBACK, API_BASE_PRIMARY]
+    : [API_BASE_PRIMARY, API_BASE_FALLBACK];
+}
+
+function shouldFailoverStatus(status: number): boolean {
+  // 0 = network/CORS/unknown from wrapper
+  if (status === 0) return true;
+  // common “route didn’t exist here but exists on the other base”
+  if (status === 404) return true;
+  // transient / throttling / upstream
+  if (status === 408 || status === 429) return true;
+  if (status >= 500) return true;
+  return false;
+}
+
+async function apiFetchWithFailover(
+  makeUrl: (base: string) => string,
+  init?: RequestInit,
+): Promise<Response | null> {
+  const bases = apiBases();
+  let last: Response | null = null;
+
+  for (const base of bases) {
+    const url = makeUrl(base);
+    try {
+      const res = await fetch(url, init);
+      last = res;
+
+      // 304 is a valid success for seal checks.
+      if (res.ok || res.status === 304) {
+        apiBaseHint = base;
+        return res;
+      }
+
+      // If this status is “final”, stop here; otherwise try the other base.
+      if (!shouldFailoverStatus(res.status)) return res;
+    } catch {
+      // network failure → try next base
+      continue;
+    }
+  }
+
+  return last;
+}
+
+async function apiFetchJsonWithFailover<T>(
+  makeUrl: (base: string) => string,
+  init?: RequestInit,
+): Promise<{ ok: true; value: T; status: number } | { ok: false; status: number }> {
+  const res = await apiFetchWithFailover(makeUrl, init);
+  if (!res) return { ok: false, status: 0 };
+  if (!res.ok) return { ok: false, status: res.status };
+  try {
+    const value = (await res.json()) as T;
+    return { ok: true, value, status: res.status };
+  } catch {
+    // if server returned non-JSON, treat as unknown failure (allows loop logic to remain strict)
+    return { ok: false, status: 0 };
+  }
+}
 
 function isLocalHostname(hostname: string): boolean {
   const h = hostname.trim().toLowerCase();
@@ -225,7 +305,6 @@ function viewBaseOrigin(): string {
   if (!hasWindow) return VIEW_BASE_FALLBACK;
   return normalizeViewOrigin(window.location.origin);
 }
-
 
 /** Make an absolute, normalized URL (stable key). Also rewrites localhost → https://phi.network. */
 function canonicalizeUrl(url: string): string {
@@ -334,7 +413,6 @@ function explorerOpenUrl(raw: string): string {
     return `${origin}${rel}`;
   }
 }
-
 
 /** Human shortener for long strings. */
 function short(s?: string, n = 10): string {
@@ -446,9 +524,10 @@ function setUrlHealth(u: string, h: UrlHealth): boolean {
 
 function isCanonicalHost(host: string): boolean {
   const liveHost = new URL(LIVE_BASE_URL).host;
+  const backupHost = new URL(LIVE_BACKUP_URL).host;
   const viewHost = new URL(viewBaseOrigin()).host;
   const fallbackHost = new URL(VIEW_BASE_FALLBACK).host;
-  return host === liveHost || host === viewHost || host === fallbackHost;
+  return host === liveHost || host === backupHost || host === viewHost || host === fallbackHost;
 }
 
 async function probeUrl(u: string): Promise<"ok" | "bad" | "unknown"> {
@@ -604,6 +683,7 @@ function contentIdFor(url: string, p: SigilSharePayloadLoose): string {
 
   return `k:${phiKey}|${pulse}|${beat}|${step}|${h}|${kind}`;
 }
+
 const isPackedViewerUrl = (raw: string): boolean => {
   const u = raw.toLowerCase();
   if (!u.includes("/stream")) return false;
@@ -647,10 +727,11 @@ function scoreUrlForView(u: string, prefer: ContentKind): number {
     if (kind === "streamQ" || kind === "stream") s += 95;
   }
 
-  // Prefer canonical view base and API base slightly
+  // Prefer canonical view base and API bases slightly
   const viewBase = viewBaseOrigin().toLowerCase();
   if (url.startsWith(viewBase)) s += 12;
   if (url.startsWith(LIVE_BASE_URL.toLowerCase())) s += 10;
+  if (url.startsWith(LIVE_BACKUP_URL.toLowerCase())) s += 10;
 
   // Health override
   const h = urlHealth.get(canonicalizeUrl(u));
@@ -1020,12 +1101,15 @@ async function flushInhaleQueue(): Promise<void> {
     const fd = new FormData();
     fd.append("file", blob, `sigils_${randId()}.json`);
 
-    const url = new URL(API_INHALE);
-    url.searchParams.set("include_state", "false");
-    url.searchParams.set("include_urls", "false");
+    const makeUrl = (base: string) => {
+      const url = new URL(API_INHALE_PATH, base);
+      url.searchParams.set("include_state", "false");
+      url.searchParams.set("include_urls", "false");
+      return url.toString();
+    };
 
-    const res = await fetch(url.toString(), { method: "POST", body: fd });
-    if (!res.ok) throw new Error(`inhale failed: ${res.status}`);
+    const res = await apiFetchWithFailover(makeUrl, { method: "POST", body: fd });
+    if (!res || !res.ok) throw new Error(`inhale failed: ${res?.status ?? 0}`);
 
     // Optional read; do not block UX on parsing.
     try {
@@ -1232,19 +1316,6 @@ function hydrateRegistryFromStorage(): void {
 /* ─────────────────────────────────────────────────────────────────────
  *  Remote pull (seal → urls) — deterministic exhale
  *  ───────────────────────────────────────────────────────────────────── */
-async function fetchJson<T>(
-  input: string,
-  init?: RequestInit,
-): Promise<{ ok: true; value: T; status: number } | { ok: false; status: number }> {
-  try {
-    const res = await fetch(input, init);
-    if (!res.ok) return { ok: false, status: res.status };
-    const value = (await res.json()) as T;
-    return { ok: true, value, status: res.status };
-  } catch {
-    return { ok: false, status: 0 };
-  }
-}
 
 /** Pull remote urls list (paged) and import any new urls into local registry. */
 async function pullAndImportRemoteUrls(
@@ -1256,15 +1327,20 @@ async function pullAndImportRemoteUrls(
 
   for (let page = 0; page < URLS_MAX_PAGES_PER_SYNC; page++) {
     const offset = page * URLS_PAGE_LIMIT;
-    const url = new URL(API_URLS);
-    url.searchParams.set("offset", String(offset));
-    url.searchParams.set("limit", String(URLS_PAGE_LIMIT));
 
-    const r = await fetchJson<ApiUrlsPageResponse>(url.toString(), {
-      method: "GET",
-      signal,
-      cache: "no-store",
-    });
+    const r = await apiFetchJsonWithFailover<ApiUrlsPageResponse>(
+      (base) => {
+        const url = new URL(API_URLS_PATH, base);
+        url.searchParams.set("offset", String(offset));
+        url.searchParams.set("limit", String(URLS_PAGE_LIMIT));
+        return url.toString();
+      },
+      {
+        method: "GET",
+        signal,
+        cache: "no-store",
+      },
+    );
 
     if (!r.ok) break;
 
@@ -2233,12 +2309,17 @@ const SigilExplorer: React.FC = () => {
         // (B) EXHALE — seal check
         const prevSeal = remoteSealRef.current;
 
-        const res = await fetch(API_SEAL, {
-          method: "GET",
-          cache: "no-store",
-          signal: ac.signal,
-          headers: prevSeal ? { "If-None-Match": `"${prevSeal}"` } : undefined,
-        });
+        const res = await apiFetchWithFailover(
+          (base) => new URL(API_SEAL_PATH, base).toString(),
+          {
+            method: "GET",
+            cache: "no-store",
+            signal: ac.signal,
+            headers: prevSeal ? { "If-None-Match": `"${prevSeal}"` } : undefined,
+          },
+        );
+
+        if (!res) return;
 
         if (res.status === 304) {
           // Still inhale on cadence (done above). Nothing new to exhale.
