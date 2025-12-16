@@ -7,10 +7,7 @@
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-
-    <!-- Atlantean PWA chrome color (matches UI, not pure black) -->
-    <meta name="theme-color" content="#07161A" />
-
+    <meta name="theme-color" content="#07080C" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="format-detection" content="telephone=no" />
 
@@ -77,42 +74,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="ΦNet" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
-    <!-- ✅ PWA SAFE-AREA FIX (prevents top UI from entering the iOS status bar) -->
-    <!-- ✅ ATLANTEAN BACKDROP (subtle teal glass, still dark + authoritative) -->
-    <style>
-      html,
-      body {
-        height: 100%;
-        background: #07161a; /* what iOS shows behind the status bar */
-      }
-
-      body {
-        background-image:
-          radial-gradient(900px 520px at 20% 8%, rgba(0, 255, 209, 0.10), transparent 60%),
-          radial-gradient(760px 520px at 80% 12%, rgba(120, 255, 240, 0.08), transparent 55%),
-          radial-gradient(900px 680px at 50% 92%, rgba(120, 190, 255, 0.06), transparent 65%);
-        background-attachment: fixed;
-      }
-
-      #root {
-        min-height: 100%;
-        box-sizing: border-box;
-
-        /* iOS safe-area insets (top bar + home indicator) */
-        padding-top: constant(safe-area-inset-top);
-        padding-top: env(safe-area-inset-top);
-
-        padding-right: constant(safe-area-inset-right);
-        padding-right: env(safe-area-inset-right);
-
-        padding-bottom: constant(safe-area-inset-bottom);
-        padding-bottom: env(safe-area-inset-bottom);
-
-        padding-left: constant(safe-area-inset-left);
-        padding-left: env(safe-area-inset-left);
-      }
-    </style>
 
     <!-- Structured Data (Schema.org) -->
     <script type="application/ld+json">
