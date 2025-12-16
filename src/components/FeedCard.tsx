@@ -3,25 +3,19 @@
 
 /**
  * FeedCard — Sigil-Glyph Capsule Renderer
- * v4.8.0 — RELEASE: v27.7.x — OFFLINE ∞ THREADS (URL-ONLY) + MERKLE + φ/FIBONACCI SEGMENT LOG
+ * v4.8.2 — FULL ACTIONS ON ALL BLOCKS (OPEN+REMEMBER) + FEED DE-DUPE HARDENED
  *
- * ✅ FIX (Replies rendering as Sigil / Proof of Breath):
- * - A “reply” is any node that has a previous context (prevUrl resolved via addChain or payload refs).
- * - Replies are ALWAYS labeled Proof of Memory™ (even if post/message/share/reaction fields are absent).
- * - Additionally, v3 payload shapes (caption/body/attachments) are treated as memory content.
+ * ✅ FIX: Replies no longer cause the Origin (Proof of Breath) to appear “again” as separate feed items
+ * - Feed always collapses to THREAD ROOT
+ * - Aggressive prune removes reply-URLs from FEED even when they lack addChain
  *
- * ✅ AUTO-REGISTER ON VISIT (no backend):
- * - When a user opens a URL (depth=0), we auto-register it:
- *   • Explorer: upsert unique by token/root key (upgrade existing entry if new URL has richer add= chain)
- *   • Feed: ONLY if it’s memory/reply; unique; upgrade if richer; never duplicate.
+ * ✅ CHANGE: Every rendered block (origin, prev-chain, thread replies) has:
+ * - Open (Proof of Breath/Memory) link
+ * - Remember button
+ * - Pack button when segmented overflow exists
  *
- * ✅ FEED URL RULE:
- * - SIGILS open via /s/<id> (or /s/<token> fallback).
- * - MEMORIES open/copy via canonical /stream/p/<token> moment URL when possible.
- * - Card shows NO primary URL line.
- *
- * 🔒 Thread reconstruction remains: NO backend, NO fetch, NO IndexedDB required.
- * (Optional LS/BroadcastChannel only for Explorer/Feed registry convenience.)
+ * ✅ KEEP: Collapsible long-form behavior (no visual regressions required)
+ * ✅ KEEP: Thread rendering + registry bridge behavior
  */
 
 import React, {
@@ -55,7 +49,6 @@ import type {
 } from "../utils/sigilDecode";
 import "./FeedCard.css";
 
-
 type Props = {
   url: string;
   /**
@@ -85,6 +78,49 @@ const isNonEmpty = (val: unknown): val is string =>
 
 /** Uppercase without type drama (guards union→never narrowing) */
 const upper = (v: unknown): string => String(v ?? "").toUpperCase();
+
+/* ─────────────────────────────────────────────────────────────
+   Long-form collapse helpers (no CSS required; you’ll style later)
+   ───────────────────────────────────────────────────────────── */
+
+type CollapseKind = "text" | "code"; // code covers code/html/pre-like bodies
+
+function textMetrics(t: string): { lines: number; chars: number } {
+  const s = String(t ?? "");
+  const chars = s.length;
+  const lines = s.length ? s.split(/\r\n|\r|\n/).length : 0;
+  return { lines, chars };
+}
+
+function collapseSpecFor(text: string, kind: CollapseKind): {
+  shouldCollapse: boolean;
+  lines: number;
+  chars: number;
+  maxHeightPx: number;
+} {
+  const { lines, chars } = textMetrics(text);
+
+  // Tuned for “preview cards”: keep them compact, but not too aggressive.
+  const maxLines = kind === "code" ? 18 : 10;
+  const maxChars = kind === "code" ? 1400 : 700;
+
+  const shouldCollapse = lines > maxLines || chars > maxChars;
+
+  // Inline cap so user doesn’t scroll forever even before CSS arrives.
+  const maxHeightPx = kind === "code" ? 320 : 240;
+
+  return { shouldCollapse, lines, chars, maxHeightPx };
+}
+
+function isInteractiveEl(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const el = target;
+  return Boolean(
+    el.closest(
+      'a,button,input,textarea,select,summary,[role="button"],[role="link"],[data-no-open="true"]',
+    ),
+  );
+}
 
 /* ─────────────────────────────────────────────────────────────
    URL / token normalization (ALL forms) + Memory Stream forms
@@ -189,6 +225,12 @@ function isSPayloadUrl(raw: string): boolean {
 }
 
 function extractFromPath(pathname: string): string | null {
+  // ✅ /s/<id> (sigil/post)
+  {
+    const m = pathname.match(/\/s\/([^/?#]+)/);
+    if (m?.[1]) return m[1];
+  }
+
   // Legacy p-tilde path (allow /p~TOKEN and /p~/TOKEN), including percent-encoded tilde
   {
     const m = pathname.match(/\/p(?:\u007e|%7[Ee])\/?([^/?#]+)/);
@@ -1214,7 +1256,8 @@ function extractV3TextAndKind(payload: unknown): { text?: string; kind?: V3BodyK
 
   if (isRecord(body)) {
     const k = readStringLoose(body, "kind");
-    const kind = (k === "text" || k === "md" || k === "code" || k === "html") ? (k as V3BodyKind) : undefined;
+    const kind =
+      k === "text" || k === "md" || k === "code" || k === "html" ? (k as V3BodyKind) : undefined;
 
     if (kind === "text") {
       const t = readStringLoose(body, "text");
@@ -1359,7 +1402,92 @@ function copyTextGestureSafe(
 const EXPLORER_LS_KEY = "sigil:urls";
 const FEED_LS_KEY = "sigil:feed";
 const EXPLORER_BC_NAME = "kai-sigil-registry";
+const EXPLORER_GLOBAL_LS_KEY = "kai:sigils:v1"; // SigilExplorer persisted registry
 const FEED_BC_NAME = "kai-feed-registry";
+
+let REG_VERSION = 0;
+let REG_NOTIFY_PENDING = false;
+const REG_LISTENERS: Set<() => void> = new Set();
+let REG_BRIDGE_INIT = false;
+
+function notifyRegistryBatched(): void {
+  if (REG_NOTIFY_PENDING) return;
+  REG_NOTIFY_PENDING = true;
+
+  const run = (): void => {
+    REG_NOTIFY_PENDING = false;
+    REG_VERSION++;
+    for (const fn of REG_LISTENERS) fn();
+  };
+
+  if (typeof queueMicrotask === "function") queueMicrotask(run);
+  else Promise.resolve().then(run);
+}
+
+function subscribeRegistry(cb: () => void): () => void {
+  REG_LISTENERS.add(cb);
+  return () => {
+    REG_LISTENERS.delete(cb);
+  };
+}
+
+function getRegistrySnapshot(): number {
+  return REG_VERSION;
+}
+
+function getRegistryServerSnapshot(): number {
+  return 0;
+}
+
+function urlsFromUnknown(v: unknown): string[] {
+  const out: string[] = [];
+
+  if (Array.isArray(v)) {
+    for (const it of v) {
+      if (typeof it === "string" && it.trim()) out.push(it.trim());
+    }
+    return out;
+  }
+
+  if (isRecord(v)) {
+    // common: { urls: [...] }
+    const maybeUrls = (v as { urls?: unknown }).urls;
+    if (Array.isArray(maybeUrls)) {
+      for (const it of maybeUrls) {
+        if (typeof it === "string" && it.trim()) out.push(it.trim());
+      }
+      return out;
+    }
+
+    // common: { "<url>": payload, ... }  (Map-like persistence)
+    const keys = Object.keys(v);
+    const urlishKeys = keys.filter(
+      (k) => k.startsWith("http") || k.startsWith("/") || k.includes("/stream") || k.includes("/s/"),
+    );
+    if (urlishKeys.length) return urlishKeys;
+
+    // fallback: values with `.url`
+    for (const vv of Object.values(v)) {
+      if (isRecord(vv) && typeof vv.url === "string" && vv.url.trim()) out.push(vv.url.trim());
+    }
+    return out;
+  }
+
+  return out;
+}
+
+function readUrlList(lsKey: string): string[] {
+  if (typeof window === "undefined") return [];
+  if (typeof window.localStorage === "undefined") return [];
+  const raw = window.localStorage.getItem(lsKey);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return urlsFromUnknown(parsed);
+  } catch {
+    return [];
+  }
+}
 
 function canonicalizeForStorage(raw: string): string {
   const t = raw.trim();
@@ -1371,18 +1499,179 @@ function canonicalizeForStorage(raw: string): string {
   }
 }
 
-function keyForRegistryUrl(raw: string): string {
-  const tok = extractTokenCandidates(raw)[0];
-  if (tok) return `t:${normalizeToken(tok)}`;
+function readExplorerGlobalUrls(): string[] {
+  // Merge all relevant stores:
+  // - feed list (sigil:feed)
+  // - local “explorer fallback” list (sigil:urls)
+  // - SigilExplorer real registry (kai:sigils:v1)
+  const merged = dedupPreserveOrder([
+    ...readUrlList(FEED_LS_KEY),
+    ...readUrlList(EXPLORER_LS_KEY),
+    ...readUrlList(EXPLORER_GLOBAL_LS_KEY),
+  ]);
 
-  const rootRef = extractRootRef(raw);
-  if (rootRef) {
-    const p = decodePayloadRef(rootRef);
-    return p ? `r:${payloadKey(p)}` : `r:${fnv1a64Hex(rootRef)}`;
+  // Canonicalize for storage (stable)
+  const out: string[] = [];
+  for (const u of merged) {
+    const c = canonicalizeForStorage(u);
+    if (c) out.push(c);
+  }
+  return dedupPreserveOrder(out);
+}
+
+function normalizeSeedHrefFromRef(refRaw: string): string {
+  const ref = stripEdgePunct(refRaw);
+  if (!ref) return "";
+
+  // payload ref → make it a viewable Memory Stream URL
+  if (ref.startsWith(PAYLOAD_PREFIX)) {
+    return buildMemoryStreamUrl(ref, []).url;
   }
 
-  return `u:${normalizeResolvedUrlForBrowser(raw)}`;
+  // prefer moment /stream/p if possible
+  return (
+    makeStreamPMomentUrl(ref) ??
+    makeStreamPMomentUrl(normalizeResolvedUrlForBrowser(ref)) ??
+    normalizeResolvedUrlForBrowser(ref)
+  );
 }
+
+/**
+ * NOTE: This key is intentionally used by the Thread panel logic (existing behavior).
+ * Do NOT repurpose it for feed-root de-dupe; use threadRootKeyFromUrlLike instead.
+ */
+function originKeyFromUrlLike(u: string): string {
+  const chain = dedupPreserveOrder(extractAddChain(u));
+  const originRef = chain[0] ?? u;
+  const p = originRef.startsWith(PAYLOAD_PREFIX) ? decodePayloadRef(originRef) : null;
+  return threadSeenKey(originRef, p ?? undefined);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Feed-root derivation (HARDENED): collapse feed to THREAD ROOT
+   - Works even if a reply URL lacks addChain by following prev refs (best-effort)
+   ───────────────────────────────────────────────────────────── */
+
+function loadPayloadFromRef(ref: string): unknown | null {
+  const r = stripEdgePunct(ref);
+  if (!r) return null;
+
+  if (r.startsWith(PAYLOAD_PREFIX)) return decodePayloadRef(r);
+
+  const d = decodeSigilUrlSmart(r);
+  if (d.decoded.ok) return d.decoded.data as unknown;
+
+  return null;
+}
+
+function threadRootRefFromUrlLike(rawUrl: string, startPayload?: unknown): string {
+  const u = stripEdgePunct(rawUrl);
+  if (!u) return rawUrl;
+
+  // If URL already has witness chain, treat earliest add as root anchor (existing format).
+  const chain = dedupPreserveOrder(extractAddChain(u));
+  if (chain.length > 0) return chain[0]!;
+
+  // Else: walk prev refs from payload (reply URLs without addChain).
+  let curRef = u;
+  let payload: unknown | null = typeof startPayload !== "undefined" ? startPayload : null;
+
+  if (!payload) payload = loadPayloadFromRef(curRef);
+
+  const seen = new Set<string>();
+  for (let i = 0; i < 48; i++) {
+    const k = threadSeenKey(curRef, payload ?? undefined);
+    if (seen.has(k)) break;
+    seen.add(k);
+
+    const prev = payload ? extractPrevRefFromPayload(payload) : null;
+    if (!prev) return curRef;
+
+    curRef = prev;
+    payload = loadPayloadFromRef(curRef);
+  }
+
+  return curRef;
+}
+
+function threadRootKeyFromUrlLike(rawUrl: string, startPayload?: unknown): string {
+  const rootRef = threadRootRefFromUrlLike(rawUrl, startPayload);
+  const p = rootRef.startsWith(PAYLOAD_PREFIX) ? decodePayloadRef(rootRef) : loadPayloadFromRef(rootRef);
+  return threadSeenKey(rootRef, p ?? undefined);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   /s URL derivation (feed primary URL requirement)
+   ───────────────────────────────────────────────────────────── */
+
+function makeSigilSUrlFromId(idRaw: string): string {
+  const id = stripEdgePunct(idRaw);
+  const base = sigilBaseHref();
+  const safe = encodeURIComponent(id);
+  return `${base}/${safe}`;
+}
+
+function readStringField(obj: unknown, keys: readonly string[]): string | null {
+  if (!isRecord(obj)) return null;
+  for (const k of keys) {
+    const v = (obj as Record<string, unknown>)[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function computeSigilSUrl(rawInputUrl: string, capsule: Capsule | null): string | null {
+  const raw = stripEdgePunct(rawInputUrl);
+
+  // If the feed already provided a /s url, keep it.
+  if (isSPayloadUrl(raw)) return raw;
+
+  // Try common capsule fields (best-effort, no schema assumptions).
+  const fromCapsule =
+    readStringField(capsule, [
+      "sigilUrl",
+      "sigilURL",
+      "sigil_url",
+      "sigilHref",
+      "sigil_href",
+      "sUrl",
+      "s_url",
+      "s",
+    ]) ?? null;
+
+  if (fromCapsule && isSPayloadUrl(fromCapsule)) return normalizeResolvedUrlForBrowser(fromCapsule);
+
+  // Prefer capsule.sigilId (canonical /s/<sigilId> mapping).
+  const sigilId = isRecord(capsule) ? (capsule as Record<string, unknown>).sigilId : undefined;
+  if (typeof sigilId === "string" && sigilId.trim()) return makeSigilSUrlFromId(sigilId);
+
+  // Fallback: use token if present (common 1:1 mapping in many builds).
+  const tok = extractTokenCandidates(raw)[0];
+  if (tok) return makeSigilSUrlFromId(tok);
+
+  return null;
+}
+
+/**
+ * Best-effort FEED thread-root href:
+ * - derive root ref (walk prev if needed)
+ * - if root is decodable, prefer /s/<id> for Breath-origin display when available
+ * - else normalize to a viewable stream href
+ */
+function threadRootHrefFromUrlLike(rawUrl: string, startPayload?: unknown): string {
+  const rootRef = threadRootRefFromUrlLike(rawUrl, startPayload);
+  const rootPayload = loadPayloadFromRef(rootRef);
+  const rootCapsule = rootPayload ? readCapsuleLoose(rootPayload) : null;
+
+  const sUrl = computeSigilSUrl(rootRef, rootCapsule);
+  if (sUrl) return normalizeResolvedUrlForBrowser(sUrl);
+
+  return normalizeSeedHrefFromRef(rootRef);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Registry helpers
+   ───────────────────────────────────────────────────────────── */
 
 function countAddsInUrl(raw: string): number {
   const u = tryParseUrl(raw);
@@ -1400,7 +1689,23 @@ function registryScore(raw: string): number {
   return adds * 100_000 + len;
 }
 
-function upsertUrlList(lsKey: string, rawUrl: string): { changed: boolean; added: boolean; updated: boolean; value: string } {
+function keyForRegistryUrl(raw: string): string {
+  const tok = extractTokenCandidates(raw)[0];
+  if (tok) return `t:${normalizeToken(tok)}`;
+
+  const rootRef = extractRootRef(raw);
+  if (rootRef) {
+    const p = decodePayloadRef(rootRef);
+    return p ? `r:${payloadKey(p)}` : `r:${fnv1a64Hex(rootRef)}`;
+  }
+
+  return `u:${normalizeResolvedUrlForBrowser(raw)}`;
+}
+
+function upsertUrlList(
+  lsKey: string,
+  rawUrl: string,
+): { changed: boolean; added: boolean; updated: boolean; value: string } {
   if (typeof window === "undefined") return { changed: false, added: false, updated: false, value: rawUrl };
   if (typeof window.localStorage === "undefined") return { changed: false, added: false, updated: false, value: rawUrl };
 
@@ -1536,6 +1841,70 @@ function notifyFeed(url: string): void {
   }
 }
 
+function ensureRegistryBridge(): void {
+  if (REG_BRIDGE_INIT) return;
+  if (typeof window === "undefined") return;
+  REG_BRIDGE_INIT = true;
+
+  // storage changes (same tab writes won’t fire “storage”, but other tabs will)
+  window.addEventListener("storage", (e: StorageEvent) => {
+    if (!e.key) return;
+    if (e.key === FEED_LS_KEY || e.key === EXPLORER_LS_KEY || e.key === EXPLORER_GLOBAL_LS_KEY) {
+      notifyRegistryBatched();
+    }
+  });
+
+  // DOM events (same tab)
+  window.addEventListener("sigil:url-registered", () => notifyRegistryBatched());
+  window.addEventListener("feed:url-registered", () => notifyRegistryBatched());
+
+  // BroadcastChannels (cross-tab)
+  try {
+    if ("BroadcastChannel" in window) {
+      const bc1 = new BroadcastChannel(EXPLORER_BC_NAME);
+      bc1.onmessage = () => notifyRegistryBatched();
+
+      const bc2 = new BroadcastChannel(FEED_BC_NAME);
+      bc2.onmessage = () => notifyRegistryBatched();
+    }
+  } catch {
+    // silent
+  }
+}
+
+/**
+ * HARD PRUNE: FEED must only contain the THREAD ROOT (one entry per thread).
+ * Uses threadRootKeyFromUrlLike (not originKeyFromUrlLike) so reply URLs get removed.
+ */
+function pruneFeedDuplicatesForThread(rootKey: string, keepHref: string): void {
+  if (typeof window === "undefined") return;
+  if (typeof window.localStorage === "undefined") return;
+
+  const existing = readUrlList(FEED_LS_KEY);
+  const keep = canonicalizeForStorage(keepHref);
+  if (!keep) return;
+
+  const next: string[] = [];
+  for (const u of existing) {
+    const c = canonicalizeForStorage(u);
+    if (!c) continue;
+
+    const ok = threadRootKeyFromUrlLike(c);
+    if (ok === rootKey) continue; // drop anything in this same thread
+    next.push(c);
+  }
+
+  next.unshift(keep);
+  const deduped = dedupPreserveOrder(next);
+
+  try {
+    window.localStorage.setItem(FEED_LS_KEY, JSON.stringify(deduped));
+    notifyRegistryBatched();
+  } catch {
+    // ignore quota
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────
    Component (thread-recursive renderer)
    ───────────────────────────────────────────────────────────── */
@@ -1560,10 +1929,7 @@ function readCapsuleLoose(v: unknown): Capsule | null {
     Object.prototype.hasOwnProperty.call(rec, k) && typeof rec[k] !== "undefined";
 
   const hasContent = (rec: Record<string, unknown>): boolean =>
-    hasDefined(rec, "post") ||
-    hasDefined(rec, "message") ||
-    hasDefined(rec, "share") ||
-    hasDefined(rec, "reaction");
+    hasDefined(rec, "post") || hasDefined(rec, "message") || hasDefined(rec, "share") || hasDefined(rec, "reaction");
 
   const mergeMissingContent = (base: Record<string, unknown>, src: Record<string, unknown>): void => {
     for (const k of ["post", "message", "share", "reaction"] as const) {
@@ -1572,14 +1938,18 @@ function readCapsuleLoose(v: unknown): Capsule | null {
   };
 
   const root = v;
-  const data = isRecord(root.data) ? (root.data as Record<string, unknown>) : null;
+  const data = isRecord((root as Record<string, unknown>).data)
+    ? ((root as Record<string, unknown>).data as Record<string, unknown>)
+    : null;
 
-  const rootHasContent = hasContent(root);
+  const rootHasContent = hasContent(root as Record<string, unknown>);
   const dataHasContent = Boolean(data) && hasContent(data!);
 
-  const capsuleFromRoot = isRecord(root.capsule) ? (root.capsule as Record<string, unknown>) : null;
-  const capsuleFromData =
-    data && isRecord(data.capsule) ? (data.capsule as Record<string, unknown>) : null;
+  const capsuleFromRoot = isRecord((root as Record<string, unknown>).capsule)
+    ? ((root as Record<string, unknown>).capsule as Record<string, unknown>)
+    : null;
+
+  const capsuleFromData = data && isRecord(data.capsule) ? (data.capsule as Record<string, unknown>) : null;
 
   const capsuleObj = capsuleFromRoot ?? capsuleFromData;
 
@@ -1587,7 +1957,7 @@ function readCapsuleLoose(v: unknown): Capsule | null {
   if (capsuleObj && (rootHasContent || dataHasContent)) {
     const merged: Record<string, unknown> = { ...capsuleObj };
     if (dataHasContent && data) mergeMissingContent(merged, data);
-    if (rootHasContent) mergeMissingContent(merged, root);
+    if (rootHasContent) mergeMissingContent(merged, root as Record<string, unknown>);
     return merged as unknown as Capsule;
   }
 
@@ -1599,7 +1969,6 @@ function readCapsuleLoose(v: unknown): Capsule | null {
   if (dataHasContent && data) return data as unknown as Capsule;
 
   // ✅ Last fallback: treat root as capsule if it has typical capsule fields
-  // (allows v3 payload shapes to pass through as a capsule object)
   return root as unknown as Capsule;
 }
 
@@ -1607,26 +1976,26 @@ function readPulseLoose(v: unknown): number {
   if (isRecord(v) && typeof v.pulse === "number" && Number.isFinite(v.pulse)) return v.pulse;
   if (
     isRecord(v) &&
-    isRecord(v.data) &&
-    typeof v.data.pulse === "number" &&
-    Number.isFinite(v.data.pulse)
+    isRecord((v as Record<string, unknown>).data) &&
+    typeof ((v as Record<string, unknown>).data as Record<string, unknown>).pulse === "number" &&
+    Number.isFinite(((v as Record<string, unknown>).data as Record<string, unknown>).pulse as number)
   )
-    return v.data.pulse;
+    return ((v as Record<string, unknown>).data as Record<string, unknown>).pulse as number;
   return 0;
 }
 
 function readAppIdLoose(v: unknown): string | undefined {
-  const a = isRecord(v) ? v.appId : undefined;
+  const a = isRecord(v) ? (v as Record<string, unknown>).appId : undefined;
   if (typeof a === "string" && a.trim()) return a;
-  const d = isRecord(v) && isRecord(v.data) ? v.data.appId : undefined;
+  const d = isRecord(v) && isRecord((v as Record<string, unknown>).data) ? ((v as Record<string, unknown>).data as Record<string, unknown>).appId : undefined;
   if (typeof d === "string" && d.trim()) return d;
   return undefined;
 }
 
 function readUserIdLoose(v: unknown): unknown {
-  const u = isRecord(v) ? v.userId : undefined;
+  const u = isRecord(v) ? (v as Record<string, unknown>).userId : undefined;
   if (typeof u !== "undefined") return u;
-  const d = isRecord(v) && isRecord(v.data) ? v.data.userId : undefined;
+  const d = isRecord(v) && isRecord((v as Record<string, unknown>).data) ? ((v as Record<string, unknown>).data as Record<string, unknown>).userId : undefined;
   return d;
 }
 
@@ -1668,58 +2037,6 @@ type ResolvedNodeOk = {
 type ResolvedNodeErr = { ok: false; openUrl: string; error: string };
 type ResolvedNode = ResolvedNodeOk | ResolvedNodeErr;
 
-/* ─────────────────────────────────────────────────────────────
-   /s URL derivation (feed primary URL requirement)
-   ───────────────────────────────────────────────────────────── */
-
-function makeSigilSUrlFromId(idRaw: string): string {
-  const id = stripEdgePunct(idRaw);
-  const base = sigilBaseHref();
-  const safe = encodeURIComponent(id);
-  return `${base}/${safe}`;
-}
-
-function readStringField(obj: unknown, keys: readonly string[]): string | null {
-  if (!isRecord(obj)) return null;
-  for (const k of keys) {
-    const v = obj[k];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return null;
-}
-
-function computeSigilSUrl(rawInputUrl: string, capsule: Capsule | null): string | null {
-  const raw = stripEdgePunct(rawInputUrl);
-
-  // If the feed already provided a /s url, keep it.
-  if (isSPayloadUrl(raw)) return raw;
-
-  // Try common capsule fields (best-effort, no schema assumptions).
-  const fromCapsule =
-    readStringField(capsule, [
-      "sigilUrl",
-      "sigilURL",
-      "sigil_url",
-      "sigilHref",
-      "sigil_href",
-      "sUrl",
-      "s_url",
-      "s",
-    ]) ?? null;
-
-  if (fromCapsule && isSPayloadUrl(fromCapsule)) return normalizeResolvedUrlForBrowser(fromCapsule);
-
-  // Prefer capsule.sigilId (canonical /s/<sigilId> mapping).
-  const sigilId = isRecord(capsule) ? capsule.sigilId : undefined;
-  if (typeof sigilId === "string" && sigilId.trim()) return makeSigilSUrlFromId(sigilId);
-
-  // Fallback: use token if present (common 1:1 mapping in many builds).
-  const tok = extractTokenCandidates(raw)[0];
-  if (tok) return makeSigilSUrlFromId(tok);
-
-  return null;
-}
-
 const FeedCardThread: React.FC<ThreadProps> = ({
   url,
   depth = 0,
@@ -1731,6 +2048,13 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const [copied, setCopied] = useState(false);
   const [packed, setPacked] = useState(false);
 
+  // ✅ Collapsible state: ALL cards start collapsed (long blocks only).
+  // Short content still shows fully because `collapsed = shouldCollapse && !bodyExpanded`.
+  const [bodyExpanded, setBodyExpanded] = useState<boolean>(false);
+
+  useEffect(() => {
+  }, [url]);
+
   const chainVersion = useSyncExternalStore(subscribeChain, getChainSnapshot, getChainServerSnapshot);
 
   const input = useMemo(() => parseInputKind(url), [url]);
@@ -1741,11 +2065,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
       const payload = input.payload;
       const capsule = readCapsuleLoose(payload);
       if (!capsule) {
-        return {
-          ok: false,
-          openUrl: input.openUrl,
-          error: "Invalid embedded payload (missing capsule).",
-        };
+        return { ok: false, openUrl: input.openUrl, error: "Invalid embedded payload (missing capsule)." };
       }
 
       const pulse = readPulseLoose(payload);
@@ -1771,9 +2091,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
       return {
         ok: false,
         openUrl,
-        error:
-          ("error" in decoded ? (decoded as { error?: string }).error : undefined) ??
-          "Decode failed.",
+        error: ("error" in decoded ? (decoded as { error?: string }).error : undefined) ?? "Decode failed.",
       };
     }
 
@@ -1790,8 +2108,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
         : readPulseLoose(decoded.data);
 
     const appId =
-      typeof (decoded.data as { appId?: unknown }).appId === "string" &&
-      (decoded.data as { appId?: string }).appId
+      typeof (decoded.data as { appId?: unknown }).appId === "string" && (decoded.data as { appId?: string }).appId
         ? (decoded.data as { appId: string }).appId
         : readAppIdLoose(decoded.data);
 
@@ -1812,6 +2129,10 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const nodeOk = node.ok;
   const nodeResolved = nodeOk ? (node as ResolvedNodeOk) : null;
   const nodeStorePayload: unknown | null = nodeOk ? nodeResolved!.storePayload : null;
+
+  // ✅ Compute /s URL early so later memos can safely use it
+  const capsuleForSUrl: Capsule | null = nodeOk ? nodeResolved!.capsule : null;
+  const sigilSUrl = useMemo(() => computeSigilSUrl(url, capsuleForSUrl), [url, capsuleForSUrl]);
 
   const addChain = useMemo(() => {
     const chain = addChainProp ? [...addChainProp] : extractAddChain(url);
@@ -1840,8 +2161,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
     if (depth >= THREAD_MAX_DEPTH) return null;
 
     const payloadForPrevScan = nodeOk ? (nodeResolved!.dataRaw ?? nodeStorePayload) : null;
-    const candidate =
-      prevUrlFromAdd ?? (payloadForPrevScan ? extractPrevRefFromPayload(payloadForPrevScan) : null);
+    const candidate = prevUrlFromAdd ?? (payloadForPrevScan ? extractPrevRefFromPayload(payloadForPrevScan) : null);
     if (!candidate) return null;
 
     const prevPayload = candidate.startsWith(PAYLOAD_PREFIX) ? decodePayloadRef(candidate) : null;
@@ -1892,6 +2212,123 @@ const FeedCardThread: React.FC<ThreadProps> = ({
       fallbackRef,
     });
   }, [nodeOk, node.openUrl, selfKey, prevUrl, rootRef]);
+
+  type ThreadItem = { key: string; url: string; pulse: number };
+
+  const registryVersion = useSyncExternalStore(subscribeRegistry, getRegistrySnapshot, getRegistryServerSnapshot);
+
+  useEffect(() => {
+    ensureRegistryBridge();
+  }, []);
+
+  // ✅ FIX: use ONE consistent “thread identity key” everywhere (origin/self/candidates)
+  // (kept as-is: this is for Thread panel semantics, not feed-root pruning)
+  const selfThreadKey = useMemo(() => {
+    const base = normalizeSeedHrefFromRef(sigilSUrl ?? node.openUrl ?? url);
+    return originKeyFromUrlLike(base);
+  }, [sigilSUrl, node.openUrl, url]);
+
+  const threadView = useMemo((): { origin: ThreadItem | null; replies: ThreadItem[] } => {
+    if (!nodeOk) return { origin: null, replies: [] };
+
+    // Thread origin reference: prefer URL witness chain, else fall back to current
+    const originRef = addChain.length > 0 ? addChain[0]! : sigilSUrl ?? url;
+    const originHref = normalizeSeedHrefFromRef(originRef);
+    const originKey = originKeyFromUrlLike(originHref);
+
+    // Pool comes from:
+    // - current URL + its addChain (cold-open support)
+    // - Explorer global URLs (SigilExplorer registry + local fallback)
+    const pool = dedupPreserveOrder([
+      normalizeSeedHrefFromRef(url),
+      normalizeSeedHrefFromRef(node.openUrl),
+      ...addChain.map((r) => normalizeSeedHrefFromRef(r)),
+      ...readExplorerGlobalUrls(),
+    ]).filter(Boolean);
+
+    // Pick best URL per content key
+    const bestByKey = new Map<string, { url: string; score: number; pulse: number }>();
+
+    const scoreThreadUrl = (u: string, isOrigin: boolean): number => {
+      let s = 0;
+      const low = u.toLowerCase();
+
+      // origin prefers /s
+      if (isOrigin) {
+        if (isSPayloadUrl(u)) s += 260;
+        else s += 40;
+      } else {
+        // replies prefer stream URLs
+        if (low.includes("/stream/t") || /[?&#]t=/.test(low)) s += 220;
+        if (low.includes("/stream/p/")) s += 190;
+        if (low.includes("/stream") && /[?&#]p=/.test(low)) s += 170;
+        if (isSPayloadUrl(u)) s -= 40; // avoid /s variants as replies
+      }
+
+      s += Math.max(0, 20 - Math.floor(u.length / 40));
+      s += Math.min(200_000, registryScore(u)); // witness-depth
+      return s;
+    };
+
+    for (const u of pool) {
+      const canon = canonicalizeForStorage(u);
+      if (!canon) continue;
+
+      const candKey = originKeyFromUrlLike(canon);
+      if (!candKey) continue;
+
+      // belongs-to-thread check:
+      // - candidate is origin itself, OR
+      // - candidate's addChain contains originKey
+      const candAdds = dedupPreserveOrder(extractAddChain(canon));
+      let belongs = candKey === originKey;
+
+      if (!belongs && candAdds.length > 0) {
+        for (const r of candAdds) {
+          const rr = normalizeSeedHrefFromRef(r);
+          if (originKeyFromUrlLike(rr) === originKey) {
+            belongs = true;
+            break;
+          }
+        }
+      }
+
+      if (!belongs) continue;
+
+      // extract pulse for ordering (best-effort)
+      const dec = decodeSigilUrlSmart(canon);
+      const p = dec.decoded.ok ? readPulseLoose(dec.decoded.data) : 0;
+
+      const isOrigin = candKey === originKey;
+      const sc = scoreThreadUrl(canon, isOrigin);
+
+      const prior = bestByKey.get(candKey);
+      if (!prior || sc > prior.score) {
+        bestByKey.set(candKey, { url: canon, score: sc, pulse: p });
+      }
+    }
+
+    const originPicked = bestByKey.get(originKey)?.url ?? originHref;
+    const originPulse = (() => {
+      const d = decodeSigilUrlSmart(originPicked);
+      return d.decoded.ok ? readPulseLoose(d.decoded.data) : 0;
+    })();
+
+    const origin: ThreadItem = { key: originKey, url: originPicked, pulse: originPulse };
+
+    const replies: ThreadItem[] = [];
+    for (const [k, v] of bestByKey.entries()) {
+      if (k === originKey) continue;
+      if (k === selfThreadKey) continue; // ✅ current post never appears in the bottom thread
+      if (isSPayloadUrl(v.url)) continue; // ✅ replies should be stream nodes, not /s variants
+      replies.push({ key: k, url: v.url, pulse: v.pulse });
+    }
+
+    // newest first
+    replies.sort((a, b) => (b.pulse ?? 0) - (a.pulse ?? 0));
+
+    return { origin, replies };
+  }, [nodeOk, addChain, sigilSUrl, url, node.openUrl, selfThreadKey, registryVersion]);
 
   /* ─────────────────────────────────────────────────────────────
      Remember/Pack: compute "now" (gesture-safe) + UI reflects CHAIN via chainVersion
@@ -1978,10 +2415,6 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const rememberUrl = rememberPack.primary.url;
   const hasArchives = rememberPack.archives.length > 0;
 
-  // Compute /s URL *before* any early return (hooks must be unconditional)
-  const capsuleForSUrl: Capsule | null = nodeOk ? nodeResolved!.capsule : null;
-  const sigilSUrl = useMemo(() => computeSigilSUrl(url, capsuleForSUrl), [url, capsuleForSUrl]);
-
   // Compute momentStreamUrl BEFORE early return (hooks must stay unconditional)
   const momentStreamUrl = useMemo(
     () => makeStreamPMomentUrl(url) ?? makeStreamPMomentUrl(node.openUrl),
@@ -2002,20 +2435,22 @@ const FeedCardThread: React.FC<ThreadProps> = ({
     if (!nodeOk || !capsuleForSUrl) return false;
 
     const cap = capsuleForSUrl;
-    const legacyContent = Boolean(cap.post || cap.message || cap.share || cap.reaction);
+    const legacyContent = Boolean((cap as Capsule).post || (cap as Capsule).message || (cap as Capsule).share || (cap as Capsule).reaction);
     const v3Content = Boolean(v3Derived.post);
     const manual =
       isManualMarkerText(kindFromDecodedData(nodeResolved!.dataRaw, "")) ||
-      isManualMarkerText(cap.source) ||
+      isManualMarkerText((cap as Capsule).source) ||
       hasManualMarkerDeep(cap);
 
     return manual || legacyContent || v3Content || isReplyNode;
   }, [nodeOk, capsuleForSUrl, v3Derived.post, nodeResolved, isReplyNode]);
 
-  // Auto-register on visit (depth=0 only)
+  // Auto-register on visit (depth=0 only) + seed explorer + push thread-root into feed (no duplicates)
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (depth !== 0) return;
+
+    ensureRegistryBridge();
 
     const visitHref =
       makeStreamPMomentUrl(window.location.href) ??
@@ -2024,23 +2459,34 @@ const FeedCardThread: React.FC<ThreadProps> = ({
       rememberUrl ??
       normalizeResolvedUrlForBrowser(url);
 
-    // Explorer: always upsert (unique, upgrade if richer)
-    const ex = upsertUrlList(EXPLORER_LS_KEY, visitHref);
-    if (ex.changed) notifyExplorer(ex.value);
+    // ✅ Seed Explorer global state with:
+    // - the visited URL
+    // - every addChain ref (so a cold-open URL still hydrates the full thread locally)
+    const seedRefs = dedupPreserveOrder([visitHref, ...addChain.map((r) => normalizeSeedHrefFromRef(r)).filter(Boolean)]);
 
-    // Feed: only if memory/reply; unique, upgrade if richer
-    if (autoMemoryFlag) {
-      const fd = upsertUrlList(FEED_LS_KEY, visitHref);
-      if (fd.changed) notifyFeed(fd.value);
+    for (const s of seedRefs) {
+      const ex = upsertUrlList(EXPLORER_LS_KEY, s);
+      if (ex.changed) notifyExplorer(ex.value);
     }
-  }, [depth, url, node.openUrl, momentStreamUrl, rememberUrl, autoMemoryFlag]);
+
+    // ✅ Feed must show THREAD ROOT ONLY (never replies as top-level items)
+    if (autoMemoryFlag) {
+      const startPayload = nodeOk ? (nodeResolved!.dataRaw ?? nodeStorePayload) : undefined;
+      const threadRootHref = threadRootHrefFromUrlLike(visitHref, startPayload);
+
+      const fd = upsertUrlList(FEED_LS_KEY, threadRootHref);
+      if (fd.changed) notifyFeed(fd.value);
+
+      // ✅ hard prune: remove ANY feed URLs that resolve to this same thread root
+      const rootKey = threadRootKeyFromUrlLike(visitHref, startPayload);
+      pruneFeedDuplicatesForThread(rootKey, threadRootHref);
+    }
+
+    notifyRegistryBatched();
+  }, [depth, url, node.openUrl, momentStreamUrl, rememberUrl, autoMemoryFlag, addChain, nodeOk, nodeResolved, nodeStorePayload]);
 
   const computeRememberCopyUrl = useCallback((): string => {
-    return (
-      makeStreamPMomentUrl(url) ??
-      makeStreamPMomentUrl(node.openUrl) ??
-      computeRememberPackNow().primary.url
-    );
+    return makeStreamPMomentUrl(url) ?? makeStreamPMomentUrl(node.openUrl) ?? computeRememberPackNow().primary.url;
   }, [url, node.openUrl, computeRememberPackNow]);
 
   const computePackCopyText = useCallback((): string => {
@@ -2094,7 +2540,19 @@ const FeedCardThread: React.FC<ThreadProps> = ({
             {node.error}
           </div>
 
+          {/* ✅ Open + Remember even on invalid */}
           <footer className="fc-actions" role="group" aria-label="Actions">
+            <a
+              className="fc-btn"
+              href={node.openUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Open the best available href for this capsule"
+            >
+              ↗ Open
+            </a>
+
             <button
               className="fc-btn"
               type="button"
@@ -2123,9 +2581,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const post: PostPayload | undefined = postLegacy ?? v3Derived.post;
 
   const pulse =
-    typeof nodeResolved!.pulse === "number" && Number.isFinite(nodeResolved!.pulse)
-      ? nodeResolved!.pulse
-      : 0;
+    typeof nodeResolved!.pulse === "number" && Number.isFinite(nodeResolved!.pulse) ? nodeResolved!.pulse : 0;
 
   const m = momentFromPulse(pulse);
   const beatZ = Math.max(0, Math.floor(m.beat));
@@ -2137,16 +2593,13 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const { day, month, year } = kaiDMYFromPulseKKS(pulse);
 
   // Kind inference: if v3 post exists, it’s a post (not sigil)
-  const inferredKind =
-    post ? "post" : message ? "message" : share ? "share" : reaction ? "reaction" : "sigil";
+  const inferredKind = post ? "post" : message ? "message" : share ? "share" : reaction ? "reaction" : "sigil";
 
   const kind: string = kindFromDecodedData(nodeResolved!.dataRaw, inferredKind);
   const kindText = String(kind);
 
   const appBadge =
-    typeof nodeResolved!.appId === "string" && nodeResolved!.appId
-      ? `app ${short(nodeResolved!.appId, 10, 4)}`
-      : undefined;
+    typeof nodeResolved!.appId === "string" && nodeResolved!.appId ? `app ${short(nodeResolved!.appId, 10, 4)}` : undefined;
 
   const userBadge =
     typeof nodeResolved!.userId !== "undefined" && nodeResolved!.userId !== null
@@ -2160,14 +2613,10 @@ const FeedCardThread: React.FC<ThreadProps> = ({
 
   const authorBadge = isNonEmpty(capsule.author) ? capsule.author : undefined;
 
-  const sourceBadge =
-    (isNonEmpty(capsule.source) ? capsule.source : undefined) ??
-    legacySourceFromData(nodeResolved!.dataRaw);
+  const sourceBadge = (isNonEmpty(capsule.source) ? capsule.source : undefined) ?? legacySourceFromData(nodeResolved!.dataRaw);
 
   const manualMarkerPresent =
-    isManualMarkerText(kindText) ||
-    isManualMarkerText(sourceBadge) ||
-    hasManualMarkerDeep(capsule);
+    isManualMarkerText(kindText) || isManualMarkerText(sourceBadge) || hasManualMarkerDeep(capsule);
 
   // Content present (legacy or v3)
   const contentPresent = Boolean(post || message || share || reaction);
@@ -2176,8 +2625,8 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   // - manual marker OR any content OR reply node (has previous context)
   const memoryMode = manualMarkerPresent || contentPresent || isReplyNode;
 
-  const kindChipLabel = memoryMode ? upper(PROOF_OF_MEMORY) : upper(kindText);
-  const ariaKindLabel = memoryMode ? PROOF_OF_MEMORY : kindText;
+  const kindChipLabel = memoryMode ? upper(PROOF_OF_MEMORY) : upper(PROOF_OF_BREATH);
+  const ariaKindLabel = memoryMode ? PROOF_OF_MEMORY : PROOF_OF_BREATH;
 
   const sourceChipLabel = sourceBadge
     ? isManualMarkerText(sourceBadge)
@@ -2195,8 +2644,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const kai = buildKaiMetaLineZero(pulse, beatZ, stepZ, day, month, year);
   const stepPct = stepPctFromIndex(stepZ);
 
-  const [ar, ag, ab] =
-    CHAKRA_RGB[chakraDayDisplay] ?? CHAKRA_RGB.Crown ?? ([238, 241, 251] as const);
+  const [ar, ag, ab] = CHAKRA_RGB[chakraDayDisplay] ?? CHAKRA_RGB.Crown ?? ([238, 241, 251] as const);
 
   const phase = ((pulse % 13) + 13) % 13;
   const styleVars: React.CSSProperties = {
@@ -2215,7 +2663,47 @@ const FeedCardThread: React.FC<ThreadProps> = ({
   const openHref = memoryMode ? memoryHref : sigilSUrl ?? memoryHref;
 
   const openLabel = memoryMode ? "↗ Proof of Memory™" : "↗ Proof of Breath™";
-  const openTitle = memoryMode ? `Open ${PROOF_OF_MEMORY}` : "Open sigil-glyph (Breath)";
+  const openTitle = memoryMode ? `Open ${PROOF_OF_MEMORY}` : `Open ${PROOF_OF_BREATH}`;
+
+  // ✅ Actions: ALWAYS show on every block (origin, prev-chain, replies, previews)
+  const showActions = true;
+
+  // Styling/semantics keep: primary vs preview
+  const isPrimaryCard = depth === 0 && threadMode !== "self";
+
+  // ✅ Collapsible decision (per-card; applies to whichever long block exists)
+  const primaryBodyText = (postText ?? messageText ?? shareNote ?? "") || "";
+  const bodyKind: CollapseKind = v3Derived.bodyKind === "code" || v3Derived.bodyKind === "html" ? "code" : "text";
+
+  const collapse = primaryBodyText ? collapseSpecFor(primaryBodyText, bodyKind) : null;
+  const shouldCollapse = Boolean(collapse?.shouldCollapse);
+  const collapsed = shouldCollapse && !bodyExpanded;
+
+  const collapseId = `fc-body-${fnv1a64Hex(selfKey).slice(0, 10)}`;
+  const onToggleBody = (e: React.MouseEvent<HTMLButtonElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setBodyExpanded((v) => !v);
+  };
+
+  // ✅ Embedded cards: click card surface to open (no action row duplication)
+  const onPreviewOpen = (e: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>): void => {
+    if (isPrimaryCard) return;
+    if (isInteractiveEl((e as React.MouseEvent).target ?? null)) return;
+
+    // keyboard
+    if ("key" in e) {
+      const k = e.key;
+      if (k !== "Enter" && k !== " ") return;
+      e.preventDefault();
+    }
+
+    try {
+      window.open(openHref, "_blank", "noopener,noreferrer");
+    } catch {
+      // ignore
+    }
+  };
 
   const nextAddIndex = addIndex - 1;
 
@@ -2233,14 +2721,20 @@ const FeedCardThread: React.FC<ThreadProps> = ({
       ) : null}
 
       <article
-        className={`fc fc--crystal ${signaturePresent ? "fc--signed" : "fc--unsigned"}`}
-        role="article"
+        className={`fc fc--crystal ${signaturePresent ? "fc--signed" : "fc--unsigned"} ${
+          isPrimaryCard ? "fc--primary" : "fc--preview"
+        }`}
+        role={isPrimaryCard ? "article" : "link"}
+        tabIndex={isPrimaryCard ? -1 : 0}
+        onClick={onPreviewOpen as unknown as React.MouseEventHandler<HTMLElement>}
+        onKeyDown={onPreviewOpen as unknown as React.KeyboardEventHandler<HTMLElement>}
         aria-label={`${ariaKindLabel} glyph`}
         data-kind={dataKindAttr}
         data-chakra={chakraDayDisplay}
         data-signed={signaturePresent ? "true" : "false"}
         data-beat={pad2(beatZ)}
         data-step={pad2(stepZ)}
+        data-collapsed={collapsed ? "true" : "false"}
         style={styleVars}
       >
         <div className="fc-crystal" aria-hidden="true" />
@@ -2248,10 +2742,10 @@ const FeedCardThread: React.FC<ThreadProps> = ({
         <div className="fc-veil" aria-hidden="true" />
 
         <div className="fc-shell">
-          <aside className="fc-left" aria-label={memoryMode ? PROOF_OF_MEMORY : "Sigil"}>
+          <aside className="fc-left" aria-label={memoryMode ? PROOF_OF_MEMORY : PROOF_OF_BREATH}>
             <div className="fc-sigilStage">
               <div className="fc-sigilGlass" aria-hidden="true" />
-              <div className="fc-sigil" aria-label={memoryMode ? PROOF_OF_MEMORY : "Sigil"}>
+              <div className="fc-sigil" aria-label={memoryMode ? PROOF_OF_MEMORY : PROOF_OF_BREATH}>
                 {/* ✅ ALWAYS show the sigil visual for THIS node’s pulse */}
                 <KaiSigil pulse={pulse} beat={beatZ} stepPct={stepPct} chakraDay={chakraDay} />
               </div>
@@ -2273,7 +2767,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
               <div className="fc-metaRow">
                 <span
                   className="fc-chip fc-chip--kind"
-                  title={memoryMode ? `${PROOF_OF_MEMORY} • type: ${kindText}` : `Kind: ${kindText}-glyph`}
+                  title={memoryMode ? `${PROOF_OF_MEMORY} • type: ${kindText}` : `${PROOF_OF_BREATH} • type: ${kindText}`}
                 >
                   {kindChipLabel}
                 </span>
@@ -2281,7 +2775,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
                 {appBadge && <span className="fc-chip">{appBadge}</span>}
                 {userBadge && <span className="fc-chip">{userBadge}</span>}
 
-                {/* ✅ SIGIL-GLYPH chip ONLY on pure sigil cards */}
+                {/* ✅ SIGIL-GLYPH chip ONLY on pure breath sigil cards */}
                 {!memoryMode && sigilId ? (
                   <span className="fc-chip fc-chip--sigil" title={`Sigil-Glyph: ${sigilId}`}>
                     SIGIL-GLYPH {short(sigilId, 6, 4)}
@@ -2344,13 +2838,38 @@ const FeedCardThread: React.FC<ThreadProps> = ({
                 {isNonEmpty(postTitle) && <h3 className="fc-title">{postTitle}</h3>}
 
                 {isNonEmpty(postText) ? (
-                  v3Derived.bodyKind === "code" || v3Derived.bodyKind === "html" ? (
-                    <pre className="fc-body" style={{ whiteSpace: "pre-wrap" }}>
-                      {postText}
-                    </pre>
-                  ) : (
-                    <p className="fc-body">{postText}</p>
-                  )
+                  <div className="fc-collapse" data-open={bodyExpanded ? "true" : "false"}>
+                    <div
+                      id={collapseId}
+                      className="fc-collapse__content"
+                      style={{
+                        maxHeight: collapsed ? `${collapse?.maxHeightPx ?? 240}px` : "none",
+                        overflow: collapsed ? "hidden" : "visible",
+                      }}
+                    >
+                      {v3Derived.bodyKind === "code" || v3Derived.bodyKind === "html" ? (
+                        <pre className="fc-body" style={{ whiteSpace: "pre-wrap" }}>
+                          {postText}
+                        </pre>
+                      ) : (
+                        <p className="fc-body">{postText}</p>
+                      )}
+                    </div>
+
+                    {shouldCollapse ? (
+                      <button
+                        className="fc-btn fc-btn--ghost fc-collapse__toggle"
+                        type="button"
+                        onClick={onToggleBody}
+                        aria-expanded={bodyExpanded}
+                        aria-controls={collapseId}
+                        data-no-open="true"
+                        title="Expand/collapse long content"
+                      >
+                        {bodyExpanded ? "Collapse" : `Expand${collapse?.lines ? ` • ${collapse.lines} lines` : ""}`}
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 {Array.isArray(post.tags) && post.tags.length > 0 && (
@@ -2376,6 +2895,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
                           target="_blank"
                           rel="noreferrer"
                           title={mm.url}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {label}
                         </a>
@@ -2385,47 +2905,38 @@ const FeedCardThread: React.FC<ThreadProps> = ({
                 )}
               </section>
             )}
-<footer className="fc-actions" role="group" aria-label="Actions">
-  <a className="fc-btn" href={openHref} target="_blank" rel="noreferrer" title={openTitle}>
-    {openLabel}
-  </a>
-
-  <button
-    className="fc-btn"
-    type="button"
-    onClick={onCopy}
-    aria-pressed={copied}
-    data-state={copied ? "remembered" : "idle"}
-    title="Copies canonical /stream/p moment URL when possible; otherwise copies the primary (latest) self-contained Memory Stream URL. If overflow exists, use Pack to copy all segments."
-  >
-    {copied ? "Remembered" : "Remember"}
-  </button>
-
-  {hasArchives ? (
-    <button
-      className="fc-btn"
-      type="button"
-      onClick={onCopyPack}
-      aria-pressed={packed}
-      data-state={packed ? "packed" : "idle"}
-      title="Copies the full segment pack (primary + archive segments) as newline-separated URLs for infinite offline recovery."
-    >
-      {packed ? "Packed" : `Pack ${1 + rememberPack.archives.length}`}
-    </button>
-  ) : null}
-
-  <span className="fc-live" aria-live="polite">
-    {copied ? "Inhaled to Memory" : packed ? "Packed to Memory" : ""}
-  </span>
-
-
 
             {message && (
               <section className="fc-bodywrap" aria-label="Message body">
-                <h3 className="fc-title">
-                  Message → {short(String(message.toUserId ?? "recipient"), 10, 4)}
-                </h3>
-                {isNonEmpty(messageText) && <p className="fc-body">{messageText}</p>}
+                <h3 className="fc-title">Message → {short(String(message.toUserId ?? "recipient"), 10, 4)}</h3>
+
+                {isNonEmpty(messageText) ? (
+                  <div className="fc-collapse" data-open={bodyExpanded ? "true" : "false"}>
+                    <div
+                      id={`${collapseId}-m`}
+                      className="fc-collapse__content"
+                      style={{
+                        maxHeight: collapsed ? `${collapse?.maxHeightPx ?? 240}px` : "none",
+                        overflow: collapsed ? "hidden" : "visible",
+                      }}
+                    >
+                      <p className="fc-body">{messageText}</p>
+                    </div>
+
+                    {shouldCollapse ? (
+                      <button
+                        className="fc-btn fc-btn--ghost fc-collapse__toggle"
+                        type="button"
+                        onClick={onToggleBody}
+                        aria-expanded={bodyExpanded}
+                        aria-controls={`${collapseId}-m`}
+                        data-no-open="true"
+                      >
+                        {bodyExpanded ? "Collapse" : "Expand"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </section>
             )}
 
@@ -2438,10 +2949,38 @@ const FeedCardThread: React.FC<ThreadProps> = ({
                   target="_blank"
                   rel="noreferrer"
                   title={share.refUrl}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {hostOf(share.refUrl) ?? share.refUrl}
                 </a>
-                {isNonEmpty(shareNote) && <p className="fc-body">{shareNote}</p>}
+
+                {isNonEmpty(shareNote) ? (
+                  <div className="fc-collapse" data-open={bodyExpanded ? "true" : "false"}>
+                    <div
+                      id={`${collapseId}-s`}
+                      className="fc-collapse__content"
+                      style={{
+                        maxHeight: collapsed ? `${collapse?.maxHeightPx ?? 240}px` : "none",
+                        overflow: collapsed ? "hidden" : "visible",
+                      }}
+                    >
+                      <p className="fc-body">{shareNote}</p>
+                    </div>
+
+                    {shouldCollapse ? (
+                      <button
+                        className="fc-btn fc-btn--ghost fc-collapse__toggle"
+                        type="button"
+                        onClick={onToggleBody}
+                        aria-expanded={bodyExpanded}
+                        aria-controls={`${collapseId}-s`}
+                        data-no-open="true"
+                      >
+                        {bodyExpanded ? "Collapse" : "Expand"}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
               </section>
             )}
 
@@ -2458,6 +2997,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
                   target="_blank"
                   rel="noreferrer"
                   title={reaction.refUrl}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {hostOf(reaction.refUrl) ?? reaction.refUrl}
                 </a>
@@ -2466,8 +3006,7 @@ const FeedCardThread: React.FC<ThreadProps> = ({
 
             {!post && !message && !share && !reaction && (
               <section className="fc-bodywrap" aria-label="Sigil body">
-                <h3 className="fc-title">{memoryMode ? PROOF_OF_MEMORY : PROOF_OF_BREATH}</h3>
-
+                {/* (Kept minimal; chip+actions already declare Proof-of-*) */}
                 {memoryMode && hasArchives ? (
                   <div className="fc-muted" style={{ marginTop: 8 }}>
                     Archive segments: {rememberPack.archives.length} (use <b>Pack</b> to copy them)
@@ -2476,40 +3015,85 @@ const FeedCardThread: React.FC<ThreadProps> = ({
               </section>
             )}
 
-            <footer className="fc-actions" role="group" aria-label="Actions">
-              <a className="fc-btn" href={openHref} target="_blank" rel="noreferrer" title={openTitle}>
-                {openLabel}
-              </a>
+            {threadMode !== "self" && depth === 0 ? (
+              <section className="fc-bodywrap" aria-label="Thread">
+                <h3 className="fc-title">Thread</h3>
 
-              <button
-                className="fc-btn"
-                type="button"
-                onClick={onCopy}
-                aria-pressed={copied}
-                data-state={copied ? "remembered" : "idle"}
-                title="Copies canonical /stream/p moment URL when possible; otherwise copies the primary (latest) self-contained Memory Stream URL. If overflow exists, use Pack to copy all segments."
-              >
-                {copied ? "Remembered" : "Remember"}
-              </button>
+                {/* ✅ Origin: show ONLY if you're not already viewing the origin */}
+                {threadView.origin && threadView.origin.key !== selfThreadKey ? (
+                  <div style={{ marginTop: 10 }}>
+                    <div className="fc-muted" style={{ marginBottom: 10 }}>
+                      Origin
+                    </div>
+                    <FeedCardThread url={threadView.origin.url} threadMode="self" depth={1} seen={[selfKey]} />
+                  </div>
+                ) : null}
 
-              {hasArchives ? (
+                <div style={{ marginTop: 14 }}>
+                  <div className="fc-muted" style={{ marginBottom: 10 }}>
+                    Replies ({threadView.replies.length})
+                  </div>
+
+                  {threadView.replies.length ? (
+                    threadView.replies.map((r) => (
+                      <FeedCardThread key={r.key} url={r.url} threadMode="self" depth={1} seen={[selfKey]} />
+                    ))
+                  ) : (
+                    <div className="fc-muted">No replies captured locally yet.</div>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {/* ✅ Actions: ALWAYS (every block has Open + Remember; Pack when needed) */}
+            {showActions ? (
+              <footer className="fc-actions" role="group" aria-label="Actions">
+                <a
+                  className="fc-btn"
+                  href={openHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={openTitle}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {openLabel}
+                </a>
+
                 <button
                   className="fc-btn"
                   type="button"
-                  onClick={onCopyPack}
-                  aria-pressed={packed}
-                  data-state={packed ? "packed" : "idle"}
-                  title="Copies the full segment pack (primary + archive segments) as newline-separated URLs for infinite offline recovery."
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCopy();
+                  }}
+                  aria-pressed={copied}
+                  data-state={copied ? "remembered" : "idle"}
+                  title="Copies canonical /stream/p moment URL when possible; otherwise copies the primary self-contained Memory Stream URL. If overflow exists, use Pack."
                 >
-                  {packed ? "Packed" : `Pack ${1 + rememberPack.archives.length}`}
+                  {copied ? "Remembered" : "Remember"}
                 </button>
-              ) : null}
 
-</footer>
-              <span className="fc-live" aria-live="polite">
-                {copied ? "Inhaled to Memory" : packed ? "Packed to Memory" : ""}
-              </span>
-            </footer>
+                {hasArchives ? (
+                  <button
+                    className="fc-btn"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCopyPack();
+                    }}
+                    aria-pressed={packed}
+                    data-state={packed ? "packed" : "idle"}
+                    title="Copies the full segment pack (primary + archive segments) as newline-separated URLs."
+                  >
+                    {packed ? "Packed" : `Pack ${1 + rememberPack.archives.length}`}
+                  </button>
+                ) : null}
+
+                <span className="fc-live" aria-live="polite">
+                  {copied ? "Inhaled to Memory" : packed ? "Packed to Memory" : ""}
+                </span>
+              </footer>
+            ) : null}
           </section>
         </div>
       </article>
@@ -2522,14 +3106,7 @@ export const FeedCard: React.FC<Props> = ({ url, threadMode = "thread" }) => {
   const addChain = useMemo(() => dedupPreserveOrder(extractAddChain(url)), [url]);
 
   if (rootRef) {
-    return (
-      <FeedCardThread
-        url={rootRef}
-        threadMode={threadMode}
-        addChain={addChain}
-        addIndex={addChain.length - 1}
-      />
-    );
+    return <FeedCardThread url={rootRef} threadMode={threadMode} addChain={addChain} addIndex={addChain.length - 1} />;
   }
 
   return <FeedCardThread url={url} threadMode={threadMode} />;
