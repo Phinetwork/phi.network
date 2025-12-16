@@ -329,6 +329,39 @@ const IconBtn: React.FC<
     </svg>
   </button>
 );
+const EXPLORER_REGISTRY_LS_KEY = "kai:sigils:v1";
+const EXPLORER_FALLBACK_LS_KEY = "sigil:urls";
+const EXPLORER_BC_NAME = "kai-sigil-registry";
+
+function registerUrlForExplorer(url: string) {
+  if (typeof window === "undefined") return;
+
+  const put = (key: string) => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      const arr = (raw ? JSON.parse(raw) : []) as string[];
+      const next = Array.isArray(arr) ? arr.slice() : [];
+      if (!next.includes(url)) next.unshift(url);
+      // keep it sane; Explorer can still pull remote history
+      window.localStorage.setItem(key, JSON.stringify(next.slice(0, 20000)));
+    } catch {}
+  };
+
+  put(EXPLORER_REGISTRY_LS_KEY);
+  put(EXPLORER_FALLBACK_LS_KEY);
+
+  // Live notify Explorer tab(s)
+  try {
+    const bc = new BroadcastChannel(EXPLORER_BC_NAME);
+    bc.postMessage({ type: "add", url });
+    bc.close();
+  } catch {}
+
+  // Optional: DOM event hook if Explorer listens
+  try {
+    window.dispatchEvent(new CustomEvent("kai:registry:add", { detail: { url } }));
+  } catch {}
+}
 
 /* ═════════════ Component ═════════════ */
 const VerifierStamperInner: React.FC = () => {
@@ -841,6 +874,7 @@ const VerifierStamperInner: React.FC = () => {
     setSealUrl(url);
     setSealHash(childHash);
     setRotateOut(true);
+    registerUrlForExplorer(url);
     switchModal(dlgRef.current, () => setSealOpen(true));
     try {
       publishRotation([parentCanonical], token);

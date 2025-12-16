@@ -3,13 +3,14 @@
    - Per-node chakra tint (root/sacral/solar/heart/throat/thirdEye/crown)
    - Etched refraction + caustic drift + micro-noise overlay
    - Breath motion (φ cadence) with reduced-motion compliance
+   - Transfer-ready UI polish (Φ send/receive rows, statuses, mobile-safe)
    - Fully scoped to .sigil-explorer
 */
 
 /* ─────────────────────────────────────────────────────────────
    ROOT / THEME TOKENS (scoped)
    ───────────────────────────────────────────────────────────── */
-.sigil-explorer {
+.sigil-explorer{
   /* Ink */
   --sx-text: #ecffff;
   --sx-text-dim: #a9f6ee;
@@ -21,6 +22,18 @@
 
   /* Chakra defaults (used if node doesn’t override --sx-chakra) */
   --sx-chakra: var(--sx-accent);
+  /* Optional Android/WebView fallback (set per-node via inline style):
+     --sx-chakra-rgb: 35,255,240; */
+
+  /* Φ / Transfers */
+  --sx-phi: #ffd780;
+  --sx-phi-rgb: 255, 215, 128;
+  --sx-ok: #63ffb0;
+  --sx-ok-rgb: 99, 255, 176;
+  --sx-warn: #ffcd4a;
+  --sx-warn-rgb: 255, 205, 74;
+  --sx-bad: #ff5f7a;
+  --sx-bad-rgb: 255, 95, 122;
 
   /* Kai breath */
   --sx-breath: 5.236s;
@@ -61,15 +74,29 @@
     radial-gradient(900px 700px at 90% 80%, rgba(183, 163, 255, 0.12), transparent 60%),
     linear-gradient(180deg, var(--sx-bg-tint-top), var(--sx-bg-tint-bot));
 
-  min-height: 100dvh;
+  /* Viewport stability across mobile bars */
+  min-height: 100vh;   /* baseline fallback */
+  min-height: 100svh;  /* stable “small viewport” on mobile */
+
   width: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
   position: relative;
+
+  /* compositor stability */
+  isolation: isolate;
 }
 
-.sigil-explorer * { box-sizing: border-box; }
+@supports (min-height: 100dvh){
+  .sigil-explorer{ min-height: 100dvh; }
+}
+
+.sigil-explorer *{ box-sizing: border-box; }
+
+/* Ensure content sits above overlays */
+.kx-toolbar,
+.explorer-scroll{ position: relative; z-index: 1; }
 
 /* ─────────────────────────────────────────────────────────────
    GLOBAL KRYSTAL OVERLAY (etched + caustic drift)
@@ -81,6 +108,12 @@
   inset: 0;
   pointer-events: none;
   z-index: 0;
+
+  transform: translate3d(0,0,0);
+  -webkit-transform: translate3d(0,0,0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .sigil-explorer::before{
@@ -102,6 +135,8 @@
     );
   mix-blend-mode: overlay;
   opacity: .35;
+
+  will-change: opacity;
 }
 
 .sigil-explorer::after{
@@ -113,6 +148,8 @@
   filter: blur(10px) saturate(1.05);
   opacity: .55;
   animation: sx-aurora var(--sx-breath) ease-in-out infinite;
+
+  will-change: transform, opacity, filter;
 }
 
 @keyframes sx-aurora{
@@ -120,10 +157,6 @@
   50%  { transform: translate3d(0,-10px,0) scale(1.03); opacity:.62; }
   100% { transform: translate3d(0,0,0) scale(1); opacity:.48; }
 }
-
-/* Ensure content sits above overlays */
-.kx-toolbar,
-.explorer-scroll { position: relative; z-index: 1; }
 
 /* ─────────────────────────────────────────────────────────────
    STICKY TOOLBAR
@@ -139,6 +172,16 @@
     linear-gradient(180deg, rgba(10, 18, 22, 0.82), rgba(6, 10, 14, 0.78));
   border-bottom: 1px solid rgba(255,255,255,0.10);
   box-shadow: var(--sx-shadow);
+
+  transform: translate3d(0,0,0);
+  -webkit-transform: translate3d(0,0,0);
+  will-change: transform;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .kx-toolbar{
+    background: linear-gradient(180deg, rgba(10, 18, 22, 0.92), rgba(6, 10, 14, 0.88));
+  }
 }
 
 .kx-toolbar-inner{
@@ -379,6 +422,8 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   scroll-behavior: smooth;
+
+  scrollbar-gutter: stable both-edges;
 }
 
 .explorer-inner{
@@ -425,6 +470,15 @@
   overflow: clip;
   position: relative;
   animation: sx-card-breathe var(--sx-breath) ease-in-out infinite;
+
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@supports not (overflow: clip){
+  .origin{ overflow: hidden; }
 }
 
 .origin::before{
@@ -549,6 +603,8 @@
   padding: 8px 9px 10px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+
+  scrollbar-gutter: stable both-edges;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -575,6 +631,12 @@
   position: relative;
   overflow: hidden;
   animation: sx-node-breathe var(--sx-breath) ease-in-out infinite;
+
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform, filter;
 }
 
 .node::before{
@@ -628,7 +690,17 @@
   100% { transform: translate3d(-10%, -12%, 0) rotate(0deg); opacity:.20; }
 }
 
-/* Node row layout (desktop = 2 columns, mobile = stacked two-row) */
+/* Optional: if your TS adds either .has-phi or data-has-phi="1" */
+.node.has-phi,
+.node[data-has-phi="1"]{
+  border-color: rgba(var(--sx-phi-rgb), 0.65);
+  box-shadow:
+    0 16px 42px rgba(0,0,0,0.58),
+    0 0 0 1px rgba(var(--sx-phi-rgb), 0.18) inset,
+    0 0 22px rgba(var(--sx-phi-rgb), 0.10);
+}
+
+/* Node row layout (desktop = 2 columns, mobile = stacked) */
 .node-row{
   display: grid;
   grid-template-columns: minmax(0, 2.2fr) minmax(0, 2fr);
@@ -720,9 +792,7 @@
     0 1px 0 rgba(0,0,0,0.25);
 }
 
-.node-link:hover{
-  color: var(--sx-accent-3);
-}
+.node-link:hover{ color: var(--sx-accent-3); }
 
 /* Kai time pills */
 .k-stamp{
@@ -746,7 +816,7 @@
 
 .k-dot{ opacity: 0.6; }
 
-/* Chakra badge (NOW chakra-colored, not purple) */
+/* Chakra badge */
 .chakra{
   padding: 5px 9px;
   border-radius: 999px;
@@ -855,7 +925,7 @@
   padding: 4px 0 2px;
 }
 
-/* Children rail (NOW chakra-tinted per parent node) */
+/* Children rail */
 .node-children{
   margin: 6px 0 8px 20px;
   padding: 8px 0 4px 12px;
@@ -884,6 +954,186 @@
 
 /* Empty branch inside origin */
 .origin-body .kx-empty{ margin: 4px 2px 6px; }
+
+/* ─────────────────────────────────────────────────────────────
+   TRANSFER READY UI (Φ send/receive/status rows)
+   - safe if unused (only applies when these classes exist in markup)
+   ───────────────────────────────────────────────────────────── */
+.tx{
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255,255,255,0.12);
+}
+
+.tx-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tx-title{
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--sx-phi) 70%, var(--sx-text));
+  font-weight: 900;
+}
+
+.tx-badges{
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tx-badge{
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--sx-phi-rgb), 0.55);
+  background:
+    radial-gradient(140% 220% at 0% 0%, rgba(var(--sx-phi-rgb), 0.18), transparent 62%),
+    linear-gradient(180deg, rgba(var(--sx-phi-rgb), 0.14), rgba(255,255,255,0.02));
+  color: #fff8e0;
+  font-size: 11px;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+}
+
+.tx-row{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 640px){
+  .tx-row{ grid-template-columns: 1fr; }
+}
+
+.tx-input{
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background:
+    radial-gradient(140% 240% at 0% 0%, rgba(var(--sx-phi-rgb), 0.10), transparent 58%),
+    linear-gradient(180deg, rgba(7,12,14,0.76), rgba(7,12,14,0.54));
+  color: var(--sx-text);
+  outline: none;
+  font-size: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.tx-input::placeholder{
+  color: color-mix(in oklab, var(--sx-text-dim) 72%, transparent);
+}
+
+.tx-input:focus-visible{
+  border-color: rgba(var(--sx-phi-rgb), 0.50);
+  box-shadow:
+    0 0 0 2px rgba(var(--sx-phi-rgb), 0.18),
+    0 0 0 6px rgba(var(--sx-phi-rgb), 0.10);
+}
+
+.tx-actions{
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tx-btn{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  cursor: pointer;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  transition: transform .12s ease, filter .18s ease, box-shadow .18s ease, border-color .18s ease;
+  user-select: none;
+}
+
+.tx-btn:active{ transform: translateY(0); }
+
+.tx-btn.send{
+  color: #2b1b00;
+  background:
+    radial-gradient(140% 220% at 0% 0%, rgba(var(--sx-phi-rgb), 0.34), transparent 56%),
+    linear-gradient(180deg, rgba(var(--sx-phi-rgb), 0.26), rgba(var(--sx-phi-rgb), 0.10));
+  box-shadow:
+    0 14px 34px rgba(var(--sx-phi-rgb), 0.12),
+    inset 0 1px 0 rgba(255,255,255,0.28);
+}
+
+.tx-btn.send:hover{
+  transform: translateY(-1px);
+  filter: brightness(1.03) saturate(1.06);
+  border-color: rgba(var(--sx-phi-rgb), 0.45);
+  box-shadow:
+    0 18px 44px rgba(var(--sx-phi-rgb), 0.16),
+    inset 0 1px 0 rgba(255,255,255,0.32);
+}
+
+.tx-btn.cancel{
+  color: var(--sx-text);
+  background:
+    radial-gradient(140% 220% at 0% 0%, rgba(255,255,255,0.06), transparent 62%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.04),
+    0 6px 18px rgba(0,0,0,0.35);
+}
+
+.tx-btn.cancel:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.24);
+  color: var(--sx-accent);
+}
+
+/* Status line */
+.tx-status{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--sx-text-dim);
+  font-size: 11px;
+}
+
+.tx-status .dot{ opacity: 0.65; }
+
+.tx-status.ok{
+  color: color-mix(in oklab, var(--sx-ok) 72%, var(--sx-text));
+}
+
+.tx-status.warn{
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-text));
+}
+
+.tx-status.bad{
+  color: color-mix(in oklab, var(--sx-bad) 70%, var(--sx-text));
+}
+
+.tx-hash{
+  font-family: var(--sx-mono);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background:
+    radial-gradient(140% 220% at 0% 0%, rgba(255,255,255,0.05), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ─────────────────────────────────────────────────────────────
    FOOTER — ULTRA SLIM
@@ -956,60 +1206,11 @@
     animation: none !important;
   }
 }
+
 /* ─────────────────────────────────────────────────────────────
-   ANDROID HARDENING PATCH (append-only)
-   - Keeps your current visuals where supported
-   - Adds fallbacks for Android Chrome/WebView quirks:
-     • 100dvh jump (address bar)
-     • overflow: clip unsupported
-     • color-mix unsupported (causes “randomly missing” tints)
-     • fixed+blur animation flicker (compositor)
+   ANDROID / WEBVIEW COLOR-MIX FALLBACK
+   (keeps chakra tint + rails even when color-mix is unsupported)
    ───────────────────────────────────────────────────────────── */
-
-/* 1) Viewport stability (Android address bar resizing) */
-.sigil-explorer{
-  min-height: 100vh;   /* baseline fallback */
-  min-height: 100svh;  /* stable “small viewport” on mobile */
-}
-@supports (min-height: 100dvh){
-  .sigil-explorer{ min-height: 100dvh; } /* your intended target */
-}
-
-/* 2) overflow: clip fallback (older Android) */
-@supports not (overflow: clip){
-  .origin{ overflow: hidden; }
-}
-
-/* 3) Reduce fixed/blur/overlay flicker on Android GPU compositing */
-.sigil-explorer{
-  isolation: isolate; /* stabilizes blend/composite stacking on some Android builds */
-}
-
-.sigil-explorer::before,
-.sigil-explorer::after{
-  transform: translate3d(0,0,0);
-  -webkit-transform: translate3d(0,0,0);
-  will-change: transform, opacity;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.kx-toolbar{
-  transform: translate3d(0,0,0);
-  -webkit-transform: translate3d(0,0,0);
-  will-change: transform;
-}
-
-/* 4) Backdrop-filter fallback (some Android WebViews “flash” it while scrolling) */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
-  .kx-toolbar{
-    /* close to your current look, but avoids blur dependency */
-    background: linear-gradient(180deg, rgba(10, 18, 22, 0.92), rgba(6, 10, 14, 0.88));
-  }
-}
-
-/* 5) color-mix fallback (older Android/WebView).
-   Optional: if you provide --sx-chakra-rgb ("r,g,b") per node/origin, tint stays perfect. */
 @supports not (background: color-mix(in oklab, white 50%, transparent)){
   .origin{
     background:
@@ -1081,8 +1282,33 @@
   }
 }
 
-/* 6) Prevent tiny layout “snaps” from scrollbars appearing/disappearing (Android) */
-.explorer-scroll,
-.origin-body{
-  scrollbar-gutter: stable both-edges;
+/* ─────────────────────────────────────────────────────────────
+   DUCKDUCKGO / ANDROID WEBVIEW FLICKER PATCH
+   Goal: zero visual change, compositor stability in coarse-pointer browsers.
+   ───────────────────────────────────────────────────────────── */
+@media (hover: none) and (pointer: coarse){
+  /* overlays: avoid fixed-position flicker path on some WebViews */
+  .sigil-explorer::before,
+  .sigil-explorer::after{
+    position: absolute;
+  }
+
+  .sigil-explorer::after,
+  .sigil-explorer::before,
+  .kx-toolbar,
+  .origin,
+  .node{
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .sigil-explorer::after{ will-change: transform, opacity, filter; }
+  .sigil-explorer::before{ will-change: opacity; }
+
+  .origin,
+  .node{
+    outline: 1px solid transparent; /* prevents 1px seam flashes */
+  }
 }

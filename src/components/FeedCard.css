@@ -23,7 +23,11 @@
   --ring: 255, 255, 255;
 
   /* accents (page may override) */
-  --gold: 42, 197, 255;             /* luminous-cyan */
+  --gold-r: 42;
+  --gold-g: 197;
+  --gold-b: 255;
+  --gold: var(--gold-r), var(--gold-g), var(--gold-b);  /* luminous-cyan (packed) */
+
   --gold-ink: 255, 215, 128;        /* warm gold */
   --danger: 255, 88, 88;
   --ok: 88, 255, 174;
@@ -132,7 +136,12 @@
   --glass: 255, 255, 255;
   --ring: 255, 255, 255;
 
-  --gold: 42, 197, 255;
+  /* ensure gold packed + components exist locally too */
+  --gold-r: 42;
+  --gold-g: 197;
+  --gold-b: 255;
+  --gold: var(--gold-r), var(--gold-g), var(--gold-b);
+
   --gold-ink: 255, 215, 128;
   --danger: 255, 88, 88;
   --ok: 88, 255, 174;
@@ -148,9 +157,9 @@
   --noise-a: 0.028;
 
   /* Accent is per-card if provided by component style vars */
-  --accent-r: var(--fc-accent-r, var(--gold));
-  --accent-g: var(--fc-accent-g, var(--gold));
-  --accent-b: var(--fc-accent-b, var(--gold));
+  --accent-r: var(--fc-accent-r, var(--gold-r));
+  --accent-g: var(--fc-accent-g, var(--gold-g));
+  --accent-b: var(--fc-accent-b, var(--gold-b));
 
   /* Breath timings */
   --pulse-dur: var(--fc-pulse-dur, var(--dur-breath));
@@ -279,6 +288,7 @@
   animation-delay: var(--pulse-offset);
 }
 
+/* “Prev” stripe button variant */
 .fc-btn--prev{
   position: relative;
   padding-left: 14px;
@@ -293,8 +303,8 @@
   height: 60%;
   transform: translateY(-50%);
   border-radius: 999px;
-  background: rgba(var(--fc-accent-r), var(--fc-accent-g), var(--fc-accent-b), 0.55);
-  box-shadow: 0 0 10px rgba(var(--fc-accent-r), var(--fc-accent-g), var(--fc-accent-b), 0.35);
+  background: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.55);
+  box-shadow: 0 0 10px rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.35);
   opacity: 0.9;
 }
 
@@ -779,12 +789,14 @@
 /* ========== 16) PRINT ========================================= */
 @media print{
   .fc{
+    color-scheme: light !important;
     backdrop-filter:none !important;
     -webkit-backdrop-filter:none !important;
     box-shadow:none !important;
     animation:none !important;
     background:#fff !important;
     border-color:#ddd !important;
+    color:#111 !important;
   }
   .fc-crystal, .fc-rim, .fc-veil, .fc-live{ display:none !important; }
   .fc-actions{ display:none !important; }
