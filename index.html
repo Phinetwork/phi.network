@@ -6,7 +6,7 @@
     <meta http-equiv="x-ua-compatible" content="ie=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0B0D12" />
+    <meta name="theme-color" content="#07080C" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="format-detection" content="telephone=no" />
 
@@ -118,7 +118,20 @@
     <script type="module" src="/src/main.tsx"></script>
   </head>
 
-  <body style="margin: 0; background: #000; color: #fff; font-family: 'Unbounded', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
+  <body
+    style="
+      margin:0;
+      min-height:100vh;
+      background:#07080C;
+      color:#EEF2FF;
+      font: 500 15px/1.5 Inter, system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      text-rendering:optimizeLegibility;
+      letter-spacing:-0.01em;
+      overflow-x:hidden;
+    "
+  >
     <noscript>Phi Network requires JavaScript enabled to run.</noscript>
     <div id="root"></div>
   </body>

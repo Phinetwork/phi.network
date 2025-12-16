@@ -1422,10 +1422,10 @@ async function copyDnsIp(btn?: HTMLButtonElement | null) {
       href="https://github.com/phinetwork/phi.network"
       target="_blank"
       rel="noreferrer"
-      aria-label="Version 28.6.2 (opens GitHub)"
+      aria-label="Version 28.6.3 (opens GitHub)"
       title="Open GitHub"
     >
-      28.6.2
+      28.6.3
     </a>
   </div>
 </footer>
