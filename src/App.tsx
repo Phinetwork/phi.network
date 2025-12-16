@@ -1,26 +1,16 @@
 /* ──────────────────────────────────────────────────────────────────────────────
    App.tsx · ΦNet Sovereign Gate Shell (KaiOS-style PWA)
-   v28.3.0 · Zero-jank Live Header + Bulletproof Popovers + Native Zoom Lock
+   v28.7.2 · Layout Fix: extra space goes to Verifier panel, NOT Sovereign Writ
    ──────────────────────────────────────────────────────────────────────────────
-   KEY UX/PERF UPGRADES (no look/behavior regressions):
-   ✅ Live header updates are isolated (no 250ms full-app rerender)
-      - Only the LIVE button rerenders on pulse ticks
-      - Everything else stays stable unless route/viewport actually changes
 
-   ✅ VisualViewport listener is shared (no duplicate listeners / no thrash)
-      - Single RAF-throttled publisher, multiple subscribers
+   ✅ CHANGE (requested):
+   - When viewport grows, Sovereign Writ should NOT get extra vertical spacing.
+   - Extra space should go to the Verifier panel.
+   - Fix implemented structurally (no CSS changes yet):
+     • SovereignDeclarations is no longer a direct flex child of .app-nav.
+       This neutralizes `.nav-foot { margin-top: auto; }` behavior without touching CSS.
+     • Optional roomy layout flag + align-self start for nav (helps tall/desktop).
 
-   ✅ Popover scroll-lock is iOS-safe (no rubber-band / background wiggle)
-      - Uses body position:fixed lock + scroll restore (still works everywhere)
-
-   ✅ Zoom lock is more complete + less intrusive
-      - Blocks pinch/double-tap/ctrl-zoom
-      - Adds legacy iOS gesture* guards
-      - Avoids swallowing legitimate input taps when possible
-
-   ✅ Portal host is “fixed-safe”
-      - Uses .app-shell when safe
-      - Falls back to document.body if .app-shell would break position:fixed (transform/contain/etc.)
 ────────────────────────────────────────────────────────────────────────────── */
 
 import React, {
@@ -46,8 +36,6 @@ import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
 import KaiVohModal from "./components/KaiVoh/KaiVohModal";
 import SigilModal from "./components/SigilModal";
 
-// ✅ Kai Pulse NOW (canonical Kai-Klok utility)
-// ✅ pull KKS v1.0 calendar constants for D/M/Y
 import {
   momentFromUTC,
   DAYS_PER_MONTH,
@@ -55,15 +43,10 @@ import {
   MONTHS_PER_YEAR,
 } from "./utils/kai_pulse";
 
-// ✅ Chart + value (Atrium-level bar)
 import HomePriceChartCard from "./components/HomePriceChartCard";
 import SovereignDeclarations from "./components/SovereignDeclarations";
-
-// ✅ IMPORTANT: use the ACTUAL explorer file (it lives in /components here)
 import SigilExplorer from "./components/SigilExplorer";
-
-// ✅ NEW: Eternal KaiKlok module (popover content)
-import EternalKlock from "./components/KaiKlockHomeFace";
+import EternalKlock from "./components/EternalKlock";
 
 import SigilFeedPage from "./pages/SigilFeedPage";
 import SigilPage from "./pages/SigilPage/SigilPage";
@@ -78,13 +61,11 @@ type NavItem = {
   end?: boolean;
 };
 
-// Strict: allow CSS custom vars without `any`
 type AppShellStyle = CSSProperties & {
   ["--breath-s"]?: string;
   ["--vvh-px"]?: string;
 };
 
-// Popover needs its own SX vars (portal may be outside .sigil-explorer scope)
 type ExplorerPopoverStyle = CSSProperties & {
   ["--sx-breath"]?: string;
   ["--sx-border"]?: string;
@@ -92,7 +73,6 @@ type ExplorerPopoverStyle = CSSProperties & {
   ["--sx-ring"]?: string;
 };
 
-// Klock popover vars
 type KlockPopoverStyle = CSSProperties & {
   ["--klock-breath"]?: string;
   ["--klock-border"]?: string;
@@ -101,7 +81,6 @@ type KlockPopoverStyle = CSSProperties & {
   ["--klock-scale"]?: string;
 };
 
-// Explicit prop types for popovers
 type ExplorerPopoverProps = {
   open: boolean;
   onClose: () => void;
@@ -114,11 +93,8 @@ type KlockPopoverProps = {
   children: React.ReactNode;
 };
 
-// ✅ router state shape for auto-opening details on KaiKlok launch
 type KlockNavState = { openDetails?: boolean };
 
-// ✅ IMPORTANT FIX (compile-time):
-// Your EternalKlock component MUST accept this prop.
 type EternalKlockProps = {
   initialDetailsOpen?: boolean;
 };
@@ -152,23 +128,30 @@ function modPos(n: number, d: number): number {
   return r < 0 ? r + d : r;
 }
 
-// App.tsx (or your existing VisualViewport init)
-// sets <html data-perf="low"> only on genuinely low-power conditions
-const root = document.documentElement;
+/* ──────────────────────────────────────────────────────────────────────────────
+   Perf hint: sets <html data-perf="low"> only on genuinely low-power conditions
+────────────────────────────────────────────────────────────────────────────── */
+(function initPerfMode(): void {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
 
-const lowPower =
-  window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ||
-  window.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches ||
-  (typeof (navigator as unknown as { deviceMemory?: number }).deviceMemory === "number" &&
-    (navigator as unknown as { deviceMemory?: number }).deviceMemory! <= 4) ||
-  (typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 4);
+  const root = document.documentElement;
 
-if (lowPower) root.dataset.perf = "low";
-else delete root.dataset.perf;
+  const nav = navigator as unknown as {
+    deviceMemory?: number;
+    hardwareConcurrency?: number;
+  };
+
+  const lowPower =
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ||
+    window.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches ||
+    (typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4) ||
+    (typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 4);
+
+  if (lowPower) root.dataset.perf = "low";
+  else delete root.dataset.perf;
+})();
 
 // ===== KKS v1.0 display math (exact step) =====
-// IMPORTANT: “pulse” is continuous; beat/step must be derived from the DAY FRACTION (not 11-pulse buckets),
-// otherwise step drifts over the longer Kai-day.
 const BEATS_PER_DAY = 36;
 const STEPS_PER_BEAT = 44;
 const STEPS_PER_DAY = BEATS_PER_DAY * STEPS_PER_BEAT;
@@ -187,7 +170,6 @@ type BeatStepDMY = {
 function computeBeatStepDMY(m: KaiMoment): BeatStepDMY {
   const pulse = readNum(m, "pulse") ?? 0;
 
-  // Beat/Step (exact): map fractional day → step-of-day → beat/step
   const pulseInDay = modPos(pulse, PULSES_PER_DAY);
   const dayFrac = PULSES_PER_DAY > 0 ? pulseInDay / PULSES_PER_DAY : 0;
 
@@ -203,17 +185,12 @@ function computeBeatStepDMY(m: KaiMoment): BeatStepDMY {
     Math.max(0, stepOfDay - beat * STEPS_PER_BEAT),
   );
 
-  // D/M/Y (KKS v1.0):
-  // - Day starts at 1
-  // - Month starts at 1
-  // - Year is 0-based
-  // Prefer the library’s dayIndex if present; otherwise derive from pulse.
   const dayIndexFromMoment =
     readNum(m, "dayIndex") ??
     readNum(m, "dayIndex0") ??
     readNum(m, "dayIndexSinceGenesis");
 
-  const eps = 1e-9; // guard float boundary jitter
+  const eps = 1e-9;
   const dayIndex =
     dayIndexFromMoment !== null
       ? Math.floor(dayIndexFromMoment)
@@ -223,32 +200,25 @@ function computeBeatStepDMY(m: KaiMoment): BeatStepDMY {
   const daysPerMonth = Number.isFinite(DAYS_PER_MONTH) ? DAYS_PER_MONTH : 42;
   const monthsPerYear = Number.isFinite(MONTHS_PER_YEAR) ? MONTHS_PER_YEAR : 8;
 
-  const year = Math.floor(dayIndex / daysPerYear); // 0-based
+  const year = Math.floor(dayIndex / daysPerYear);
   const dayInYear = modPos(dayIndex, daysPerYear);
 
-  let monthIndex = Math.floor(dayInYear / daysPerMonth); // 0-based
+  let monthIndex = Math.floor(dayInYear / daysPerMonth);
   if (monthIndex < 0) monthIndex = 0;
   if (monthIndex > monthsPerYear - 1) monthIndex = monthsPerYear - 1;
 
   const dayInMonth = dayInYear - monthIndex * daysPerMonth;
 
-  const month = monthIndex + 1; // 1-based (M1 start)
-  const day = Math.floor(dayInMonth) + 1; // 1-based (D1 start)
+  const month = monthIndex + 1;
+  const day = Math.floor(dayInMonth) + 1;
 
   return { beat, step, day, month, year };
 }
 
-/**
- * Beat:Step label (00:00)
- */
 function formatBeatStepLabel(v: BeatStepDMY): string {
   return `${fmt2(v.beat)}:${fmt2(v.step)}`;
 }
 
-/**
- * D/M/Y label (D#/M#/Y#) — NO zero-padding:
- * Start is D1/M1/Y0
- */
 function formatDMYLabel(v: BeatStepDMY): string {
   return `D${v.day}/M${v.month}/Y${v.year}`;
 }
@@ -263,18 +233,6 @@ function isInteractiveTarget(t: EventTarget | null): boolean {
   return Boolean(ht.isContentEditable) || Boolean(el.closest("[contenteditable='true']"));
 }
 
-/**
- * 🔒 useDisableZoom — lock viewport like a native app
- *
- * - Blocks pinch-zoom (multi-touch)
- * - Blocks double-tap zoom
- * - Blocks CTRL/⌘ +/- / 0 zoom shortcuts
- * - Adds iOS legacy gesture* guards
- * - Sets touch-action: manipulation on <html> and <body>
- *
- * NOTE: Pair this with CSS:
- *   input, textarea, select, button { font-size: 16px; }
- */
 function useDisableZoom(): void {
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -282,41 +240,27 @@ function useDisableZoom(): void {
     let lastTouchEnd = 0;
 
     const onTouchEnd = (e: TouchEvent): void => {
-      // Avoid swallowing legitimate fast taps on form controls/links.
       if (isInteractiveTarget(e.target)) return;
 
       const now = Date.now();
-      if (now - lastTouchEnd <= 300) {
-        // prevent double-tap zoom
-        e.preventDefault();
-      }
+      if (now - lastTouchEnd <= 300) e.preventDefault();
       lastTouchEnd = now;
     };
 
     const onTouchMove = (e: TouchEvent): void => {
-      // Block pinch-zoom (2+ fingers moving)
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
+      if (e.touches.length > 1) e.preventDefault();
     };
 
     const onWheel = (e: WheelEvent): void => {
-      // Disable ctrl/⌘ + wheel zoom while preserving scrolling
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-      }
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
     };
 
     const onKeydown = (e: KeyboardEvent): void => {
       if (!e.ctrlKey && !e.metaKey) return;
       const k = e.key;
-      // CTRL/⌘ + / - / 0 zoom shortcuts (covers different keyboard layouts)
-      if (k === "+" || k === "-" || k === "=" || k === "_" || k === "0") {
-        e.preventDefault();
-      }
+      if (k === "+" || k === "-" || k === "=" || k === "_" || k === "0") e.preventDefault();
     };
 
-    // iOS Safari legacy pinch handlers (non-standard, but still emitted on some builds)
     const onGesture = (e: Event): void => {
       e.preventDefault();
     };
@@ -333,7 +277,6 @@ function useDisableZoom(): void {
     body.style.touchAction = "manipulation";
     (html.style as unknown as { webkitTextSizeAdjust?: string }).webkitTextSizeAdjust = "100%";
 
-    // Capture helps block zoom earlier in the event chain.
     document.addEventListener("touchend", onTouchEnd, { passive: false, capture: true });
     document.addEventListener("touchmove", onTouchMove, { passive: false, capture: true });
     document.addEventListener("gesturestart", onGesture, { passive: false, capture: true });
@@ -344,11 +287,31 @@ function useDisableZoom(): void {
     window.addEventListener("keydown", onKeydown);
 
     return () => {
-      document.removeEventListener("touchend", onTouchEnd, { capture: true } as unknown as EventListenerOptions);
-      document.removeEventListener("touchmove", onTouchMove, { capture: true } as unknown as EventListenerOptions);
-      document.removeEventListener("gesturestart", onGesture, { capture: true } as unknown as EventListenerOptions);
-      document.removeEventListener("gesturechange", onGesture, { capture: true } as unknown as EventListenerOptions);
-      document.removeEventListener("gestureend", onGesture, { capture: true } as unknown as EventListenerOptions);
+      document.removeEventListener(
+        "touchend",
+        onTouchEnd,
+        { capture: true } as unknown as EventListenerOptions,
+      );
+      document.removeEventListener(
+        "touchmove",
+        onTouchMove,
+        { capture: true } as unknown as EventListenerOptions,
+      );
+      document.removeEventListener(
+        "gesturestart",
+        onGesture,
+        { capture: true } as unknown as EventListenerOptions,
+      );
+      document.removeEventListener(
+        "gesturechange",
+        onGesture,
+        { capture: true } as unknown as EventListenerOptions,
+      );
+      document.removeEventListener(
+        "gestureend",
+        onGesture,
+        { capture: true } as unknown as EventListenerOptions,
+      );
 
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKeydown);
@@ -363,8 +326,6 @@ function useDisableZoom(): void {
 
 /* ──────────────────────────────────────────────────────────────────────────────
    Shared VisualViewport publisher (RAF-throttled)
-   - prevents duplicate listeners
-   - prevents scroll/resize state thrash
 ────────────────────────────────────────────────────────────────────────────── */
 type VVSize = { width: number; height: number };
 
@@ -444,9 +405,6 @@ function stopVVListenersIfIdle(): void {
   if (vvStore.cleanup) vvStore.cleanup();
 }
 
-/**
- * useVisualViewportSize — shared, RAF-throttled viewport size
- */
 function useVisualViewportSize(): VVSize {
   const [size, setSize] = useState<VVSize>(() => {
     if (typeof window === "undefined") return { width: 0, height: 0 };
@@ -460,7 +418,6 @@ function useVisualViewportSize(): VVSize {
     const sub = (s: VVSize): void => setSize(s);
     vvStore.subs.add(sub);
 
-    // sync immediately to store (covers mount after a resize)
     sub(vvStore.size);
 
     return () => {
@@ -473,7 +430,7 @@ function useVisualViewportSize(): VVSize {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   iOS-safe scroll lock (prevents background rubber-band / scroll bleed)
+   iOS-safe scroll lock
 ────────────────────────────────────────────────────────────────────────────── */
 function useBodyScrollLock(lock: boolean): void {
   const savedRef = useRef<{
@@ -510,7 +467,6 @@ function useBodyScrollLock(lock: boolean): void {
     html.style.overflow = "hidden";
     body.style.overflow = "hidden";
 
-    // The fixed-body technique is the most consistent “no bleed” lock on iOS.
     body.style.position = "fixed";
     body.style.top = `-${scrollY}px`;
     body.style.left = "0";
@@ -529,7 +485,6 @@ function useBodyScrollLock(lock: boolean): void {
       body.style.right = saved.bodyRight;
       body.style.width = saved.bodyWidth;
 
-      // restore scroll position
       window.scrollTo(0, saved.scrollY);
       savedRef.current = null;
     };
@@ -542,7 +497,6 @@ function isFixedSafeHost(el: HTMLElement): boolean {
   const backdropFilter = (cs as unknown as { backdropFilter?: string }).backdropFilter;
   const willChange = cs.willChange || "";
 
-  // Any of these can turn a descendant position:fixed into a containing-block relative fixed.
   const risky =
     (cs.transform && cs.transform !== "none") ||
     (cs.perspective && cs.perspective !== "none") ||
@@ -562,7 +516,7 @@ function getPortalHost(): HTMLElement {
     try {
       if (isFixedSafeHost(shell)) return shell;
     } catch {
-      // ignore and fall through
+      // ignore
     }
   }
   return document.body;
@@ -585,10 +539,8 @@ function ExplorerPopover({
     return getPortalHost();
   }, [isClient]);
 
-  // Lock background scroll while open (iOS-safe)
   useBodyScrollLock(open && isClient);
 
-  // ESC to close
   useEffect(() => {
     if (!open || !isClient) return;
 
@@ -613,7 +565,6 @@ function ExplorerPopover({
     const w = vvSize.width;
 
     return {
-      // ✅ force true full-screen hitbox (prevents click-through reopen bugs)
       position: "fixed",
       inset: 0,
       pointerEvents: "auto",
@@ -641,7 +592,6 @@ function ExplorerPopover({
 
   const onClosePointerDown = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>): void => {
-      // ✅ prevents click-through to underlying LIVE button on some mobile stacks
       e.preventDefault();
       e.stopPropagation();
       onClose();
@@ -659,10 +609,7 @@ function ExplorerPopover({
       aria-modal="true"
       aria-label="PhiStream Explorer"
       onPointerDown={onBackdropPointerDown}
-      onClick={(e) => {
-        // extra guard against click-through
-        e.stopPropagation();
-      }}
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="explorer-pop__panel" role="document">
         <button
@@ -692,7 +639,11 @@ function ExplorerPopover({
   );
 }
 
-function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX.Element | null {
+function KlockPopover({
+  open,
+  onClose,
+  children,
+}: KlockPopoverProps): React.JSX.Element | null {
   const isClient = typeof document !== "undefined";
   const vvSize = useVisualViewportSize();
 
@@ -701,10 +652,8 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
     return getPortalHost();
   }, [isClient]);
 
-  // Lock background scroll while open (iOS-safe)
   useBodyScrollLock(open && isClient);
 
-  // ESC to close
   useEffect(() => {
     if (!open || !isClient) return;
 
@@ -729,7 +678,6 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
     const w = vvSize.width;
 
     return {
-      // ✅ force true full-screen hitbox (prevents click-through / “won’t close” illusions)
       position: "fixed",
       inset: 0,
       pointerEvents: "auto",
@@ -741,8 +689,6 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
       ["--klock-border-strong"]: "rgba(255, 231, 160, 0.55)",
       ["--klock-ring"]:
         "0 0 0 2px rgba(255, 225, 150, 0.22), 0 0 0 6px rgba(255, 210, 120, 0.10)",
-
-      // ✅ Bigger Klock (CSS can map this to size/typography/layout)
       ["--klock-scale"]: "5",
     };
   }, [open, isClient, vvSize.height, vvSize.width]);
@@ -760,7 +706,6 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
 
   const onClosePointerDown = useCallback(
     (e: React.PointerEvent<HTMLButtonElement>): void => {
-      // ✅ strongest close: prevents click-through + closes immediately on press
       e.preventDefault();
       e.stopPropagation();
       onClose();
@@ -778,10 +723,7 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
       aria-modal="true"
       aria-label="Eternal KaiKlok"
       onPointerDown={onBackdropPointerDown}
-      onClick={(e) => {
-        // extra guard against click-through
-        e.stopPropagation();
-      }}
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="klock-pop__panel" role="document" data-klock-size="xl">
         <button
@@ -891,11 +833,9 @@ function KlockRoute(): React.JSX.Element {
     navigate("/", { replace: true });
   }, [navigate]);
 
-  // ✅ Honor navigation intent (still defaults to BIG face open)
   const navState = (location.state as KlockNavState | null) ?? null;
   const initialDetailsOpen = navState?.openDetails ?? true;
 
-  // ✅ Cast imported module to typed component locally (no `any`)
   const EternalKlockTyped = EternalKlock as unknown as React.ComponentType<EternalKlockProps>;
 
   return (
@@ -984,7 +924,6 @@ function LiveKaiButton({
       const dmyLabel = formatDMYLabel(bsd);
 
       setSnap((prev) => {
-        // Update only if visible strings changed (prevents pointless rerenders)
         if (
           prev.pulseStr === pulseStr &&
           prev.beatStepLabel === beatStepLabel &&
@@ -996,7 +935,6 @@ function LiveKaiButton({
       });
     };
 
-    // First tick immediately (ensures no “stale first paint” after resume)
     tick();
 
     const id = window.setInterval(tick, 250);
@@ -1063,17 +1001,20 @@ function AppChrome(): React.JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // 🔒 Lock viewport zoom globally (acts like a native KaiOS app shell)
   useDisableZoom();
 
-  // Canonical Golden Breath
   const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
   const BREATH_MS = useMemo(() => BREATH_S * 1000, [BREATH_S]);
-
-  // Canonical day breath count (precision)
   const BREATHS_PER_DAY = useMemo(() => 17_491.270421, []);
 
   const vvSize = useVisualViewportSize();
+
+  // ✅ Layout signal: “roomy” screens (desktop / tablet / very tall)
+  const roomy = useMemo(() => {
+    const h = vvSize.height || 0;
+    const w = vvSize.width || 0;
+    return h >= 820 && w >= 980;
+  }, [vvSize.height, vvSize.width]);
 
   const shellStyle = useMemo<AppShellStyle>(
     () => ({
@@ -1179,8 +1120,6 @@ function AppChrome(): React.JSX.Element {
       if (contentEl) ro.observe(contentEl);
     }
 
-    // vv changes are already RAF-throttled in the shared publisher,
-    // but we still re-check overflow on any resize since layout shifts.
     window.addEventListener("resize", onAnyResize, { passive: true });
 
     scheduleMeasure();
@@ -1247,36 +1186,46 @@ function AppChrome(): React.JSX.Element {
     const st: KlockNavState = { openDetails: true };
     navigate("/klock", { state: st });
   }, [navigate]);
-const DNS_IP = "137.66.18.241";
 
-async function copyDnsIp(btn?: HTMLButtonElement | null) {
-  try {
-    await navigator.clipboard.writeText(DNS_IP);
-  } catch {
-    // fallback for older browsers / permissions
-    const ta = document.createElement("textarea");
-    ta.value = DNS_IP;
-    ta.setAttribute("readonly", "true");
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    ta.style.top = "-9999px";
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
+  const DNS_IP = "137.66.18.241";
+
+  async function copyDnsIp(btn?: HTMLButtonElement | null) {
+    try {
+      await navigator.clipboard.writeText(DNS_IP);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = DNS_IP;
+      ta.setAttribute("readonly", "true");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+
+    if (btn) {
+      btn.classList.add("is-copied");
+      window.setTimeout(() => btn.classList.remove("is-copied"), 900);
+    }
   }
 
-  if (btn) {
-    btn.classList.add("is-copied");
-    window.setTimeout(() => btn.classList.remove("is-copied"), 900);
-  }
-}
+  // ✅ Nav: don’t stretch on roomy screens (lets panel “own” the extra space visually)
+  const navInlineStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!roomy) return undefined;
+    return {
+      alignSelf: "start",
+      height: "auto",
+    };
+  }, [roomy]);
 
   return (
     <div
       className="app-shell"
       data-ui="atlantean-banking"
       data-panel-scroll={panelShouldScroll ? "1" : "0"}
+      data-roomy={roomy ? "1" : "0"}
       style={shellStyle}
     >
       <a className="skip-link" href="#app-content">
@@ -1345,7 +1294,12 @@ async function copyDnsIp(btn?: HTMLButtonElement | null) {
                 </div>
               )}
 
-              <nav className="app-nav" aria-label="Primary navigation">
+              <nav
+                className="app-nav"
+                aria-label="Primary navigation"
+                data-nav-roomy={roomy ? "1" : "0"}
+                style={navInlineStyle}
+              >
                 <div className="nav-head">
                   <div className="nav-head__title">Atrium</div>
                   <div className="nav-head__sub">Breath-Sealed Identity · Kairos-ZK Proof</div>
@@ -1373,7 +1327,12 @@ async function copyDnsIp(btn?: HTMLButtonElement | null) {
                   ))}
                 </div>
 
-                <SovereignDeclarations />
+                {/* ✅ CRITICAL STRUCTURAL FIX:
+                    SovereignDeclarations is wrapped so its internal `.nav-foot { margin-top:auto }`
+                    no longer “eats” extra height in the nav column when the viewport grows. */}
+                <div className="nav-writ-slot" data-writ-slim="1">
+                  <SovereignDeclarations />
+                </div>
               </nav>
 
               <section className="app-panel" aria-label="Sovereign Gate panel">
@@ -1401,36 +1360,34 @@ async function copyDnsIp(btn?: HTMLButtonElement | null) {
                   </div>
                 </div>
 
-<footer className="panel-foot" aria-label="Footer">
-  <div className="panel-foot__left">
-    <span className="mono">ΦNet</span> • Sovereign Gate •{" "}
-    <button
-      type="button"
-      className="dns-copy mono"
-      onClick={(e) => void copyDnsIp(e.currentTarget)}
-      aria-label={`Remember .kai DNS IP ${DNS_IP}`}
-      title="Remember DNS IP"
-    >
-      .kai DNS: <span className="mono">{DNS_IP}</span>
-    </button>
-  </div>
+                <footer className="panel-foot" aria-label="Footer">
+                  <div className="panel-foot__left">
+                    <span className="mono">ΦNet</span> • Sovereign Gate •{" "}
+                    <button
+                      type="button"
+                      className="dns-copy mono"
+                      onClick={(e) => void copyDnsIp(e.currentTarget)}
+                      aria-label={`Remember .kai DNS IP ${DNS_IP}`}
+                      title="Remember DNS IP"
+                    >
+                      .kai DNS: <span className="mono">{DNS_IP}</span>
+                    </button>
+                  </div>
 
-  <div className="panel-foot__right">
-    <span className="mono">V</span>{" "}
-    <a
-      className="mono"
-      href="https://github.com/phinetwork/phi.network"
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Version 28.6.7 (opens GitHub)"
-      title="Open GitHub"
-    >
-      28.6.7
-    </a>
-  </div>
-</footer>
-
-
+                  <div className="panel-foot__right">
+                    <span className="mono">V</span>{" "}
+                    <a
+                      className="mono"
+                      href="https://github.com/phinetwork/phi.network"
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="Version 28.7.4 (opens GitHub)"
+                      title="Open GitHub"
+                    >
+                      28.7.4
+                    </a>
+                  </div>
+                </footer>
               </section>
             </div>
           </div>
