@@ -1,15 +1,125 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Core -->
     <meta charset="UTF-8" />
-    <title>verify.kai — Kai Sigil Verifier</title>
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0B0D12" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- Primary SEO -->
+    <title>Phi Network (ΦNet) ⧫ Proof-of-Breath Identity, Value & Memory (Kairos-Aligned)</title>
     <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
+      name="description"
+      content="Phi Network (ΦNet) is a Kairos-aligned proof-of-breath system for identity, value, and memory—minted offline, verifiable anywhere, synced without a database."
     />
-  </head>
-  <body>
-    <div id="root"></div>
+    <meta
+      name="keywords"
+      content="Phi Network, ΦNet, proof of breath, Kairos, harmonic time, sovereign identity, offline verification, memory crystals, sigil glyphs, Kai Signature, BJ Klock"
+    />
+    <meta name="author" content="BJ Klock" />
+
+    <!-- Indexing Controls -->
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <meta name="googlebot" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+
+    <!-- Canonical + Language -->
+    <link rel="canonical" href="https://phi.network/" />
+    <link rel="alternate" href="https://phi.network/" hreflang="en" />
+
+    <!-- Icons / PWA -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph -->
+    <meta property="og:site_name" content="Phi Network" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Phi Network (ΦNet) — Proof-of-Breath Identity, Value & Memory" />
+    <meta
+      property="og:description"
+      content="Mint offline. Verify anywhere. Sync global state without a database—Kairos-aligned identity, value, and memory."
+    />
+    <meta property="og:url" content="https://phi.network/" />
+    <meta property="og:image" content="https://phi.network/phi.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Phi Network (ΦNet) — Kairos-aligned Proof-of-Breath system" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Phi Network (ΦNet) — Proof-of-Breath Identity, Value & Memory" />
+    <meta
+      name="twitter:description"
+      content="Mint offline. Verify anywhere. Sync global state without a database—Kairos-aligned identity, value, and memory."
+    />
+    <meta name="twitter:image" content="https://phi.network/phi.png" />
+    <meta name="twitter:site" content="@ph" />
+
+    <!-- Fonts (optional, keep if used) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Apple Web App -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ΦNet" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Structured Data (Schema.org) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://phi.network/#org",
+            "name": "Phi Network",
+            "alternateName": "ΦNet",
+            "url": "https://phi.network/",
+            "logo": "https://phi.network/phi.png"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://phi.network/#website",
+            "url": "https://phi.network/",
+            "name": "Phi Network",
+            "publisher": { "@id": "https://phi.network/#org" },
+            "inLanguage": "en",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "https://phi.network/search?q={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://phi.network/#app",
+            "name": "Phi Network",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Web",
+            "url": "https://phi.network/",
+            "publisher": { "@id": "https://phi.network/#org" },
+            "description": "Kairos-aligned proof-of-breath identity, value, and memory—minted offline and verifiable anywhere."
+          }
+        ]
+      }
+    </script>
+
+    <!-- Vite Entry -->
     <script type="module" src="/src/main.tsx"></script>
+  </head>
+
+  <body style="margin: 0; background: #000; color: #fff; font-family: 'Unbounded', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
+    <noscript>Phi Network requires JavaScript enabled to run.</noscript>
+    <div id="root"></div>
   </body>
 </html>
