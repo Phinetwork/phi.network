@@ -1377,25 +1377,28 @@ function AppChrome(): React.JSX.Element {
                   </div>
                 </div>
 
-                <footer className="panel-foot" aria-label="Footer">
-                  <div className="panel-foot__left">
-                    <span className="mono">ΦNet</span> • Sovereign Gate
-                  </div>
+<footer className="panel-foot" aria-label="Footer">
+<div className="panel-foot__left">
+  <span className="mono">ΦNet</span> • Sovereign Gate •
+  <button type="button" className="dns-copy mono">
+    .kai DNS: <span className="mono">137.66.18.241</span>
+  </button>
+</div>
+  <div className="panel-foot__right">
+    <span className="mono">V</span>{" "}
+    <a
+      className="mono"
+      href="https://github.com/phinetwork/phi.network"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Version 28.4 (opens GitHub)"
+      title="Open GitHub"
+    >
+      28.4
+    </a>
+  </div>
+</footer>
 
-                  <div className="panel-foot__right">
-                    <span className="mono">V</span>{" "}
-                    <a
-                      className="mono"
-                      href="https://github.com/phinetwork/phi.network"
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label="Version 28.3 (opens GitHub)"
-                      title="Open GitHub"
-                    >
-                      28.3
-                    </a>
-                  </div>
-                </footer>
               </section>
             </div>
           </div>

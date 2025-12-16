@@ -1,5 +1,5 @@
 // src/pages/SigilExplorer.tsx
-// v3.10.1 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
+// v3.10.2 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
 //
 // CORE TRUTH (production behavior):
 // ✅ On OPEN: push (inhale) everything you have → API, then pull (exhale) anything new ← API
@@ -17,6 +17,9 @@
 // ✅ Stream URL preference: /stream/* with t= (or /stream/t) > /stream/p never ever p~ > /stream?p=… > /s fallback.
 // ✅ Any localhost sigil/post URLs are auto-mapped to https://phi.network (stable canonical).
 // ✅ /p~ links are NEVER displayed/selected in Explorer UI (browser view always uses /stream/*).
+// ✅ CLICK OPEN OVERRIDE: Clicking a node ALWAYS opens the payload on the CURRENT host origin
+//    (localhost / verify.kai / kaiklok.com / any host), regardless of what origin is stored in data.
+//    Data stays the same; only the click-open URL is host-rooted.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -223,6 +226,11 @@ function viewBaseOrigin(): string {
   return normalizeViewOrigin(window.location.origin);
 }
 
+function hostRootOrigin(): string {
+  if (!hasWindow) return VIEW_BASE_FALLBACK;
+  return window.location.origin;
+}
+
 /** Make an absolute, normalized URL (stable key). Also rewrites localhost → https://phi.network. */
 function canonicalizeUrl(url: string): string {
   try {
@@ -308,6 +316,26 @@ function browserViewUrl(u: string): string {
   if (!isPTildeUrl(abs)) return abs;
   const tok = parseStreamToken(abs);
   return tok ? canonicalizeUrl(streamUrlFromToken(tok)) : abs;
+}
+
+/**
+ * CLICK OPEN URL: force opens on the CURRENT host origin, preserving path/search/hash.
+ * (Does NOT mutate stored URLs; view-only override for anchor clicks.)
+ */
+function explorerOpenUrl(raw: string): string {
+  if (!hasWindow) return browserViewUrl(raw);
+  const safe = browserViewUrl(raw);
+
+  try {
+    const u = new URL(safe, hostRootOrigin());
+    const out = new URL(hostRootOrigin());
+    out.pathname = u.pathname;
+    out.search = u.search;
+    out.hash = u.hash;
+    return out.toString();
+  } catch {
+    return safe;
+  }
 }
 
 /** Human shortener for long strings. */
@@ -598,7 +626,7 @@ function scoreUrlForView(u: string, prefer: ContentKind): number {
   const url = u.toLowerCase();
   const kind = classifyUrlKind(u);
   let s = 0;
-if (isPackedViewerUrl(url)) s -= 10_000; // never primary, ever
+  if (isPackedViewerUrl(url)) s -= 10_000; // never primary, ever
 
   // ── Kind-specific preference (this is the “always post when post, always stream when stream” rule)
   if (prefer === "post") {
@@ -1739,6 +1767,8 @@ function SigilTreeNode({ node }: { node: SigilNode }) {
   const phiSentFromPulse = getPhiSentForPulse(node.payload.pulse);
   const detailEntries = buildDetailEntries(node);
 
+  const openHref = explorerOpenUrl(node.url);
+
   return (
     <div className="node" style={chakraTintStyle(chakraDay)} data-chakra={String(chakraDay ?? "")}>
       <div className="node-row">
@@ -1756,10 +1786,10 @@ function SigilTreeNode({ node }: { node: SigilNode }) {
 
           <a
             className="node-link"
-            href={node.url}
+            href={openHref}
             target="_blank"
             rel="noopener noreferrer"
-            title={node.url}
+            title={openHref}
           >
             <span>{short(sig ?? hash ?? "glyph", 12)}</span>
           </a>
@@ -1838,6 +1868,8 @@ function OriginPanel({ root }: { root: SigilNode }) {
   const originHash = parseHashFromUrl(root.url);
   const originSig = root.payload.kaiSignature;
 
+  const openHref = explorerOpenUrl(root.url);
+
   return (
     <section
       className="origin"
@@ -1848,7 +1880,7 @@ function OriginPanel({ root }: { root: SigilNode }) {
       <header className="origin-head">
         <div className="o-meta">
           <span className="o-title">Origin</span>
-          <a className="o-link" href={root.url} target="_blank" rel="noopener noreferrer" title={root.url}>
+          <a className="o-link" href={openHref} target="_blank" rel="noopener noreferrer" title={openHref}>
             {short(originSig ?? originHash ?? "origin", 14)}
           </a>
           {root.payload.chakraDay && (

@@ -2335,6 +2335,152 @@ a:hover {
     animation: none;
   }
 }
+/* ─────────────────────────────────────────────────────────────
+   Footer: FORCE single-row (no wrap) + auto-shrink typography
+────────────────────────────────────────────────────────────── */
+.panel-foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+
+  flex-wrap:nowrap;         /* never wrap */
+  white-space:nowrap;       /* never wrap */
+
+  /* shrink on small screens instead of wrapping */
+  font-size:clamp(8px, 2.15vw, 12px);
+  line-height:1;
+  overflow:visible;
+}
+
+.panel-foot__left{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:nowrap;         /* never wrap */
+  white-space:nowrap;
+  min-width:0;
+  overflow:visible;
+}
+
+.panel-foot__right{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DNS copy chip — slimmer + no width jump on "copied"
+   Toggle: .is-copied (or data-copied="1") for ~900ms
+────────────────────────────────────────────────────────────── */
+.dns-copy{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+
+  /* ultra thin */
+  padding:0 6px;
+  min-height:16px;
+  border-radius:999px;
+  line-height:1;
+
+  font-size:inherit;
+  letter-spacing:0;
+  font-variant-numeric:tabular-nums;
+
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.028);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+
+  opacity:0.9;
+  cursor:pointer;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+
+  transition:
+    transform 120ms ease,
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
+}
+
+.dns-copy:hover{
+  opacity:1;
+  border-color:rgba(255,255,255,0.18);
+  background:rgba(255,255,255,0.045);
+}
+
+.dns-copy:active{ transform:translateY(0.5px); }
+
+.dns-copy:focus-visible{
+  outline:2px solid rgba(255,255,255,0.22);
+  outline-offset:2px;
+}
+
+/* icon — stays slim */
+.dns-copy::before{
+  content:"⧉";
+  opacity:0.55;
+  font-size:0.95em;
+  transform:translateY(-0.5px);
+}
+
+/* Copied toast (absolute so it NEVER changes footer width) */
+.dns-copy::after{
+  content:"Copied";
+  position:absolute;
+  left:50%;
+  bottom:calc(100% + 6px);
+  transform:translateX(-50%) translateY(4px);
+  pointer-events:none;
+
+  padding:2px 7px;
+  border-radius:999px;
+
+  font-size:0.9em;
+  line-height:1;
+
+  border:1px solid rgba(255,255,255,0.14);
+  background:rgba(0,0,0,0.48);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+
+  opacity:0;
+  transition:opacity 140ms ease, transform 140ms ease;
+}
+
+/* COPIED STATE — visible + unmistakable, no layout shift */
+.dns-copy.is-copied,
+.dns-copy[data-copied="1"]{
+  opacity:1;
+  border-color:rgba(255,255,255,0.28);
+  background:rgba(255,255,255,0.06);
+  box-shadow:0 0 0 1px rgba(255,255,255,0.05);
+}
+
+/* swap icon to checkmark (no width jump) */
+.dns-copy.is-copied::before,
+.dns-copy[data-copied="1"]::before{
+  content:"✓";
+  opacity:0.85;
+}
+
+/* show toast */
+.dns-copy.is-copied::after,
+.dns-copy[data-copied="1"]::after{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+
+/* tighter on very small screens (still one row) */
+@media (max-width: 420px){
+  .panel-foot{ gap:8px; font-size:clamp(7.5px, 2.35vw, 11px); }
+  .panel-foot__left{ gap:5px; }
+  .dns-copy{ padding:0 5px; min-height:15px; gap:4px; }
+}
 
 /* ─────────────────────────────────────────────────────────────
    PERFORMANCE GATE — auto + optional hard flag
