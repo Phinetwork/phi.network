@@ -2723,3 +2723,78 @@ html[data-perf="low"] .kk-pop__panel {
   animation-delay: 0ms !important;
   transition-delay: 0ms !important;
 }
+/* ─────────────────────────────────────────────────────────────
+   v28.6.x — KAI PILL: ALWAYS ONE LINE (auto-shrink on small)
+   - never wraps
+   - text scales down smoothly instead of stacking
+   - pill hugs content + stays right-justified
+────────────────────────────────────────────────────────────── */
+
+.topbar-live{
+  min-width: 0 !important;
+  width: max-content;
+  max-width: 76vw;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  /* padding + gap also shrink on small screens */
+  padding: clamp(4px, 1.2vw, 6px) clamp(8px, 2.2vw, 12px);
+  gap: clamp(6px, 1.8vw, 12px);
+  min-height: 38px;
+}
+
+.live-orb{ flex: 0 0 auto; }
+
+.live-text{
+  display: inline-flex;
+  flex-direction: row !important;
+  align-items: baseline !important;
+  gap: clamp(6px, 1.8vw, 12px);
+
+  white-space: nowrap;      /* hard lock: one line */
+  line-height: 1;
+  min-width: 0;             /* allow shrink */
+  overflow: hidden;         /* safety: never break layout */
+}
+
+/* One typographic system + tabular numerics = baseline stays perfect */
+.live-title,
+.live-meta{
+  display: inline-flex;
+  align-items: baseline;
+  line-height: 1;
+  white-space: nowrap;
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "SF Mono", Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+/* ✅ Auto-shrink text size + spacing as viewport shrinks */
+.live-title{
+  font-size: clamp(10px, 2.2vw, 13px);
+  letter-spacing: clamp(0.08em, 0.6vw, 0.14em);
+}
+
+.live-meta{
+  font-size: clamp(9px, 2.0vw, 12px);
+  letter-spacing: clamp(0.06em, 0.55vw, 0.12em);
+  opacity: 0.86;
+}
+
+/* If meta still gets long, it trims (still ONE line) */
+.live-meta{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ultra-tight phones: tighten spacing more */
+@media (max-width: 420px){
+  .topbar-live{ max-width: 70vw; }
+  .topbar-live{ gap: 8px; }
+  .live-text{ gap: 8px; }
+}
