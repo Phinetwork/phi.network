@@ -107,7 +107,7 @@ import {
 } from "../../utils/feedPayload";
 import { normalizeClaimGlyphRef, normalizeUsername } from "../../utils/usernameClaim";
 import { getUsernameClaimRegistry, ingestUsernameClaimGlyph } from "../../utils/usernameClaimRegistry";
-import { USERNAME_CLAIM_KIND } from "../../types/usernameClaim";
+import { USERNAME_CLAIM_KIND, type UsernameClaimPayload } from "../../types/usernameClaim";
 
 /* Explorer bridge: register any stream/sigil URL */
 import { registerSigilUrl } from "../../utils/sigilRegistry";
@@ -1685,7 +1685,7 @@ function SigilStreamInner(): React.JSX.Element {
         }
 
         const payload = (claimEvidence as { payload?: unknown }).payload as
-          | { normalized?: string; username?: string; originHash?: string; ownerHint?: string | null; kind?: string }
+          | UsernameClaimPayload
           | undefined;
 
         if (!payload || payload.kind !== USERNAME_CLAIM_KIND) {

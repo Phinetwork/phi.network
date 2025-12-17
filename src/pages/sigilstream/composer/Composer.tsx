@@ -668,8 +668,6 @@ export function Composer({
         replyTextTrimmed.length > 0
           ? ({ kind: "text", text: replyTextTrimmed } as const)
           : undefined;
-
-      const normalizedAuthor = normalizedUsername;
       let usernameClaimEvidence: UsernameClaimGlyphEvidence | undefined;
 
       if (normalizedAuthor) {
