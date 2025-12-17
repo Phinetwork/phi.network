@@ -1,5 +1,5 @@
 // src/pages/SigilExplorer.tsx
-// v3.10.4 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
+// v3.10.5 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
 //
 // CORE TRUTH (production behavior):
 // ✅ On OPEN: push (inhale) everything you have → API, then pull (exhale) anything new ← API
@@ -9,6 +9,11 @@
 // ✅ Keeps ALL URL variants in data + shows them in detail; chooses best primary for viewing
 // ✅ No echo loops from remote imports (remote adds never re-inhale automatically)
 // ✅ Deterministic ordering: Kai-time only (pulse/beat/stepIndex). No Chronos ordering used.
+//
+// NEW (v3.10.5 — stream route compat):
+// ✅ STREAM VIEW NORMALIZATION: any `/stream/p/<token>` (or `/p~<token>`) is DISPLAYED + OPENED as `/stream#p=<token>`
+// ✅ Copy/Open always uses the working hash-viewer form (prevents “route not found” / broken deep links)
+// ✅ Parent/Origin URLs in details also normalize to hash-viewer form when applicable
 //
 // NEW (stability refactor — same behavior, no UI change):
 // ✅ Node expand/collapse is now stable across any forest rebuild (no “random refresh” feel)
@@ -24,7 +29,6 @@ import {
 } from "../utils/sigilUrl";
 import type { SigilSharePayloadLoose } from "../utils/sigilUrl";
 import "./SigilExplorer.css";
-
 
 /* ─────────────────────────────────────────────────────────────────────
    Live base (API + canonical sync target)
@@ -341,6 +345,42 @@ function streamUrlFromToken(token: string): string {
   return new URL(`/stream/p/${token}`, base).toString();
 }
 
+/** Build the WORKING hash-viewer URL for streams: /stream#p=<token> */
+function streamHashViewerUrlFromToken(token: string): string {
+  const base = viewBaseOrigin();
+  const u = new URL("/stream", base);
+  const h = new URLSearchParams();
+  h.set("p", token);
+  u.hash = `#${h.toString()}`;
+  return u.toString();
+}
+
+/** Convert `/stream/p/<token>` → `/stream#p=<token>` (preserves search + existing hash params). */
+function streamPPathToHashViewerUrl(raw: string): string {
+  try {
+    const base = viewBaseOrigin();
+    const u = new URL(raw, base);
+    const m = u.pathname.match(/\/stream\/p\/([^/]+)/u);
+    if (!m?.[1]) return raw;
+
+    const token = decodeURIComponent(m[1]);
+    const out = new URL("/stream", base);
+
+    // Preserve any query params (e.g. add=...) as-is.
+    out.search = u.search;
+
+    // Preserve existing hash params, but force `p=`.
+    const hashStr = u.hash.startsWith("#") ? u.hash.slice(1) : "";
+    const hp = new URLSearchParams(hashStr);
+    hp.set("p", token);
+    out.hash = `#${hp.toString()}`;
+
+    return out.toString();
+  } catch {
+    return raw;
+  }
+}
+
 /** Attempt to parse stream token from /stream/p/<token> or ?p=<token> or /p~<token> (identity help). */
 function parseStreamToken(url: string): string | undefined {
   try {
@@ -373,12 +413,26 @@ function parseStreamToken(url: string): string | undefined {
   }
 }
 
-/** If a URL is /p~, convert ONLY for browser view (never stored-mutation, never shown as /p~). */
+/**
+ * Browser-view normalization:
+ * - /p~<token> → /stream#p=<token>
+ * - /stream/p/<token> → /stream#p=<token>
+ * (view-only; DOES NOT mutate stored registry URLs)
+ */
 function browserViewUrl(u: string): string {
   const abs = canonicalizeUrl(u);
-  if (!isPTildeUrl(abs)) return abs;
-  const tok = parseStreamToken(abs);
-  return tok ? canonicalizeUrl(streamUrlFromToken(tok)) : abs;
+
+  // /p~<token> (never viewable) → hash-viewer
+  if (isPTildeUrl(abs)) {
+    const tok = parseStreamToken(abs);
+    return tok ? canonicalizeUrl(streamHashViewerUrlFromToken(tok)) : abs;
+  }
+
+  // /stream/p/<token> → /stream#p=<token>
+  const sp = streamPPathToHashViewerUrl(abs);
+  if (sp !== abs) return canonicalizeUrl(sp);
+
+  return abs;
 }
 
 /**
@@ -1551,7 +1605,7 @@ function buildDetailEntries(node: SigilNode): DetailEntry[] {
   for (const key of memoryKeys) {
     const v = record[key];
     if (typeof v === "string" && v.trim().length > 0 && !usedKeys.has(key)) {
-      entries.push({ label: key, value: v.trim() });
+      entries.push({ label: key, value: browserViewUrl(v.trim()) });
       usedKeys.add(key);
     }
   }
@@ -1567,13 +1621,15 @@ function buildDetailEntries(node: SigilNode): DetailEntry[] {
 
     if (typeof value === "string" && value.trim().length === 0) continue;
 
-    const printable = typeof value === "string" ? value.trim() : JSON.stringify(value);
+    const printable = typeof value === "string" ? browserViewUrl(value.trim()) : JSON.stringify(value);
     entries.push({ label: key, value: printable });
   }
 
-  entries.push({ label: "Primary URL", value: node.url });
+  entries.push({ label: "Primary URL", value: browserViewUrl(node.url) });
 
-  const visibleVariants = node.urls.filter((u) => !isPTildeUrl(u));
+  const visibleVariants = node.urls
+    .filter((u) => !isPTildeUrl(u))
+    .map((u) => browserViewUrl(u));
 
   if (node.urls.length > 1) {
     entries.push({
@@ -1717,7 +1773,7 @@ function SigilTreeNode({ node, expanded, toggle, phiTotalsByPulse }: SigilTreeNo
           <button
             className="node-copy"
             aria-label="Copy URL"
-            onClick={() => void copyText(node.url)}
+            onClick={() => void copyText(openHref)}
             title="Copy URL"
             type="button"
           >
@@ -1809,7 +1865,7 @@ function OriginPanel({
           <span className="o-count" title="Total content keys in this lineage">
             {count} keys
           </span>
-          <button className="o-copy" onClick={() => void copyText(root.url)} title="Copy origin URL" type="button">
+          <button className="o-copy" onClick={() => void copyText(openHref)} title="Copy origin URL" type="button">
             Remember Origin
           </button>
         </div>
