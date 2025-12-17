@@ -3,17 +3,10 @@
 
 import {
   USERNAME_CLAIM_KIND,
-  type UsernameClaimPayload,
   type UsernameClaimRegistryEntry,
+  type UsernameClaimGlyphEvidence,
 } from "../types/usernameClaim";
-import { normalizeUsername } from "./usernameClaim";
-
-export type UsernameClaimGlyphRef = {
-  hash: string; // username-claim glyph hash (derivative glyph)
-  url: string; // Memory Stream token/URL that renders the glyph
-  payload: UsernameClaimPayload;
-  ownerHint?: string | null; // optional hint from ingest time (overrides payload.ownerHint)
-};
+import { normalizeClaimGlyphRef, normalizeUsername } from "./usernameClaim";
 
 export type UsernameClaimRegistry = Record<string, UsernameClaimRegistryEntry>;
 
@@ -21,6 +14,13 @@ const hasWindow = typeof window !== "undefined";
 const LS_KEY = "kai:username-claims:v1" as const;
 const CHANNEL_NAME = "kai-username-claims" as const;
 const EVENT_NAME = "username-claim:registered" as const;
+const BROADCAST_TYPE = "username-claim" as const;
+
+let memoryRegistry: UsernameClaimRegistry = {};
+
+function cloneRegistry(reg: UsernameClaimRegistry): UsernameClaimRegistry {
+  return Object.fromEntries(Object.entries(reg)) as UsernameClaimRegistry;
+}
 
 /** Canonicalize URL to absolute when possible for explorer surfaces. */
 function canonicalizeUrl(raw: string): string | null {
@@ -38,10 +38,13 @@ function canonicalizeUrl(raw: string): string | null {
 }
 
 function readRegistry(): UsernameClaimRegistry {
-  if (!hasWindow) return {};
+  if (!hasWindow) return cloneRegistry(memoryRegistry);
   try {
     const raw = window.localStorage.getItem(LS_KEY);
-    if (!raw) return {};
+    if (!raw) {
+      memoryRegistry = {};
+      return {};
+    }
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object") return {};
     const rec = parsed as Record<string, UsernameClaimRegistryEntry>;
@@ -51,19 +54,49 @@ function readRegistry(): UsernameClaimRegistry {
       if (typeof v.normalized !== "string" || typeof v.claimHash !== "string") continue;
       out[k] = v as UsernameClaimRegistryEntry;
     }
-    return out;
+    memoryRegistry = cloneRegistry(out);
+    return cloneRegistry(out);
   } catch {
-    return {};
+    return cloneRegistry(memoryRegistry);
   }
 }
 
 function writeRegistry(reg: UsernameClaimRegistry): void {
+  memoryRegistry = cloneRegistry(reg);
   if (!hasWindow) return;
   try {
     window.localStorage.setItem(LS_KEY, JSON.stringify(reg));
   } catch {
     /* ignore */
   }
+}
+
+let _bc: BroadcastChannel | null = null;
+function getBroadcastChannel(): BroadcastChannel | null {
+  if (!hasWindow) return null;
+  if (!("BroadcastChannel" in window)) return null;
+  if (_bc) return _bc;
+  _bc = new BroadcastChannel(CHANNEL_NAME);
+  return _bc;
+}
+
+function mergeEntry(entry: UsernameClaimRegistryEntry): boolean {
+  const registry = readRegistry();
+  const existing = registry[entry.normalized];
+  if (existing && existing.claimHash !== entry.claimHash) return false;
+
+  const unchanged =
+    existing &&
+    existing.claimHash === entry.claimHash &&
+    existing.claimUrl === entry.claimUrl &&
+    existing.originHash === entry.originHash &&
+    existing.ownerHint === entry.ownerHint;
+
+  if (unchanged) return true;
+
+  registry[entry.normalized] = entry;
+  writeRegistry(registry);
+  return true;
 }
 
 function broadcast(entry: UsernameClaimRegistryEntry): void {
@@ -79,10 +112,8 @@ function broadcast(entry: UsernameClaimRegistryEntry): void {
 
   // BroadcastChannel for cross-tab sync
   try {
-    if (!("BroadcastChannel" in window)) return;
-    const bc = new BroadcastChannel(CHANNEL_NAME);
-    bc.postMessage({ type: "username-claim", entry });
-    bc.close();
+    const bc = getBroadcastChannel();
+    bc?.postMessage({ type: BROADCAST_TYPE, entry });
   } catch {
     /* ignore */
   }
@@ -97,29 +128,32 @@ export type IngestResult = {
 
 function upsertEntry(
   registry: UsernameClaimRegistry,
-  ref: UsernameClaimGlyphRef,
+  ref: UsernameClaimGlyphEvidence,
 ): { updated: boolean; entry?: UsernameClaimRegistryEntry; reason?: string } {
   const payload = ref.payload;
   if (!payload || payload.kind !== USERNAME_CLAIM_KIND) {
     return { updated: false, reason: "not a username-claim glyph" };
   }
 
+  const claimHash = normalizeClaimGlyphRef(ref.hash);
+  if (!claimHash) return { updated: false, reason: "missing glyph hash" };
+
   const normalized = normalizeUsername(payload.normalized || payload.username);
   if (!normalized) return { updated: false, reason: "missing username" };
 
   const current = registry[normalized];
-  if (current && current.claimHash !== ref.hash) {
+  if (current && current.claimHash !== claimHash) {
     return { updated: false, reason: "username already bound" };
   }
 
-  const claimUrl = canonicalizeUrl(ref.url);
+  const claimUrl = canonicalizeUrl(ref.url ?? "");
   if (!claimUrl) return { updated: false, reason: "missing claim url" };
 
   const ownerHint = ref.ownerHint ?? payload.ownerHint ?? null;
   const entry: UsernameClaimRegistryEntry = {
     username: payload.username,
     normalized,
-    claimHash: ref.hash,
+    claimHash,
     claimUrl,
     originHash: payload.originHash,
     ownerHint,
@@ -138,7 +172,7 @@ function upsertEntry(
 }
 
 /** Ingest a single username-claim glyph into the global registry. */
-export function ingestUsernameClaimGlyph(ref: UsernameClaimGlyphRef): IngestResult {
+export function ingestUsernameClaimGlyph(ref: UsernameClaimGlyphEvidence): IngestResult {
   const registry = readRegistry();
   const { updated, entry, reason } = upsertEntry(registry, ref);
 
@@ -152,7 +186,7 @@ export function ingestUsernameClaimGlyph(ref: UsernameClaimGlyphRef): IngestResu
 }
 
 /** Batch-ingest multiple username-claim glyphs; stops on first rejection. */
-export function ingestUsernameClaimGlyphs(refs: UsernameClaimGlyphRef[]): IngestResult {
+export function ingestUsernameClaimGlyphs(refs: UsernameClaimGlyphEvidence[]): IngestResult {
   const registry = readRegistry();
   for (const ref of refs) {
     const { updated, entry, reason } = upsertEntry(registry, ref);
@@ -181,13 +215,13 @@ export function subscribeUsernameClaimRegistry(
 
   const onEvent = (ev: Event) => {
     const ce = ev as CustomEvent<UsernameClaimRegistryEntry>;
-    if (ce?.detail) handler(ce.detail, "event");
+    if (ce?.detail && mergeEntry(ce.detail)) handler(ce.detail, "event");
   };
 
-  const bc = "BroadcastChannel" in window ? new BroadcastChannel(CHANNEL_NAME) : null;
+  const bc = getBroadcastChannel();
   const onMsg = (ev: MessageEvent) => {
     const data = ev?.data as { type?: string; entry?: UsernameClaimRegistryEntry } | undefined;
-    if (data?.type === "username-claim" && data.entry) {
+    if (data?.type === BROADCAST_TYPE && data.entry && mergeEntry(data.entry)) {
       handler(data.entry, "broadcast");
     }
   };
@@ -197,7 +231,7 @@ export function subscribeUsernameClaimRegistry(
     try {
       const parsed = JSON.parse(ev.newValue) as UsernameClaimRegistry;
       for (const entry of Object.values(parsed)) {
-        if (entry && typeof entry === "object") handler(entry, "storage");
+        if (entry && typeof entry === "object" && mergeEntry(entry)) handler(entry, "storage");
       }
     } catch {
       /* ignore */
@@ -212,7 +246,6 @@ export function subscribeUsernameClaimRegistry(
     window.removeEventListener(EVENT_NAME, onEvent as EventListener);
     if (bc) bc.removeEventListener("message", onMsg as EventListener);
     window.removeEventListener("storage", onStorage);
-    bc?.close();
   };
 }
 

@@ -3,16 +3,18 @@
 
 /**
  * KaiVohApp — Kai-Sigil Posting OS
- * v5.0 — Sealed | Embedded | Broadcast | Verified (Kai-Klok aligned)
+ * v5.2 — KPV-1 Proof Hash (payload-bound verification)
  *
- * Flow:
- *   1. Login   — Scan / upload Kai-Sigil, verify Kai Signature → derive Φ-Key.
- *   2. Connect — Configure KaiVoh (accounts, docs, attachments, stream tools).
- *   3. Compose — PostComposer: write post + choose media to be sealed.
- *   4. Seal    — Breath-based sealing (Kai pulse, chakra day, KKS v1).
- *   5. Embed   — Embed Kai Signature + Φ-Key metadata directly into media.
- *   6. Share   — Broadcast hub (MultiShareDispatcher + /api/post/*).
- *   7. Verify  — VerifierFrame (QR + proof) so anyone can confirm human origin.
+ * NEW (requested):
+ * ✅ Adds a deterministic proof hash that binds the full capsule:
+ *    pulse + chakraDay + kaiSignature + phiKey + verifierSlug  → SHA-256
+ * ✅ proofHash is embedded into the file metadata (SVG <metadata>) and carried in Share-step proof capsule
+ * ✅ verifierUrl remains for convenience/QR, but is NOT part of the hash (host can change)
+ *
+ * Preserved guarantees:
+ * ✅ Sealed chakraDay (moment-of-sealing) is canonical
+ * ✅ verifierUrl is never null and is bound at embed time
+ * ✅ MultiShareDispatcher receives the canonical proof capsule (verifierData)
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -24,7 +26,7 @@ import SigilLogin from "./SigilLogin";
 import { SessionProvider } from "../session/SessionProvider";
 import { useSession } from "../session/useSession";
 
-import KaiVoh from "./KaiVoh"; // KaiVoh = connect + stream tools
+import KaiVoh from "./KaiVoh";
 import PostComposer from "./PostComposer";
 import type { ComposedPost } from "./PostComposer";
 import BreathSealer from "./BreathSealer";
@@ -33,14 +35,22 @@ import { embedKaiSignature } from "./SignatureEmbedder";
 import type { EmbeddedMediaResult } from "./SignatureEmbedder";
 import MultiShareDispatcher from "./MultiShareDispatcher";
 import { buildNextSigilSvg, downloadSigil } from "./SigilMemoryBuilder";
-/* New: full verifier frame (QR + Φ-Key proof) */
+
+/* Verifier UI + proof helpers */
 import VerifierFrame from "./VerifierFrame";
+import {
+  buildVerifierSlug,
+  buildVerifierUrl,
+  hashProofCapsuleV1,
+  normalizeChakraDay,
+  type ProofCapsuleV1,
+} from "./verifierProof";
 
 /* Canonical crypto parity (match VerifierStamper): derive Φ-Key FROM SIGNATURE */
 import { derivePhiKeyFromSig } from "../VerifierStamper/sigilUtils";
 
 /* Kai-Klok φ-engine (KKS v1) */
-import { fetchKaiOrLocal, epochMsFromPulse } from "../../utils/kai_pulse";
+import { fetchKaiOrLocal, epochMsFromPulse, type ChakraDay } from "../../utils/kai_pulse";
 
 /* Types */
 import type { PostEntry, SessionData } from "../session/sessionTypes";
@@ -49,14 +59,7 @@ import type { PostEntry, SessionData } from "../session/sessionTypes";
 /*                               Helper Types                                 */
 /* -------------------------------------------------------------------------- */
 
-type FlowStep =
-  | "login"
-  | "connect"
-  | "compose"
-  | "seal"
-  | "embed"
-  | "share"
-  | "verify";
+type FlowStep = "login" | "connect" | "compose" | "seal" | "embed" | "share" | "verify";
 
 /**
  * Minimal, trusted shape we accept from SigilLogin → never from data-* attrs.
@@ -83,7 +86,28 @@ type ExtendedKksMetadata = KaiSigKksMetadataShape & {
   originPulse?: number;
   sigilPulse?: number;
   exhalePulse?: number;
+
+  verifierUrl?: string;
+  verifierSlug?: string;
+
+  /** KPV-1: hash that binds the proof capsule */
+  proofHash?: string;
+
+  /** KPV-1: canonical capsule used to compute proofHash */
+  proofCapsule?: ProofCapsuleV1;
 };
+
+type VerifierData = Readonly<{
+  pulse: number;
+  chakraDay: ChakraDay;
+  kaiSignature: string;
+  phiKey: string;
+
+  verifierSlug: string;
+  verifierUrl: string;
+
+  proofHash: string;
+}>;
 
 /* -------------------------------------------------------------------------- */
 /*                           Narrowing / Validation                            */
@@ -111,9 +135,7 @@ function toPostLedger(v: unknown): PostEntry[] {
   return out;
 }
 
-function toStringRecord(
-  v: unknown,
-): Record<string, string> | undefined {
+function toStringRecord(v: unknown): Record<string, string> | undefined {
   if (!isRecord(v)) return undefined;
   const out: Record<string, string> = {};
   for (const [k, val] of Object.entries(v)) {
@@ -127,25 +149,14 @@ function parseSigilMeta(v: unknown): SigilMeta | null {
 
   const kaiSignature = v.kaiSignature;
   const pulse = v.pulse;
-  if (typeof kaiSignature !== "string" || typeof pulse !== "number") {
-    return null;
-  }
+  if (typeof kaiSignature !== "string" || typeof pulse !== "number") return null;
 
-  const chakraDay =
-    typeof v.chakraDay === "string" ? v.chakraDay : undefined;
-  const userPhiKey =
-    typeof v.userPhiKey === "string" ? v.userPhiKey : undefined;
+  const chakraDay = typeof v.chakraDay === "string" ? v.chakraDay : undefined;
+  const userPhiKey = typeof v.userPhiKey === "string" ? v.userPhiKey : undefined;
   const connectedAccounts = toStringRecord(v.connectedAccounts);
   const postLedger = toPostLedger(v.postLedger);
 
-  return {
-    kaiSignature,
-    pulse,
-    chakraDay,
-    userPhiKey,
-    connectedAccounts,
-    postLedger,
-  };
+  return { kaiSignature, pulse, chakraDay, userPhiKey, connectedAccounts, postLedger };
 }
 
 /** Light, sane Base58 (no case-folding, no hard 34-char lock) */
@@ -158,14 +169,7 @@ function isValidPhiKeyShape(k: string): boolean {
 /*                          Presentation Helpers                              */
 /* -------------------------------------------------------------------------- */
 
-const FLOW_ORDER: FlowStep[] = [
-  "connect", // login is pre-flow; HUD appears after
-  "compose",
-  "seal",
-  "embed",
-  "share",
-  "verify",
-];
+const FLOW_ORDER: FlowStep[] = ["connect", "compose", "seal", "embed", "share", "verify"];
 
 const FLOW_LABEL: Record<FlowStep, string> = {
   login: "Login",
@@ -184,7 +188,10 @@ function shortKey(k: string | undefined): string {
 }
 
 function chakraClass(chakraDay?: string): string {
-  const base = (chakraDay || "Crown").toLowerCase();
+  const base = (chakraDay || "Crown")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
   return `kv-chakra-${base}`;
 }
 
@@ -194,6 +201,46 @@ function formatCountdown(ms?: number | null): string {
   if (seconds < 1) return `${seconds.toFixed(2)}s`;
   if (seconds < 10) return `${seconds.toFixed(1)}s`;
   return `${seconds.toFixed(0)}s`;
+}
+
+function safeFileExt(name: string): string {
+  const i = name.lastIndexOf(".");
+  if (i <= 0 || i >= name.length - 1) return "";
+  const ext = name.slice(i);
+  if (ext.length > 12) return "";
+  return ext;
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** Ensure the final SVG Blob actually contains the final merged metadata JSON. */
+async function embedMetadataIntoSvgBlob(svgBlob: Blob, metadata: unknown): Promise<Blob> {
+  try {
+    const rawText = await svgBlob.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawText, "image/svg+xml");
+
+    if (doc.querySelector("parsererror")) return svgBlob;
+
+    const root = doc.documentElement;
+    if (!root || root.namespaceURI !== SVG_NS || root.tagName.toLowerCase() !== "svg") return svgBlob;
+
+    const metas = doc.getElementsByTagName("metadata");
+    const metaEl: SVGMetadataElement =
+      metas.length > 0
+        ? (metas.item(0) as SVGMetadataElement)
+        : (doc.createElementNS(SVG_NS, "metadata") as SVGMetadataElement);
+
+    if (metas.length === 0) root.appendChild(metaEl);
+
+    metaEl.textContent = JSON.stringify(metadata, null, 2);
+
+    const serializer = new XMLSerializer();
+    const updatedSvg = serializer.serializeToString(doc);
+    return new Blob([updatedSvg], { type: "image/svg+xml" });
+  } catch {
+    return svgBlob;
+  }
 }
 
 /* --------------------------- UI Subcomponents ----------------------------- */
@@ -211,11 +258,7 @@ function StepIndicator({ current }: StepIndicatorProps): ReactElement {
         const isCurrent = step === current;
         const isDone = currentIndex >= 0 && index < currentIndex;
 
-        const chipClass = [
-          "kv-step-chip",
-          isDone ? "kv-step-chip--done" : "",
-          isCurrent ? "kv-step-chip--active" : "",
-        ]
+        const chipClass = ["kv-step-chip", isDone ? "kv-step-chip--done" : "", isCurrent ? "kv-step-chip--active" : ""]
           .filter(Boolean)
           .join(" ");
 
@@ -225,9 +268,7 @@ function StepIndicator({ current }: StepIndicatorProps): ReactElement {
               <span className="kv-step-index">{index + 1}</span>
               <span className="kv-step-label">{FLOW_LABEL[step]}</span>
             </div>
-            {index < FLOW_ORDER.length - 1 && (
-              <div className="kv-step-rail" aria-hidden="true" />
-            )}
+            {index < FLOW_ORDER.length - 1 ? <div className="kv-step-rail" aria-hidden="true" /> : null}
           </div>
         );
       })}
@@ -259,55 +300,50 @@ function SessionHud({
   const countdownLabel = formatCountdown(msToNextPulse);
 
   return (
-    <header
-      className={["kv-session-hud", chakraClass(session.chakraDay)].join(
-        " ",
-      )}
-    >
+    <header className={["kv-session-hud", chakraClass(session.chakraDay)].join(" ")}>
       <div className="kv-session-main">
         <div className="kv-session-header-row">
           <div className="kv-session-title-block">
             <div className="kv-session-kicker">KaiVoh · Glyph Session</div>
+
             <div className="kv-session-keyline">
               <span className="kv-meta-item kv-meta-phikey">
                 <span className="kv-meta-label">Φ-Key</span>
-                <span className="kv-meta-value">
-                  {shortKey(session.phiKey)}
-                </span>
+                <span className="kv-meta-value">{shortKey(session.phiKey)}</span>
               </span>
+
               <span className="kv-meta-divider" />
+
               <span className="kv-meta-item">
                 <span className="kv-meta-label">Sigil Pulse</span>
                 <span className="kv-meta-value">{session.pulse}</span>
               </span>
+
               <span className="kv-meta-divider" />
+
               <span className="kv-meta-item">
                 <span className="kv-meta-label">Chakra</span>
-                <span className="kv-meta-value">
-                  {session.chakraDay ?? "Crown"}
-                </span>
+                <span className="kv-meta-value">{session.chakraDay ?? "Crown"}</span>
               </span>
-              {ledgerCount > 0 && (
+
+              {ledgerCount > 0 ? (
                 <>
                   <span className="kv-meta-divider" />
                   <span className="kv-meta-item kv-meta-activity">
                     <span className="kv-meta-label">Sealed</span>
                     <span className="kv-meta-value">
-                      {ledgerCount}{" "}
-                      {ledgerCount === 1 ? "post" : "posts"}
+                      {ledgerCount} {ledgerCount === 1 ? "post" : "posts"}
                     </span>
                   </span>
                 </>
-              )}
+              ) : null}
             </div>
 
             <div className="kv-session-live">
               <span className="kv-live-label">Live Kai Pulse</span>
               <span className="kv-live-value">
                 {pulseDisplay}
-                <span className="kv-live-countdown">
-                  · next breath in {countdownLabel}
-                </span>
+                <span className="kv-live-countdown">· next breath in {countdownLabel}</span>
               </span>
             </div>
           </div>
@@ -316,18 +352,12 @@ function SessionHud({
             <span
               className={[
                 "kv-accounts-pill",
-                hasConnectedAccounts
-                  ? "kv-accounts-pill--ok"
-                  : "kv-accounts-pill--warn",
+                hasConnectedAccounts ? "kv-accounts-pill--ok" : "kv-accounts-pill--warn",
               ].join(" ")}
             >
-              {hasConnectedAccounts
-                ? "Accounts linked"
-                : "Connect accounts"}
+              {hasConnectedAccounts ? "Accounts linked" : "Connect accounts"}
             </span>
-            <span className="kv-step-current-label">
-              {FLOW_LABEL[step] ?? "Flow"}
-            </span>
+            <span className="kv-step-current-label">{FLOW_LABEL[step] ?? "Flow"}</span>
           </div>
         </div>
 
@@ -337,18 +367,10 @@ function SessionHud({
       </div>
 
       <div className="kv-session-actions">
-        <button
-          type="button"
-          onClick={onNewPost}
-          className="kv-btn kv-btn-primary"
-        >
-        + Exhale Memory
+        <button type="button" onClick={onNewPost} className="kv-btn kv-btn-primary">
+          + Exhale Memory
         </button>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="kv-btn kv-btn-ghost"
-        >
+        <button type="button" onClick={onLogout} className="kv-btn kv-btn-ghost">
           ⏻ Inhale Memories
         </button>
       </div>
@@ -362,9 +384,8 @@ interface ActivityStripProps {
 
 function ActivityStrip({ ledger }: ActivityStripProps): ReactElement | null {
   if (!ledger || ledger.length === 0) return null;
-  const lastFew = [...ledger]
-    .sort((a, b) => b.pulse - a.pulse)
-    .slice(0, 4);
+
+  const lastFew = [...ledger].sort((a, b) => b.pulse - a.pulse).slice(0, 4);
 
   return (
     <section className="kv-activity">
@@ -372,30 +393,22 @@ function ActivityStrip({ ledger }: ActivityStripProps): ReactElement | null {
         <span className="kv-activity-title">Session Activity</span>
         <span className="kv-activity-count">{ledger.length} total</span>
       </div>
+
       <div className="kv-activity-list">
         {lastFew.map((entry) => (
-          <div
-            key={`${entry.platform}-${entry.pulse}-${entry.link}`}
-            className="kv-activity-item"
-          >
+          <div key={`${entry.platform}-${entry.pulse}-${entry.link}`} className="kv-activity-item">
             <div className="kv-activity-item-main">
-              <span className="kv-activity-platform">
-                {entry.platform}
-              </span>
+              <span className="kv-activity-platform">{entry.platform}</span>
               <span className="kv-activity-pulse">
                 Pulse <span>{entry.pulse}</span>
               </span>
             </div>
-            {entry.link && (
-              <a
-                href={entry.link}
-                target="_blank"
-                rel="noreferrer"
-                className="kv-activity-link"
-              >
+
+            {entry.link ? (
+              <a href={entry.link} target="_blank" rel="noreferrer" className="kv-activity-link">
                 {entry.link}
               </a>
-            )}
+            ) : null}
           </div>
         ))}
       </div>
@@ -413,31 +426,26 @@ function KaiVohFlow(): ReactElement {
   const [step, setStep] = useState<FlowStep>("login");
   const [post, setPost] = useState<ComposedPost | null>(null);
   const [sealed, setSealed] = useState<SealedPost | null>(null);
-  const [finalMedia, setFinalMedia] =
-    useState<EmbeddedMediaResult | null>(null);
-  const [verifierData, setVerifierData] = useState<{
-    pulse: number;
-    kaiSignature: string;
-    phiKey: string;
-  } | null>(null);
+  const [finalMedia, setFinalMedia] = useState<EmbeddedMediaResult | null>(null);
+  const [verifierData, setVerifierData] = useState<VerifierData | null>(null);
+
   const [flowError, setFlowError] = useState<string | null>(null);
 
   /* Live Kai pulse + countdown (KKS v1) */
   const [livePulse, setLivePulse] = useState<number | null>(null);
-  const [msToNextPulse, setMsToNextPulse] = useState<number | null>(
-    null,
-  );
+  const [msToNextPulse, setMsToNextPulse] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    const tick = async () => {
+    const tick = async (): Promise<void> => {
       const now = new Date();
       const kai = await fetchKaiOrLocal(undefined, now);
       if (cancelled) return;
 
       const pulseNow = kai.pulse;
       const nextPulseMsBI = epochMsFromPulse(pulseNow + 1);
+
       let remaining = Number(nextPulseMsBI - BigInt(now.getTime()));
       if (!Number.isFinite(remaining) || remaining < 0) remaining = 0;
 
@@ -446,9 +454,7 @@ function KaiVohFlow(): ReactElement {
     };
 
     void tick();
-    const timer = window.setInterval(() => {
-      void tick();
-    }, 250);
+    const timer = window.setInterval(() => void tick(), 250);
 
     return () => {
       cancelled = true;
@@ -456,23 +462,16 @@ function KaiVohFlow(): ReactElement {
     };
   }, []);
 
-  const hasConnectedAccounts = useMemo(
-    () =>
-      !!session &&
-      !!session.connectedAccounts &&
-      Object.keys(session.connectedAccounts).length > 0,
-    [session],
-  );
+  const hasConnectedAccounts = useMemo(() => {
+    if (!session || !session.connectedAccounts) return false;
+    return Object.keys(session.connectedAccounts).length > 0;
+  }, [session]);
 
   /* ---------------------------------------------------------------------- */
   /*                          Session + Sigil Handling                      */
   /* ---------------------------------------------------------------------- */
 
-  /** Top-of-funnel: receive verified meta from SigilLogin (already signature-checked there) */
-  const handleSigilVerified = async (
-    _svgText: string,
-    rawMeta: unknown,
-  ): Promise<void> => {
+  const handleSigilVerified = async (_svgText: string, rawMeta: unknown): Promise<void> => {
     try {
       setFlowError(null);
 
@@ -482,46 +481,38 @@ function KaiVohFlow(): ReactElement {
       const expectedPhiKey = await derivePhiKeyFromSig(meta.kaiSignature);
 
       if (meta.userPhiKey && meta.userPhiKey !== expectedPhiKey) {
-        console.warn(
-          "[KaiVoh] Embedded userPhiKey differs from derived; preferring derived from signature.",
-          { embedded: meta.userPhiKey, derived: expectedPhiKey },
-        );
+        console.warn("[KaiVoh] Embedded userPhiKey differs from derived; preferring derived from signature.", {
+          embedded: meta.userPhiKey,
+          derived: expectedPhiKey,
+        });
       }
 
       if (!isValidPhiKeyShape(expectedPhiKey)) {
         throw new Error("Invalid Φ-Key shape after derivation.");
       }
 
+      const sessionChakra: ChakraDay = normalizeChakraDay(meta.chakraDay) ?? "Crown";
+
       const nextSession: SessionData = {
         phiKey: expectedPhiKey,
         kaiSignature: meta.kaiSignature,
         pulse: meta.pulse,
-        chakraDay: meta.chakraDay ?? "Crown",
+        chakraDay: sessionChakra,
         connectedAccounts: meta.connectedAccounts ?? {},
         postLedger: meta.postLedger ?? [],
       };
 
       setSession(nextSession);
 
-      if (
-        nextSession.connectedAccounts &&
-        Object.keys(nextSession.connectedAccounts).length > 0
-      ) {
-        setStep("compose");
-      } else {
-        setStep("connect");
-      }
+      if (Object.keys(nextSession.connectedAccounts ?? {}).length > 0) setStep("compose");
+      else setStep("connect");
     } catch (e) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : "Invalid Φ-Key signature or metadata.";
+      const msg = e instanceof Error ? e.message : "Invalid Φ-Key signature or metadata.";
       setFlowError(msg);
       setStep("login");
     }
   };
 
-  /** Logout mints the next sigil and resets flow */
   const handleLogout = (): void => {
     if (!session) return;
 
@@ -537,7 +528,6 @@ function KaiVohFlow(): ReactElement {
     setStep("login");
   };
 
-  /** Start a new post inside the same sigil (no logout) */
   const handleNewPost = (): void => {
     setPost(null);
     setSealed(null);
@@ -551,11 +541,10 @@ function KaiVohFlow(): ReactElement {
   /*                          Embedding Kai Signature                       */
   /* ---------------------------------------------------------------------- */
 
-  /** Embed signature exactly once when we enter "embed" */
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    (async (): Promise<void> => {
       if (step !== "embed" || !sealed || !session) return;
 
       try {
@@ -565,39 +554,110 @@ function KaiVohFlow(): ReactElement {
         const originPulse = session.pulse;
         const exhalePulse = sealed.pulse;
 
-        // memory_<originPulse>_<exhalePulse>.svg
-        const filename = `memory_p${originPulse}_p${exhalePulse}.svg`;
+        const baseMeta: KaiSigKksMetadataShape = mediaRaw.metadata;
 
-        const baseMeta = (mediaRaw.metadata ??
-          {}) as KaiSigKksMetadataShape;
+        // 🔒 Canonical proof signature = what the file will claim
+        const proofSig = (baseMeta.kaiSignature ?? sealed.kaiSignature ?? session.kaiSignature ?? "").trim();
+        if (!proofSig) throw new Error("Missing kaiSignature for embedded proof.");
+
+        // ✅ Canonical Φ-Key derived from the exact embedded signature
+        const proofPhiKey = await derivePhiKeyFromSig(proofSig);
+
+        // Optional hard invariant — prevents minting broken artifacts
+        if (session.phiKey && session.phiKey !== proofPhiKey) {
+          throw new Error("Proof mismatch: embedded kaiSignature derives a different Φ-Key than session.");
+        }
+
+        // ✅ Canonical chakraDay precedence:
+        //    sealed (moment) → baseMeta (if string) → session → Crown
+        const baseChakraRaw = typeof baseMeta.chakraDay === "string" ? baseMeta.chakraDay : undefined;
+
+        const proofChakraDay: ChakraDay =
+          normalizeChakraDay(sealed.chakraDay ?? undefined) ??
+          normalizeChakraDay(baseChakraRaw) ??
+          normalizeChakraDay(session.chakraDay ?? undefined) ??
+          "Crown";
+
+        // ✅ domain-stable slug (bound into proof hash)
+        const verifierSlug = buildVerifierSlug(exhalePulse, proofSig);
+
+        // ✅ canonical verifier URL (convenience/QR; host can change)
+        const verifierUrl = buildVerifierUrl(exhalePulse, proofSig);
+
+        // ✅ KPV-1 capsule + hash (binds the payload)
+        const capsule: ProofCapsuleV1 = {
+          v: "KPV-1",
+          pulse: exhalePulse,
+          chakraDay: proofChakraDay,
+          kaiSignature: proofSig,
+          phiKey: proofPhiKey,
+          verifierSlug,
+        };
+
+        const proofHash = await hashProofCapsuleV1(capsule);
 
         const mergedMetadata: ExtendedKksMetadata = {
           ...baseMeta,
+
+          pulse: exhalePulse,
+          kaiPulse: exhalePulse,
+
+          chakraDay: proofChakraDay,
+
+          kaiSignature: proofSig,
+          phiKey: proofPhiKey,
+          userPhiKey: proofPhiKey,
+          phiKeyShort: `φK-${proofPhiKey.slice(0, 8)}`,
+
+          verifierUrl,
+          verifierSlug,
+
+          // ✅ payload-bound integrity proof
+          proofCapsule: capsule,
+          proofHash,
+
           originPulse,
           sigilPulse: originPulse,
           exhalePulse,
-          phiKey: session.phiKey,
         };
+
+        // If this is SVG, rewrite the SVG <metadata> so the *file itself* carries mergedMetadata.
+        let content = mediaRaw.content;
+        if (mediaRaw.type === "image" && content.type.includes("svg")) {
+          content = await embedMetadataIntoSvgBlob(content, mergedMetadata);
+        }
+
+        const ext =
+          safeFileExt(mediaRaw.filename) ||
+          safeFileExt(sealed.post.file.name) ||
+          (mediaRaw.type === "video" ? ".mp4" : ".svg");
+
+        const filename = `memory_p${originPulse}_p${exhalePulse}${ext}`;
 
         const media: EmbeddedMediaResult = {
           ...mediaRaw,
+          content,
           filename,
           metadata: mergedMetadata,
         };
 
         setFinalMedia(media);
+
+        // ✅ canonical proof capsule for Share step + Verify step (includes proofHash)
         setVerifierData({
-          pulse: sealed.pulse,
-          kaiSignature: sealed.kaiSignature,
-          phiKey: session.phiKey,
+          pulse: exhalePulse,
+          chakraDay: proofChakraDay,
+          kaiSignature: proofSig,
+          phiKey: proofPhiKey,
+          verifierSlug,
+          verifierUrl,
+          proofHash,
         });
+
         setStep("share");
       } catch (err) {
         if (cancelled) return;
-        const msg =
-          err instanceof Error
-            ? err.message
-            : "Failed to embed Kai Signature into media.";
+        const msg = err instanceof Error ? err.message : "Failed to embed Kai Signature into media.";
         setFlowError(msg);
         setStep("compose");
       }
@@ -612,14 +672,7 @@ function KaiVohFlow(): ReactElement {
   /*                             Ledger Helpers                             */
   /* ---------------------------------------------------------------------- */
 
-  /**
-   * Append broadcast results into the in-session ledger so every share
-   * is remembered as part of the sigil's living history.
-   */
-  const appendBroadcastToLedger = (
-    results: { platform: string; link: string }[],
-    pulse: number,
-  ): void => {
+  const appendBroadcastToLedger = (results: { platform: string; link: string }[], pulse: number): void => {
     if (!session || results.length === 0) return;
 
     const existing = session.postLedger ?? [];
@@ -632,10 +685,7 @@ function KaiVohFlow(): ReactElement {
       })),
     ];
 
-    setSession({
-      ...session,
-      postLedger: appended,
-    });
+    setSession({ ...session, postLedger: appended });
   };
 
   /* ---------------------------------------------------------------------- */
@@ -647,7 +697,7 @@ function KaiVohFlow(): ReactElement {
       <div className="kai-voh-login-shell">
         <main className="kv-main-card">
           <SigilLogin onVerified={handleSigilVerified} />
-          {flowError && <p className="kv-error">{flowError}</p>}
+          {flowError ? <p className="kv-error">{flowError}</p> : null}
         </main>
       </div>
     );
@@ -658,11 +708,7 @@ function KaiVohFlow(): ReactElement {
       return (
         <div className="kv-connect-step">
           <KaiVoh />
-          <button
-            type="button"
-            onClick={() => setStep("compose")}
-            className="kv-btn kv-btn-primary kv-btn-wide"
-          >
+          <button type="button" onClick={() => setStep("compose")} className="kv-btn kv-btn-primary kv-btn-wide">
             Continue to Compose
           </button>
         </div>
@@ -688,6 +734,8 @@ function KaiVohFlow(): ReactElement {
       return (
         <BreathSealer
           post={post}
+          identityKaiSignature={session.kaiSignature} // ✅ required (stable identity sig)
+          userPhiKey={session.phiKey} // ✅ optional but recommended
           onSealComplete={(sealedPost: SealedPost) => {
             setSealed(sealedPost);
             setStep("embed");
@@ -697,17 +745,14 @@ function KaiVohFlow(): ReactElement {
     }
 
     if (step === "embed") {
-      return (
-        <p className="kv-embed-status">
-          Embedding Kai Signature into your media…
-        </p>
-      );
+      return <p className="kv-embed-status">Embedding Kai Signature into your media…</p>;
     }
 
-    if (step === "share" && finalMedia && sealed && session) {
+    if (step === "share" && finalMedia && sealed && verifierData) {
       return (
         <MultiShareDispatcher
           media={finalMedia}
+          proof={verifierData}
           onComplete={(results) => {
             appendBroadcastToLedger(results, sealed.pulse);
             setStep("verify");
@@ -716,38 +761,27 @@ function KaiVohFlow(): ReactElement {
       );
     }
 
-    if (step === "verify" && verifierData && session) {
+    if (step === "verify" && verifierData) {
       return (
         <div className="kv-verify-step">
           <VerifierFrame
             pulse={verifierData.pulse}
             kaiSignature={verifierData.kaiSignature}
             phiKey={verifierData.phiKey}
-            chakraDay={session.chakraDay}
-            /* If you want, you can pass the post caption here once you
-               confirm the field name on ComposedPost / SealedPost, e.g.:
-               caption={post?.text ?? undefined}
-            */
+            chakraDay={verifierData.chakraDay}
             compact={false}
           />
+
           <p className="kv-verify-copy">
-            Your memory is now verifiable as human-authored under this Φ-Key.
-            Anyone can scan the QR or open the verifier link to confirm it
+            Your memory is now verifiable as human-authored under this Φ-Key. Anyone can scan the QR or open the verifier link to confirm it
             was sealed at this pulse under your sigil.
           </p>
+
           <div className="kv-verify-actions">
-            <button
-              type="button"
-              onClick={handleNewPost}
-              className="kv-btn kv-btn-primary"
-            >
+            <button type="button" onClick={handleNewPost} className="kv-btn kv-btn-primary">
               + Exhale Memory
             </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="kv-btn kv-btn-ghost"
-            >
+            <button type="button" onClick={handleLogout} className="kv-btn kv-btn-ghost">
               ⏻ Inhale Memories
             </button>
           </div>
@@ -758,11 +792,7 @@ function KaiVohFlow(): ReactElement {
     return (
       <div className="kv-error-state">
         Something went sideways in the breath stream…
-        <button
-          type="button"
-          onClick={handleNewPost}
-          className="kv-error-reset"
-        >
+        <button type="button" onClick={handleNewPost} className="kv-error-reset">
           Reset step
         </button>
       </div>
@@ -783,12 +813,10 @@ function KaiVohFlow(): ReactElement {
 
       <main className="kv-main-card">
         {renderStep()}
-        {flowError && <p className="kv-error">{flowError}</p>}
+        {flowError ? <p className="kv-error">{flowError}</p> : null}
       </main>
 
-      {session.postLedger && session.postLedger.length > 0 && (
-        <ActivityStrip ledger={session.postLedger} />
-      )}
+      {session.postLedger && session.postLedger.length > 0 ? <ActivityStrip ledger={session.postLedger} /> : null}
     </div>
   );
 }

@@ -105,6 +105,9 @@ import {
   type FeedPostPayload,
   type PostBody,
 } from "../../utils/feedPayload";
+import { normalizeClaimGlyphRef, normalizeUsername } from "../../utils/usernameClaim";
+import { getUsernameClaimRegistry, ingestUsernameClaimGlyph } from "../../utils/usernameClaimRegistry";
+import { USERNAME_CLAIM_KIND, type UsernameClaimPayload } from "../../types/usernameClaim";
 
 /* Explorer bridge: register any stream/sigil URL */
 import { registerSigilUrl } from "../../utils/sigilRegistry";
@@ -520,6 +523,7 @@ const MSV2_KEY = "sf:memoryStream:v2";
 const MSV2_MAX_NODES = 20000;
 const MSV2_MAX_CHILDREN = 4096;
 const MSV2_MAX_WALK = 4096;
+const USERNAME_REHYDRATE_LIMIT = 2048;
 
 type MemoryStreamV2 = {
   v: 2;
@@ -1392,6 +1396,7 @@ function SigilStreamInner(): React.JSX.Element {
   const ms2Ref = useRef<MemoryStreamV2>(ms2Load());
   const ms2ScannedUrlRef = useRef<Set<string>>(new Set<string>());
   const [ms2Tick, setMs2Tick] = useState(0);
+  const claimsHydratedRef = useRef(false);
 
   const ms2IngestMany = useCallback((urls: readonly string[], pulseHint?: number) => {
     const g = ms2Ref.current;
@@ -1412,6 +1417,73 @@ function SigilStreamInner(): React.JSX.Element {
     }
   }, []);
 
+  const rehydrateUsernameClaimsFromHistory = useCallback(
+    (urls: readonly string[]) => {
+      if (claimsHydratedRef.current) return;
+      claimsHydratedRef.current = true;
+
+      try {
+        const tokens = new Set<string>();
+        const pushToken = (tok: string | null | undefined) => {
+          if (!tok) return;
+          const norm = normalizeIncomingToken(tok);
+          if (isLikelyToken(norm)) tokens.add(norm);
+        };
+
+        const g = ms2Ref.current;
+        for (const t of Object.keys(g.parentOf)) pushToken(t);
+        for (const t of Object.keys(g.childrenOf)) {
+          pushToken(t);
+          for (const c of g.childrenOf[t] ?? []) pushToken(c);
+        }
+        for (const t of Object.keys(g.pulseOf)) pushToken(t);
+
+        for (const u of urls) {
+          pushToken(extractTokenFromUrlLike(u));
+          for (const add of ms2ExtractAddTokensFromUrl(u)) pushToken(add);
+        }
+
+        let count = 0;
+        for (const token of tokens) {
+          if (count >= USERNAME_REHYDRATE_LIMIT) break;
+          count += 1;
+
+          const decoded = decodeFeedPayload(token);
+          if (!decoded) continue;
+
+          const claimEvidence = (decoded as FeedPostPayload & { usernameClaim?: unknown }).usernameClaim;
+          if (!claimEvidence) continue;
+
+          const claimHash = normalizeClaimGlyphRef((claimEvidence as { hash?: string }).hash ?? "");
+          const payload = (claimEvidence as { payload?: unknown }).payload as UsernameClaimPayload | undefined;
+
+          if (!claimHash || !payload || payload.kind !== USERNAME_CLAIM_KIND) continue;
+
+          const normalizedPayloadUser = normalizeUsername(payload.normalized || payload.username || "");
+          const normalizedFromAuthor = normalizeUsername(decoded.author ?? "");
+          const normalizedUsername = normalizedPayloadUser || normalizedFromAuthor;
+
+          if (!normalizedUsername) continue;
+
+          const claimUrl = (claimEvidence as { url?: string }).url?.trim() || canonicalizeCurrentStreamUrl(token);
+          if (!claimUrl) continue;
+
+          const ownerHint = (claimEvidence as { ownerHint?: string | null }).ownerHint ?? payload.ownerHint ?? null;
+
+          ingestUsernameClaimGlyph({
+            hash: claimHash,
+            url: claimUrl,
+            payload: { ...payload, normalized: normalizedPayloadUser || normalizedUsername },
+            ownerHint,
+          });
+        }
+      } catch (e) {
+        report("rehydrate username claims", e);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     (async () => {
       try {
@@ -1427,11 +1499,14 @@ function SigilStreamInner(): React.JSX.Element {
 
         // Learn thread edges from anything we already know
         ms2IngestMany(unique.map((s) => s.url));
+
+        // Rehydrate username-claim registry from historical payloads
+        rehydrateUsernameClaimsFromHistory(unique.map((s) => s.url));
       } catch (e) {
         report("initial seed load", e);
       }
     })().catch((e) => report("initial seed load outer", e));
-  }, [ms2IngestMany]);
+  }, [ms2IngestMany, rehydrateUsernameClaimsFromHistory]);
 
   /**
    * Ingest add= links from CURRENT location every time it changes.
@@ -1644,6 +1719,83 @@ function SigilStreamInner(): React.JSX.Element {
         setPayload(null);
         setPayloadError("Invalid or unreadable payload token.");
         return;
+      }
+
+      const claimEvidence = (decoded as FeedPostPayload & { usernameClaim?: unknown }).usernameClaim;
+      const normalizedFromClaim = claimEvidence
+        ? normalizeUsername(
+            (claimEvidence as { payload?: { normalized?: string; username?: string } }).payload?.normalized ||
+              (claimEvidence as { payload?: { normalized?: string; username?: string } }).payload?.username ||
+              "",
+          )
+        : "";
+      const normalizedFromAuthor = normalizeUsername(decoded.author ?? "");
+      const normalizedUsername = normalizedFromClaim || normalizedFromAuthor;
+
+      if (claimEvidence) {
+        const claimHash = normalizeClaimGlyphRef((claimEvidence as { hash?: string }).hash ?? "");
+        const claimUrl =
+          (claimEvidence as { url?: string }).url?.trim() || canonicalizeCurrentStreamUrl(token);
+
+        if (!claimHash || !claimUrl) {
+          setPayload(null);
+          setPayloadError("Username claim missing glyph reference.");
+          return;
+        }
+        if (!normalizedUsername) {
+          setPayload(null);
+          setPayloadError("Username claim missing normalized username.");
+          return;
+        }
+
+        const registry = getUsernameClaimRegistry();
+        const existing = registry[normalizedUsername];
+        if (existing && existing.claimHash !== claimHash) {
+          setPayload(null);
+          setPayloadError("Username claimed by another glyph.");
+          return;
+        }
+
+        const payload = (claimEvidence as { payload?: unknown }).payload as
+          | UsernameClaimPayload
+          | undefined;
+
+        if (!payload || payload.kind !== USERNAME_CLAIM_KIND) {
+          setPayload(null);
+          setPayloadError("Invalid username-claim payload.");
+          return;
+        }
+
+        const normalizedPayloadUser =
+          normalizeUsername(payload.normalized || payload.username || "") || normalizedUsername;
+        if (normalizedPayloadUser !== normalizedUsername) {
+          setPayload(null);
+          setPayloadError("Username claim does not match author.");
+          return;
+        }
+
+        const ingest = ingestUsernameClaimGlyph({
+          hash: claimHash,
+          url: claimUrl,
+          payload: {
+            ...payload,
+            normalized: normalizedPayloadUser,
+          },
+          ownerHint: (claimEvidence as { ownerHint?: string | null }).ownerHint ?? payload.ownerHint ?? null,
+        });
+
+        if (!ingest.accepted) {
+          setPayload(null);
+          setPayloadError(`Username claim rejected: ${ingest.reason ?? "unknown"}.`);
+          return;
+        }
+      } else if (normalizedUsername) {
+        const registry = getUsernameClaimRegistry();
+        if (registry[normalizedUsername]) {
+          setPayload(null);
+          setPayloadError("Claim glyph is required for this username.");
+          return;
+        }
       }
 
       setPayload(decoded);
