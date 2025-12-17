@@ -36,7 +36,7 @@ import {
   subscribeUsernameClaimRegistry,
 } from "../../../utils/usernameClaimRegistry";
 import { normalizeUsername, mintUsernameClaimGlyph } from "../../../utils/usernameClaim";
-import type { UsernameClaimRegistry } from "../../../types/usernameClaim";
+import type { UsernameClaimRegistry } from "../../../utils/usernameClaimRegistry";
 
 /* NEW v3 payload engine */
 import {
@@ -567,7 +567,7 @@ export function Composer({
     setUsernameClaims(getUsernameClaimRegistry());
     const unsub = subscribeUsernameClaimRegistry((entry, source) => {
       void source;
-      setUsernameClaims((prev) => ({ ...prev, [entry.normalized]: entry }));
+      setUsernameClaims((prev: UsernameClaimRegistry) => ({ ...prev, [entry.normalized]: entry }));
     });
     return () => unsub();
   }, []);
@@ -780,15 +780,15 @@ export function Composer({
             return;
           }
         } else {
-          if (!composerMeta || !composerKaiSig) {
+          if (!safeMeta || !composerKaiSig) {
             toasts.push("warn", "Inhale your sigil to mint a username claim.");
             return;
           }
 
           const originGlyph = {
             hash: composerKaiSig,
-            pulseCreated: (composerMeta as { pulse?: number })?.pulse ?? pulseNow,
-            pulseGenesis: (composerMeta as { pulse?: number })?.pulse ?? pulseNow,
+            pulseCreated: (safeMeta as { pulse?: number })?.pulse ?? pulseNow,
+            pulseGenesis: (safeMeta as { pulse?: number })?.pulse ?? pulseNow,
             value: 1,
             sentTo: [],
             receivedFrom: [],
