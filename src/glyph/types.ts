@@ -20,6 +20,7 @@ import type {
   ValueSeal,
   HashHex as ValHashHex,
 } from "../utils/valuation";
+import type { UsernameClaimPayload } from "../types/usernameClaim";
 
 /* --------------------------------- brands --------------------------------- */
 export type Brand<T, B extends string> = T & { readonly __brand: B };
@@ -89,6 +90,7 @@ export interface GlyphMetadata {
   timestamp?: number;        // Epoch timestamp (optional for sorting)
   coverUrl?: string;         // optional image/preview
   color?: string;            // UI accent color
+  usernameClaim?: UsernameClaimPayload; // derivative username-claim payload
 }
 
 /* --------------------------------- glyph ----------------------------------- */
