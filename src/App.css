@@ -103,6 +103,35 @@
   /* Perf knobs (mobile throttles) */
   --orbit-blur: 40px;
   --glow-blur: 32px;
+    /* ── Chakra ink + chakra ark (arc) colors ───────────────────── */
+
+  /* 0 Root */
+  --chakra-ink-0: #ff3b6b;
+  --chakra-ark-0: #ff6aa6;
+
+  /* 1 Sacral */
+  --chakra-ink-1: #ff8a3d;
+  --chakra-ark-1: #ffc07a;
+
+  /* 2 Solar */
+  --chakra-ink-2: #ffd24a;
+  --chakra-ark-2: #fff2a6;
+
+  /* 3 Heart */
+  --chakra-ink-3: #26ffc4;
+  --chakra-ark-3: #a6ffe9;
+
+  /* 4 Throat */
+  --chakra-ink-4: #33f6ff;
+  --chakra-ark-4: #a8fbff;
+
+  /* 5 Third Eye */
+  --chakra-ink-5: #7e86ff;
+  --chakra-ark-5: #c6c9ff;
+
+  /* 6 Crown */
+  --chakra-ink-6: #c18bff;
+  --chakra-ark-6: #ead8ff;
 }
 /* ─────────────────────────────────────────────────────────────
    GLOBAL DARK THEME LOCK — ignore device light mode everywhere
@@ -707,6 +736,8 @@ a:hover {
 .topbar-live {
   appearance: none;
   -webkit-appearance: none;
+  
+  
 
   display: flex;
   align-items: center;
@@ -731,6 +762,32 @@ a:hover {
   outline: none;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14),
     0 0 0 6px rgba(120, 220, 255, 0.1);
+    
+}
+/* Topbar time tint inputs (set from App.tsx via style vars) */
+.topbar-live{
+  --kai-chakra: var(--chakra-ink-3);
+  --kai-ark:    var(--chakra-ark-3);
+}
+
+/* Fine-grained time styling */
+.kai-tag,
+.kai-sep{
+  color: rgba(245,247,255,0.62);
+}
+
+.kai-num{
+  font-variant-numeric: tabular-nums;
+}
+
+.kai-num--chakra{
+  color: var(--kai-chakra);
+  text-shadow: 0 0 16px rgba(0,0,0,0.55);
+}
+
+.kai-num--ark{
+  color: var(--kai-ark);
+  text-shadow: 0 0 16px rgba(0,0,0,0.55);
 }
 
 /* PERF: glow via pseudo-element; animate opacity/scale only */
