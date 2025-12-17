@@ -1966,8 +1966,8 @@ function OriginPanel({ root }: { root: SigilNode }) {
 
         <div className="o-right">
           <KaiStamp p={root.payload} />
-          <span className="o-count" title="Total content nodes in this lineage">
-            {count} nodes
+          <span className="o-count" title="Total content keys in this lineage">
+            {count} keys
           </span>
           <button className="o-copy" onClick={() => void copyText(root.url)} title="Copy origin URL" type="button">
             Remember Origin
