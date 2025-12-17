@@ -103,6 +103,35 @@
   /* Perf knobs (mobile throttles) */
   --orbit-blur: 40px;
   --glow-blur: 32px;
+    /* ── Chakra ink + chakra ark (arc) colors ───────────────────── */
+
+  /* 0 Root */
+  --chakra-ink-0: #ff3b6b;
+  --chakra-ark-0: #ff6aa6;
+
+  /* 1 Sacral */
+  --chakra-ink-1: #ff8a3d;
+  --chakra-ark-1: #ffc07a;
+
+  /* 2 Solar */
+  --chakra-ink-2: #ffd24a;
+  --chakra-ark-2: #fff2a6;
+
+  /* 3 Heart */
+  --chakra-ink-3: #26ffc4;
+  --chakra-ark-3: #a6ffe9;
+
+  /* 4 Throat */
+  --chakra-ink-4: #33f6ff;
+  --chakra-ark-4: #a8fbff;
+
+  /* 5 Third Eye */
+  --chakra-ink-5: #7e86ff;
+  --chakra-ark-5: #c6c9ff;
+
+  /* 6 Crown */
+  --chakra-ink-6: #c18bff;
+  --chakra-ark-6: #ead8ff;
 }
 /* ─────────────────────────────────────────────────────────────
    GLOBAL DARK THEME LOCK — ignore device light mode everywhere
@@ -707,6 +736,8 @@ a:hover {
 .topbar-live {
   appearance: none;
   -webkit-appearance: none;
+  
+  
 
   display: flex;
   align-items: center;
@@ -731,6 +762,32 @@ a:hover {
   outline: none;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14),
     0 0 0 6px rgba(120, 220, 255, 0.1);
+    
+}
+/* Topbar time tint inputs (set from App.tsx via style vars) */
+.topbar-live{
+  --kai-chakra: var(--chakra-ink-3);
+  --kai-ark:    var(--chakra-ark-3);
+}
+
+/* Fine-grained time styling */
+.kai-tag,
+.kai-sep{
+  color: rgba(245,247,255,0.62);
+}
+
+.kai-num{
+  font-variant-numeric: tabular-nums;
+}
+
+.kai-num--chakra{
+  color: var(--kai-chakra);
+  text-shadow: 0 0 16px rgba(0,0,0,0.55);
+}
+
+.kai-num--ark{
+  color: var(--kai-ark);
+  text-shadow: 0 0 16px rgba(0,0,0,0.55);
 }
 
 /* PERF: glow via pseudo-element; animate opacity/scale only */
@@ -2896,6 +2953,63 @@ html[data-perf="low"] .kk-pop__panel {
     align-self: stretch;
     min-height: 0;
     height: 100%;
+  }
+}
+/* ──────────────────────────────────────────────────────────────────────────────
+   v28.7.x — FINISH: Nav Writ Slot parity + no double borders + desktop anchor
+   - Keeps your mobile caps/behavior exactly
+   - Restores “Writ at bottom” feel on desktop WITHOUT reintroducing mobile dead air
+   - Prevents double border/background now that .nav-foot lives inside .nav-writ-slot
+────────────────────────────────────────────────────────────────────────────── */
+
+/* Writ wrapper should own the rim + tint; inner .nav-foot becomes “content only” */
+.nav-writ-slot{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+.nav-writ-slot .nav-foot{
+  margin-top:0;                 /* kill legacy push-to-bottom behavior */
+  border-top:0;                 /* wrapper already provides the top rim */
+  background:transparent;       /* wrapper already provides the tint */
+}
+
+/* Desktop/tablet: keep Atrium full height, but pin Writ to the bottom cleanly */
+@media (min-width: 981px){
+  .nav-writ-slot{
+    margin-top:auto;            /* “Sovereign Writ” docks at bottom again */
+  }
+
+  /* Optional: let the nav list be the flexible middle (no hidden overflow) */
+  .nav-list{
+    flex: 1 1 auto;
+    min-height: 0;
+
+    overflow: auto;             /* only scroll if it truly needs it */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: thin;
+    scrollbar-color: rgba(170, 241, 255, 0.18) transparent;
+  }
+  .nav-list::-webkit-scrollbar{ width:10px; }
+  .nav-list::-webkit-scrollbar-track{ background:transparent; }
+  .nav-list::-webkit-scrollbar-thumb{
+    background: rgba(170, 241, 255, 0.18);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  .nav-list::-webkit-scrollbar-thumb:hover{
+    background: rgba(170, 241, 255, 0.28);
+  }
+}
+
+/* Mobile: ensure the wrapper NEVER “pushes” (your cap logic stays in control) */
+@media (max-width: 980px){
+  .nav-writ-slot{
+    margin-top: 0;              /* hard stop: no auto spacing injection */
   }
 }
 
