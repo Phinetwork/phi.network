@@ -1,5 +1,5 @@
 // src/pages/SigilExplorer.tsx
-// v3.10.3 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
+// v3.10.4 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
 //
 // CORE TRUTH (production behavior):
 // ✅ On OPEN: push (inhale) everything you have → API, then pull (exhale) anything new ← API
@@ -14,6 +14,7 @@
 // ✅ IKANN API FAILOVER: https://align.kaiklok.com ⇄ http://m.kai (same endpoints, same behavior)
 // ✅ Sticky “last-known-good” API base so it doesn’t ping-pong every request
 // ✅ Failover applies to: /sigils/seal, /sigils/urls, /sigils/inhale (push + pull loop remains identical)
+// ✅ ALL unique memories minted from a glyph now DISPLAY (content identity is moment-true; no kaiSignature collapse)
 //
 // KEEP (from v3.10.2):
 // ✅ Parents are ALWAYS /s (post URLs). /s nodes ALWAYS display.
@@ -642,13 +643,11 @@ function readPhiKeyFromPayload(p: SigilSharePayloadLoose): string {
  */
 function momentKeyFor(url: string, p: SigilSharePayloadLoose): string {
   const phiKey = readPhiKeyFromPayload(p);
-  const pulse = Number.isFinite(p.pulse ?? NaN) ? (p.pulse ?? 0) : 0;
-  const beat = Number.isFinite(p.beat ?? NaN) ? (p.beat ?? 0) : 0;
-  const step = Number.isFinite(p.stepIndex ?? NaN) ? (p.stepIndex ?? 0) : 0;
+  const pulse = Number.isFinite(p.pulse ?? NaN) ? (p.pulse as number) : null;
 
-  if (phiKey && (p.pulse != null || p.beat != null || p.stepIndex != null)) {
-    return `k:${phiKey}|${pulse}|${beat}|${step}`;
-  }
+  // ✅ Moment grouping should be stable across URL variants.
+  // Beat/step are display fields; they are not reliable for identity because some variants decode them as 0.
+  if (phiKey && pulse != null) return `k:${phiKey}|${pulse}`;
 
   const sig = typeof p.kaiSignature === "string" ? p.kaiSignature.trim() : "";
   if (sig) return `sig:${sig}`;
@@ -662,27 +661,40 @@ function momentKeyFor(url: string, p: SigilSharePayloadLoose): string {
   return `u:${canonicalizeUrl(url)}`;
 }
 
+
 /**
  * Content identity (kind-aware): keeps /s nodes DISTINCT from /stream nodes so /s always displays,
  * while /stream variants (/stream/t vs /stream/p) still dedupe together.
+ *
+ * v3.10.4 FIX:
+ * - kaiSignature is an IDENTITY stamp (who signed / minted), not a MEMORY identity.
+ * - Using kaiSignature alone collapses *every distinct memory* minted by the same glyph into ONE node.
+ * - Therefore: content identity must be moment-specific (phiKey+pulse+beat+step) + post hash when present.
  */
 function contentIdFor(url: string, p: SigilSharePayloadLoose): string {
   const kind = contentKindForUrl(url); // post | stream | other
 
-  const sig = typeof p.kaiSignature === "string" ? p.kaiSignature.trim() : "";
-  if (sig) return `sig:${sig}|${kind}`;
-
-  const tok = parseStreamToken(url);
-  if (tok && tok.trim()) return `tok:${tok.trim()}|${kind}`;
+  // ✅ HARD RULE: if it's a /s post and we have a hash, the hash IS the identity.
+  // This collapses all URL variants for the same post (fixes the duplicate beat 0/step 0 row).
+  const h = parseHashFromUrl(url) ?? "";
+  if (kind === "post" && h) return `post:${h}`;
 
   const phiKey = readPhiKeyFromPayload(p);
-  const pulse = p.pulse ?? 0;
-  const beat = p.beat ?? 0;
-  const step = p.stepIndex ?? 0;
-  const h = parseHashFromUrl(url) ?? "";
+  const pulse = Number.isFinite(p.pulse ?? NaN) ? (p.pulse as number) : null;
 
-  return `k:${phiKey}|${pulse}|${beat}|${step}|${h}|${kind}`;
+  // Streams: moment-true identity should be stable even if beat/step decode varies.
+  if (kind === "stream" && phiKey && pulse != null) return `stream:${phiKey}|${pulse}`;
+
+  // Fallbacks (rare)
+  const sig = typeof p.kaiSignature === "string" ? p.kaiSignature.trim() : "";
+  if (sig) return `${kind}:sig:${sig}`;
+
+  const tok = parseStreamToken(url);
+  if (tok && tok.trim()) return `${kind}:tok:${tok.trim()}`;
+
+  return `${kind}:u:${canonicalizeUrl(url)}`;
 }
+
 
 const isPackedViewerUrl = (raw: string): boolean => {
   const u = raw.toLowerCase();
@@ -1966,8 +1978,8 @@ function OriginPanel({ root }: { root: SigilNode }) {
 
         <div className="o-right">
           <KaiStamp p={root.payload} />
-          <span className="o-count" title="Total content nodes in this lineage">
-            {count} nodes
+          <span className="o-count" title="Total content keys in this lineage">
+            {count} keys
           </span>
           <button className="o-copy" onClick={() => void copyText(root.url)} title="Copy origin URL" type="button">
             Remember Origin
