@@ -13,16 +13,18 @@ type SigilColors = {
 };
 
 type ChakraName =
-  | "root"        // 1 — red
-  | "sacral"      // 2 — orange
-  | "solar"       // 3 — yellow
-  | "heart"       // 4 — green
-  | "throat"      // 5 — blue/cyan
-  | "thirdEye"    // 6 — indigo
-  | "crown"       // 7 — violet
-  | "krown";      // alias for crown
+  | "root" // 1 — red
+  | "sacral" // 2 — orange
+  | "solar" // 3 — yellow
+  | "heart" // 4 — green
+  | "throat" // 5 — blue/cyan
+  | "thirdEye" // 6 — indigo
+  | "crown" // 7 — violet
+  | "krown"; // alias for crown
 
 type Props = {
+  /** Session-derived username/handle (string rendered as-is) */
+  username?: string;
   /** Session-derived ΦKey (string rendered as-is) */
   phiKey?: string;
   /** Session-derived Kai Signature / ΣSig (string rendered as-is) */
@@ -40,7 +42,7 @@ type CSSVarStyle = React.CSSProperties & Record<`--${string}`, string>;
 function hexToRgbTuple(hex: string): [number, number, number] | null {
   let h = hex.trim();
   if (h.startsWith("#")) h = h.slice(1);
-  if (h.length === 3) h = h.split("").map(c => c + c).join("");
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
   if (h.length !== 6) return null;
   const n = parseInt(h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -49,7 +51,7 @@ const clamp = (v: number, a = 0, b = 255) => Math.max(a, Math.min(b, v));
 function mixRGB(
   a: [number, number, number],
   b: [number, number, number],
-  t: number
+  t: number,
 ): [number, number, number] {
   return [
     clamp(a[0] + (b[0] - a[0]) * t),
@@ -62,13 +64,13 @@ const toRGBVar = (t: [number, number, number]) => `${t[0]}, ${t[1]}, ${t[2]}`;
 /* -------------------- chakra mapping -------------------- */
 /** Tailored, vivid chakra anchors (root → crown/krown). */
 const CHAKRA_HEX: Record<Exclude<ChakraName, "krown">, string> = {
-  root: "#FF3B3B",     // radiant red
-  sacral: "#FF8A33",   // deep orange
-  solar: "#FFD60A",    // golden yellow
-  heart: "#22C55E",    // emerald green
-  throat: "#0EA5E9",   // azure/cyan
+  root: "#FF3B3B", // radiant red
+  sacral: "#FF8A33", // deep orange
+  solar: "#FFD60A", // golden yellow
+  heart: "#22C55E", // emerald green
+  throat: "#0EA5E9", // azure/cyan
   thirdEye: "#6366F1", // indigo
-  crown: "#C084FC",    // violet
+  crown: "#C084FC", // violet
 };
 const KROWN_ALIAS: ChakraName = "crown";
 
@@ -82,7 +84,7 @@ function chakraPrimary(ch?: ChakraName | number): [number, number, number] | nul
   } else {
     key = ch === "krown" ? (KROWN_ALIAS as ChakraName) : ch;
   }
-  const hx = CHAKRA_HEX[(key as Exclude<ChakraName, "krown">)] ?? CHAKRA_HEX.crown;
+  const hx = CHAKRA_HEX[key as Exclude<ChakraName, "krown">] ?? CHAKRA_HEX.crown;
   return hexToRgbTuple(hx);
 }
 
@@ -95,7 +97,7 @@ function paletteFromChakra(ch?: ChakraName | number): Triad | null {
   const white: [number, number, number] = [255, 255, 255];
   const gold: [number, number, number] = [255, 215, 128];
   const secondary = mixRGB(p, white, 0.28); // gentle lift
-  const accent = mixRGB(p, gold, 0.42);     // Atlantean warmth
+  const accent = mixRGB(p, gold, 0.42); // Atlantean warmth
   return { s1: toRGBVar(p), s2: toRGBVar(secondary), s3: toRGBVar(accent) };
 }
 
@@ -122,14 +124,25 @@ function resolvePalette(chakra: Props["chakra"], sigilColors?: SigilColors): Tri
   return DEFAULT_TRIAD;
 }
 
+function normalizeUsername(u?: string): string | undefined {
+  if (!u) return undefined;
+  const t = u.trim();
+  if (!t) return undefined;
+  // display exactly as provided, but for typical handles, ensure it visually reads as a handle
+  if (t.startsWith("@")) return t;
+  return t;
+}
+
 /* -------------------- component -------------------- */
 export function IdentityBar({
+  username,
   phiKey,
   kaiSignature,
   sigilColors,
   chakra,
 }: Props): React.JSX.Element {
   const palette = resolvePalette(chakra, sigilColors);
+  const uname = normalizeUsername(username);
 
   const cssVars: CSSVarStyle = {
     "--sigil-1": palette.s1, // primary (chakra)
@@ -137,7 +150,7 @@ export function IdentityBar({
     "--sigil-3": palette.s3, // accent (golden warmth)
   };
 
-  const empty = !phiKey && !kaiSignature;
+  const empty = !uname && !phiKey && !kaiSignature;
 
   return (
     <div className="sf-identity" style={cssVars} {...(empty ? { "data-empty": "" } : {})}>
@@ -146,7 +159,14 @@ export function IdentityBar({
         style={{ rowGap: ".4rem", columnGap: ".4rem", display: "flex", flexWrap: "wrap" }}
         aria-label={empty ? "No identity loaded" : "Identity chips"}
       >
-        {empty && <span className="sf-muted">No ΦKey loaded this session.</span>}
+        {empty && <span className="sf-muted">No identity loaded this session.</span>}
+
+        {uname && (
+          <span className="sf-pill sf-pill--user" title="Username (session)">
+            <strong className="sf-pill__label">User</strong>&nbsp;
+            <span className="sf-key">{uname}</span>
+          </span>
+        )}
 
         {phiKey && (
           <span className="sf-pill sf-pill--phikey" title="Your ΦKey (session)">
