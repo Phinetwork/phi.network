@@ -1,6 +1,7 @@
 /* Mobile-first, full-height modal with sticky footer + safe areas */
 
-:root {
+.glyph-import-backdrop,
+.glyph-import-modal {
   --phi: 1.61803398875;
 
   --bg-0: #040607;
