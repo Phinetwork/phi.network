@@ -1,6 +1,4 @@
 // src/pages/SigilPage/useValuation.ts
-/* eslint-disable */
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -18,14 +16,14 @@ import {
   scanKairosWindow,
   computeTrustGrade,
   classifyMarketTier,
+  type SigilMetadataLite,
+  type ValueSeal,
 } from "../../utils/valuation";
-
-// NOTE: No strict linting, no strict TS — we keep this file flexible and permissive by design.
 
 type PriceFlash = "up" | "down" | null;
 
 type Args = {
-  payload: any; // intentionally loose — upstream payloads evolve
+  payload: SigilMetadataLite | null | undefined;
   urlSearchParams: URLSearchParams;
   currentPulse: number | null | undefined;
   routeHash?: string | null;
@@ -46,7 +44,7 @@ function useStableSha256() {
 }
 
 export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
-  const [valSeal, setValSeal] = useState<any>(null);
+  const [valSeal, setValSeal] = useState<ValueSeal | null>(null);
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [priceFlash, setPriceFlash] = useState<PriceFlash>(null);
 
@@ -66,7 +64,6 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
       if (!payload || !Number.isFinite(currentPulse ?? NaN)) {
         if (!alive) return;
 
-        // Idempotent clears (no-op if already null)
         setValSeal((prev) => (prev === null ? prev : null));
         setLivePrice((prev) => (prev === null ? prev : null));
         setPriceFlash((prev) => (prev === null ? prev : null));
@@ -75,43 +72,40 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
         return;
       }
 
-      const p: any = payload || {};
-
-      // Deterministic, typed-enough metadata for valuation
-      const meta: any = {
+      const meta: SigilMetadataLite = {
         // identity & rhythm
-        pulse: p.pulse,
-        kaiPulse: p.pulse,
-        beat: p.beat,
-        stepIndex: p.stepIndex,
-        stepsPerBeat: p.stepsPerBeat,
+        pulse: payload.pulse,
+        kaiPulse: payload.pulse,
+        beat: payload.beat,
+        stepIndex: payload.stepIndex,
+        stepsPerBeat: payload.stepsPerBeat,
 
         // craft signals (optional)
-        seriesSize: p.seriesSize,
-        quality: p.quality,
-        creatorVerified: p.creatorVerified,
-        creatorRep: p.creatorRep,
+        seriesSize: payload.seriesSize,
+        quality: payload.quality,
+        creatorVerified: payload.creatorVerified,
+        creatorRep: payload.creatorRep,
 
         // resonance (optional)
-        frequencyHz: p.frequencyHz,
-        chakraDay: p.chakraDay,
-        chakraGate: p.chakraGate,
+        frequencyHz: payload.frequencyHz,
+        chakraDay: payload.chakraDay,
+        chakraGate: payload.chakraGate,
 
         // lineage (optional)
-        transfers: p.transfers,
-        cumulativeTransfers: p.cumulativeTransfers,
+        transfers: payload.transfers,
+        cumulativeTransfers: payload.cumulativeTransfers,
 
         // segmented head (optional)
-        segments: p.segments,
-        segmentsMerkleRoot: p.segmentsMerkleRoot,
-        transfersWindowRoot: p.transfersWindowRoot,
+        segments: payload.segments,
+        segmentsMerkleRoot: payload.segmentsMerkleRoot,
+        transfersWindowRoot: payload.transfersWindowRoot,
 
         // intrinsic IP cashflows (optional)
-        ip: p.ip,
+        ip: payload.ip,
 
         // signatures (optional)
-        kaiSignature: p.kaiSignature,
-        userPhiKey: p.userPhiKey,
+        kaiSignature: payload.kaiSignature,
+        userPhiKey: payload.userPhiKey,
 
         // policy pin — use stable string only
         valuationPolicyId: vpolKey || undefined,
@@ -147,7 +141,7 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
   }, [payload, currentPulse, vpolKey, hasher]);
 
   // Convenience: claim pulse
-  const claimPulse = useMemo(() => (payload as any)?.pulse, [payload]);
+  const claimPulse = useMemo(() => payload?.pulse, [payload]);
 
   // 1) Numeric rarity
   const rarity = useMemo(() => {
@@ -165,10 +159,10 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
     const stepsPerBeat =
       valSeal?.inputs?.pulsesPerBeat
         ? Math.max(1, Math.round(valSeal.inputs.pulsesPerBeat / 11))
-        : (payload as any)?.stepsPerBeat ?? 44;
+        : payload?.stepsPerBeat ?? 44;
     const cadence = valSeal?.inputs?.cadenceRegularity ?? 1;
     const resonance = valSeal?.inputs?.resonancePhi ?? 0.5;
-    const stepIndexClaimOverride = (payload as any)?.stepIndex;
+    const stepIndexClaimOverride = payload?.stepIndex;
     return explainOscillation(claimPulse as number, currentPulse as number, {
       stepsPerBeat,
       cadenceRegularity: cadence,
@@ -179,9 +173,9 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
 
   // 3) Lineage narrative
   const lineageNarrative = useMemo(() => {
-    const transfers = (payload as any)?.transfers;
+    const transfers = payload?.transfers;
     if (!transfers || !transfers.length) return ["No closed transfers yet — lineage still forming."];
-    return explainLineage(transfers, { stepsPerBeat: (payload as any)?.stepsPerBeat ?? 44 });
+    return explainLineage(transfers, { stepsPerBeat: payload?.stepsPerBeat ?? 44 });
   }, [payload]);
 
   // 4) Trust & Market tier
@@ -193,9 +187,9 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
 
   // 5) Kairos scanner window
   const kairos = useMemo(() => {
-    if (!Number.isFinite(currentPulse ?? NaN)) return { window: [] as any[] };
+    if (!Number.isFinite(currentPulse ?? NaN)) return { window: [] as unknown[] };
     const start = currentPulse as number;
-    const window = scanKairosWindow(start, 144, 1, { stepsPerBeat: (payload as any)?.stepsPerBeat ?? 44 });
+    const window = scanKairosWindow(start, 144, 1, { stepsPerBeat: payload?.stepsPerBeat ?? 44 });
     return { window };
   }, [currentPulse, payload]);
 
@@ -214,8 +208,11 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
   const audio = useMemo(() => {
     if (!Number.isFinite(claimPulse ?? NaN)) return { dataURI: null, renderWav: undefined };
     const { dataURI } = renderSigilWav(claimPulse as number, 2.0, 44100, { stereo: true });
-    const renderWav = (seconds = 2.0, sampleRate = 44100, opts?: any) =>
-      renderSigilWav(claimPulse as number, seconds, sampleRate, opts);
+    const renderWav = (
+      seconds = 2.0,
+      sampleRate = 44100,
+      opts?: Record<string, unknown>,
+    ) => renderSigilWav(claimPulse as number, seconds, sampleRate, opts);
     return { dataURI, renderWav };
   }, [claimPulse]);
 
@@ -234,7 +231,7 @@ export function useValuation({ payload, urlSearchParams, currentPulse }: Args) {
       explainRarity: () => rarity.lines,
       explainLineage: () => lineageNarrative,
       scanKairos: (start: number, count: number, step = 1, stepsPerBeat?: number) =>
-        scanKairosWindow(start, count, step, { stepsPerBeat: stepsPerBeat ?? (payload as any)?.stepsPerBeat ?? 44 }),
+        scanKairosWindow(start, count, step, { stepsPerBeat: stepsPerBeat ?? payload?.stepsPerBeat ?? 44 }),
       makeScroll: (title?: string) => (valSeal ? toExplainableScroll(valSeal, { title: title ?? "Kai-Sigil Valuation Scroll" }) : null),
       makeScrollHTML: (title?: string) => (valSeal ? renderScrollHTML(valSeal, { title }) : null),
       makeSpiral: (p?: number) =>

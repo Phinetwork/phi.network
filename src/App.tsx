@@ -20,18 +20,9 @@ import React, {
   useState,
   type CSSProperties,
 } from "react";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 
-import VerifierStamper from "./components/VerifierStamper/VerifierStamper";
 import KaiVohModal from "./components/KaiVoh/KaiVohModal";
 import SigilModal from "./components/SigilModal";
 
@@ -41,17 +32,13 @@ import {
   DAYS_PER_YEAR,
   MONTHS_PER_YEAR,
 } from "./utils/kai_pulse";
+import { fmt2, formatPulse, modPos, readNum } from "./utils/kaiTimeDisplay";
+import { usePerfMode } from "./hooks/usePerfMode";
 
 import HomePriceChartCard from "./components/HomePriceChartCard";
 import SovereignDeclarations from "./components/SovereignDeclarations";
 import SigilExplorer from "./components/SigilExplorer";
 import EternalKlock from "./components/EternalKlock";
-
-import SigilFeedPage from "./pages/SigilFeedPage";
-import SigilPage from "./pages/SigilPage/SigilPage";
-import PShort from "./pages/PShort";
-
-import VerifyPage from "./pages/VerifyPage";
 
 import "./App.css";
 
@@ -102,33 +89,6 @@ type EternalKlockProps = {
 
 type KaiMoment = ReturnType<typeof momentFromUTC>;
 
-function readNum(obj: unknown, key: string): number | null {
-  if (!obj || typeof obj !== "object") return null;
-  const rec = obj as Record<string, unknown>;
-  const v = rec[key];
-  return typeof v === "number" && Number.isFinite(v) ? v : null;
-}
-
-function fmt2(n: number): string {
-  const nn = Math.floor(n);
-  if (!Number.isFinite(nn)) return "00";
-  if (nn < 0) return String(nn);
-  return String(nn).padStart(2, "0");
-}
-
-function formatPulse(pulse: number): string {
-  if (!Number.isFinite(pulse)) return "—";
-  if (pulse < 0) return String(pulse);
-  if (pulse < 1_000_000) return String(pulse).padStart(6, "0");
-  return pulse.toLocaleString("en-US");
-}
-
-function modPos(n: number, d: number): number {
-  if (!Number.isFinite(n) || !Number.isFinite(d) || d === 0) return 0;
-  const r = n % d;
-  return r < 0 ? r + d : r;
-}
-
 function isInteractiveTarget(t: EventTarget | null): boolean {
   const el = t instanceof Element ? t : null;
   if (!el) return false;
@@ -138,29 +98,6 @@ function isInteractiveTarget(t: EventTarget | null): boolean {
   const ht = el as HTMLElement;
   return Boolean(ht.isContentEditable) || Boolean(el.closest("[contenteditable='true']"));
 }
-
-/* ──────────────────────────────────────────────────────────────────────────────
-   Perf hint: sets <html data-perf="low"> only on genuinely low-power conditions
-────────────────────────────────────────────────────────────────────────────── */
-(function initPerfMode(): void {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
-
-  const root = document.documentElement;
-
-  const nav = navigator as unknown as {
-    deviceMemory?: number;
-    hardwareConcurrency?: number;
-  };
-
-  const lowPower =
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ||
-    window.matchMedia?.("(prefers-reduced-transparency: reduce)")?.matches ||
-    (typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4) ||
-    (typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 4);
-
-  if (lowPower) root.dataset.perf = "low";
-  else delete root.dataset.perf;
-})();
 
 /* ──────────────────────────────────────────────────────────────────────────────
    KKS v1.0 display math (exact step)
@@ -738,7 +675,7 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
 /* ──────────────────────────────────────────────────────────────────────────────
    Routes
 ────────────────────────────────────────────────────────────────────────────── */
-function KaiVohRoute(): React.JSX.Element {
+export function KaiVohRoute(): React.JSX.Element {
   const navigate = useNavigate();
   const [open, setOpen] = useState<boolean>(true);
 
@@ -757,7 +694,7 @@ function KaiVohRoute(): React.JSX.Element {
   );
 }
 
-function SigilMintRoute(): React.JSX.Element {
+export function SigilMintRoute(): React.JSX.Element {
   const navigate = useNavigate();
   const [open, setOpen] = useState<boolean>(true);
 
@@ -778,7 +715,7 @@ function SigilMintRoute(): React.JSX.Element {
   );
 }
 
-function ExplorerRoute(): React.JSX.Element {
+export function ExplorerRoute(): React.JSX.Element {
   const navigate = useNavigate();
   const [open, setOpen] = useState<boolean>(true);
 
@@ -800,7 +737,7 @@ function ExplorerRoute(): React.JSX.Element {
   );
 }
 
-function KlockRoute(): React.JSX.Element {
+export function KlockRoute(): React.JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState<boolean>(true);
@@ -970,11 +907,12 @@ function LiveKaiButton({
 /* ──────────────────────────────────────────────────────────────────────────────
    AppChrome
 ────────────────────────────────────────────────────────────────────────────── */
-function AppChrome(): React.JSX.Element {
+export function AppChrome(): React.JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
 
   useDisableZoom();
+  usePerfMode();
 
   const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
   const BREATH_MS = useMemo(() => BREATH_S * 1000, [BREATH_S]);
@@ -1345,10 +1283,10 @@ function AppChrome(): React.JSX.Element {
                       href="https://github.com/phinetwork/phi.network"
                       target="_blank"
                       rel="noreferrer"
-                      aria-label="Version 29.0.5 (opens GitHub)"
+                      aria-label="Version 29.3 (opens GitHub)"
                       title="Open GitHub"
                     >
-                      29.0.5
+                      29.3
                     </a>
                   </div>
                 </footer>
@@ -1361,7 +1299,7 @@ function AppChrome(): React.JSX.Element {
   );
 }
 
-function NotFound(): React.JSX.Element {
+export function NotFound(): React.JSX.Element {
   return (
     <div className="notfound" role="region" aria-label="Not found">
       <div className="notfound__code">404</div>
@@ -1378,35 +1316,4 @@ function NotFound(): React.JSX.Element {
   );
 }
 
-export default function App(): React.JSX.Element {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="s" element={<SigilPage />} />
-        <Route path="s/:hash" element={<SigilPage />} />
-
-        <Route path="stream" element={<SigilFeedPage />} />
-        <Route path="stream/p/:token" element={<SigilFeedPage />} />
-        <Route path="stream/c/:token" element={<SigilFeedPage />} />
-        <Route path="feed" element={<SigilFeedPage />} />
-        <Route path="feed/p/:token" element={<SigilFeedPage />} />
-        <Route path="p~:token" element={<SigilFeedPage />} />
-        <Route path="p~:token/*" element={<PShort />} />
-        <Route path="token" element={<SigilFeedPage />} />
-        <Route path="p~token" element={<SigilFeedPage />} />
-        <Route path="p" element={<PShort />} />
-        <Route path="verify/*" element={<VerifyPage />} />
-
-        <Route element={<AppChrome />}>
-          <Route index element={<VerifierStamper />} />
-          <Route path="mint" element={<SigilMintRoute />} />
-          <Route path="voh" element={<KaiVohRoute />} />
-          <Route path="explorer" element={<ExplorerRoute />} />
-          <Route path="klock" element={<KlockRoute />} />
-          <Route path="klok" element={<KlockRoute />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
-  );
-}
+export default AppChrome;

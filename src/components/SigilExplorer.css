@@ -1,5 +1,6 @@
 /* src/pages/SigilExplorer.css
    Kairos Keystream Explorer — KRYSTAL ETCH v3 (Atlantean Glass)
+   ✅ Mobile scroll fix: viewport is HARD-LOCKED to .sigil-explorer; ONLY .explorer-scroll scrolls.
    - Per-node chakra tint (root/sacral/solar/heart/throat/thirdEye/crown)
    - Etched refraction + caustic drift + micro-noise overlay
    - Breath motion (φ cadence) with reduced-motion compliance
@@ -8,9 +9,41 @@
 */
 
 /* ─────────────────────────────────────────────────────────────
+   MOBILE BODY-SCROLL LOCK (scoped via :has)
+   (extra safety on iOS/Android browsers that still try to scroll the page)
+   ───────────────────────────────────────────────────────────── */
+@supports selector(:has(*)){
+  html:has(.sigil-explorer),
+  body:has(.sigil-explorer){
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
    ROOT / THEME TOKENS (scoped)
    ───────────────────────────────────────────────────────────── */
 .sigil-explorer{
+  /* HARD viewport lock (prevents page scroll on mobile) */
+  position: fixed;
+  
+  inset: 0;
+  width: 100%;
+  height: 100vh;   /* fallback */
+  height: 100svh;  /* stable “small viewport” on mobile */
+  overflow: hidden;
+  overscroll-behavior: none;
+
+  /* IMPORTANT: ensure the scroll child can actually shrink */
+  min-height: 0;
+  min-width: 0;
+
+  /* Grid: header + scroll area. minmax(0,1fr) is the mobile scroll fix. */
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+
   /* Ink */
   --sx-text: #ecffff;
   --sx-text-dim: #a9f6ee;
@@ -74,22 +107,12 @@
     radial-gradient(900px 700px at 90% 80%, rgba(183, 163, 255, 0.12), transparent 60%),
     linear-gradient(180deg, var(--sx-bg-tint-top), var(--sx-bg-tint-bot));
 
-  /* Viewport stability across mobile bars */
-  min-height: 100vh;   /* baseline fallback */
-  min-height: 100svh;  /* stable “small viewport” on mobile */
-
-  width: 100%;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  overflow: hidden;
-  position: relative;
-
   /* compositor stability */
   isolation: isolate;
 }
 
-@supports (min-height: 100dvh){
-  .sigil-explorer{ min-height: 100dvh; }
+@supports (height: 100dvh){
+  .sigil-explorer{ height: 100dvh; }
 }
 
 .sigil-explorer *{ box-sizing: border-box; }
@@ -100,11 +123,12 @@
 
 /* ─────────────────────────────────────────────────────────────
    GLOBAL KRYSTAL OVERLAY (etched + caustic drift)
+   NOTE: absolute (not fixed) to avoid mobile body scroll / flicker paths.
    ───────────────────────────────────────────────────────────── */
 .sigil-explorer::before,
 .sigil-explorer::after{
   content:"";
-  position: fixed;
+  position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 0;
@@ -135,7 +159,6 @@
     );
   mix-blend-mode: overlay;
   opacity: .35;
-
   will-change: opacity;
 }
 
@@ -148,7 +171,6 @@
   filter: blur(10px) saturate(1.05);
   opacity: .55;
   animation: sx-aurora var(--sx-breath) ease-in-out infinite;
-
   will-change: transform, opacity, filter;
 }
 
@@ -159,11 +181,10 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   STICKY TOOLBAR
+   TOOLBAR (stays visible because ONLY the content pane scrolls)
    ───────────────────────────────────────────────────────────── */
 .kx-toolbar{
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 10;
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   backdrop-filter: blur(14px) saturate(140%);
@@ -412,15 +433,21 @@
 .kx-pill.subtle{ opacity: 0.88; }
 
 /* ─────────────────────────────────────────────────────────────
-   SCROLL VIEWPORT
+   SCROLL VIEWPORT (ONLY SCROLLER)
    ───────────────────────────────────────────────────────────── */
 .explorer-scroll{
+  /* CRITICAL: allow the grid row to constrain this element */
+  min-height: 0;
+  min-width: 0;
+
   overflow: auto;
   padding: var(--sx-pad);
+  padding-bottom: max(var(--sx-pad), env(safe-area-inset-bottom, 0px));
   display: grid;
   gap: 14px;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
+  overscroll-behavior: contain;
+  touch-action: pan-y pinch-zoom;
   scroll-behavior: smooth;
 
   scrollbar-gutter: stable both-edges;
@@ -432,6 +459,7 @@
   width: 100%;
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -456,25 +484,28 @@
    ───────────────────────────────────────────────────────────── */
 .forest{ display: grid; gap: 14px; }
 
+/* ─────────────────────────────────────────────────────────────
+   ORIGIN CONTAINER (chakra-tinted, etched, breathing)
+   ───────────────────────────────────────────────────────────── */
 .origin{
-  --sx-chakra: var(--sx-chakra);
+  border-radius: var(--sx-radius-md);
   border: 1px solid rgba(255,255,255,0.16);
-  border-radius: var(--sx-radius);
   background:
     radial-gradient(120% 180% at 0% 0%, color-mix(in oklab, var(--sx-chakra) 18%, transparent), transparent 60%),
-    radial-gradient(120% 180% at 100% 100%, color-mix(in oklab, var(--sx-chakra) 10%, transparent), transparent 62%),
+    radial-gradient(120% 180% at 100% 100%, color-mix(in oklab, var(--sx-chakra) 12%, transparent), transparent 62%),
     linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
-  backdrop-filter: blur(18px) saturate(170%);
-  box-shadow: var(--sx-shadow-card);
-  overflow: clip;
+  box-shadow:
+    0 16px 42px rgba(0,0,0,0.58),
+    inset 0 1px 0 rgba(255,255,255,0  
+,0.06);
   position: relative;
-  animation: sx-card-breathe var(--sx-breath) ease-in-out infinite;
-
+  overflow: hidden;
+  animation: sx-origin-breathe var(--sx-breath) ease-in-out infinite;     
   transform: translateZ(0);
   -webkit-transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  will-change: transform, filter;
 }
 
 @supports not (overflow: clip){
@@ -603,7 +634,6 @@
   padding: 8px 9px 10px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-
   scrollbar-gutter: stable both-edges;
 }
 
@@ -618,7 +648,6 @@
 }
 
 .node{
-  /* per-node chakra tint injected by TS via style: --sx-chakra */
   border-radius: var(--sx-radius-sm);
   border: 1px solid rgba(255,255,255,0.16);
   background:
@@ -957,7 +986,6 @@
 
 /* ─────────────────────────────────────────────────────────────
    TRANSFER READY UI (Φ send/receive/status rows)
-   - safe if unused (only applies when these classes exist in markup)
    ───────────────────────────────────────────────────────────── */
 .tx{
   display: grid;
@@ -1209,7 +1237,6 @@
 
 /* ─────────────────────────────────────────────────────────────
    ANDROID / WEBVIEW COLOR-MIX FALLBACK
-   (keeps chakra tint + rails even when color-mix is unsupported)
    ───────────────────────────────────────────────────────────── */
 @supports not (background: color-mix(in oklab, white 50%, transparent)){
   .origin{
@@ -1283,16 +1310,9 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   DUCKDUCKGO / ANDROID WEBVIEW FLICKER PATCH
-   Goal: zero visual change, compositor stability in coarse-pointer browsers.
+   COARSE-POINTER WEBVIEW STABILITY PATCH (no visual change)
    ───────────────────────────────────────────────────────────── */
 @media (hover: none) and (pointer: coarse){
-  /* overlays: avoid fixed-position flicker path on some WebViews */
-  .sigil-explorer::before,
-  .sigil-explorer::after{
-    position: absolute;
-  }
-
   .sigil-explorer::after,
   .sigil-explorer::before,
   .kx-toolbar,
@@ -1311,4 +1331,120 @@
   .node{
     outline: 1px solid transparent; /* prevents 1px seam flashes */
   }
+}
+
+
+
+/* ─────────────────────────────────────────────────────────────
+   TOOLBAR — ULTRA COMPACT HEIGHT PATCH (same layout, tighter)
+   Paste at END of file (replaces previous compact patch)
+   ───────────────────────────────────────────────────────────── */
+
+.kx-toolbar-inner{
+  padding: clamp(6px, 1.9vw, 11px);
+  gap: 8px;
+}
+
+.kx-brand{ gap: 8px; }
+
+.kx-glyph{
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.kx-title{ gap: 3px; }
+.kx-title h1{
+  line-height: 1.04;
+  margin: 0;
+}
+
+.kx-tagline{
+  font-size: 11px;
+  opacity: 0.88;
+}
+
+.kx-controls{ gap: 7px; }
+.kx-add-form{ gap: 5px; }
+
+.kx-input{
+  padding: 8px 10px;
+  border-radius: 11px;
+  font-size: 12.5px;
+}
+
+.kx-button{
+  padding: 8px 12px;
+  border-radius: 11px;
+  font-size: 12px;
+}
+
+.kx-import,
+.kx-export{
+  padding: 7px 10px;
+  border-radius: 11px;
+  font-size: 11.5px;
+}
+
+.kx-stats{ gap: 5px; }
+.kx-pill{
+  padding: 4px 8px;
+  font-size: 10.5px;
+}
+
+/* Ultra-tight on very small phones */
+@media (max-width: 420px){
+  .kx-toolbar-inner{ padding: 6px; gap: 7px; }
+  .kx-glyph{ width: 28px; height: 28px; }
+  .kx-input{ padding: 7px 9px; }
+  .kx-button{ padding: 7px 11px; }
+  .kx-import,
+  .kx-export{ padding: 6px 9px; }
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   TOOLBAR — KEYS INLINE + CLOSE BUTTON NUDGE
+   Paste at END of file (after the ultra-compact patch)
+   ───────────────────────────────────────────────────────────── */
+
+/* On phones: put KEYS pill on the SAME row as Inhale/Exhale */
+@media (max-width: 679px){
+  .kx-controls{
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 7px;
+  }
+
+  /* keep the input + big INHALE spanning full width */
+  .kx-add-form{
+    grid-column: 1 / -1;
+  }
+
+  /* inhale/exhale (import/export) on left */
+  .kx-io{
+    grid-column: 1;
+    justify-content: start;
+  }
+
+  /* KEYS pill on right, vertically centered */
+  .kx-stats{
+    grid-column: 2;
+    justify-content: flex-end;
+    align-self: center;
+    margin: 0;
+  }
+}
+
+/* Nudge the X (close) button up slightly (safe multi-selector) */
+.kx-toolbar :where(.kx-close, .kx-dismiss, .kx-x, .close, .close-btn, .toolbar-close){
+  transform: translate3d(0, -2px, 0);
+  will-change: transform;
+}
+
+/* If it’s just a button with an aria-label/title, catch that too */
+.kx-toolbar :where(button[aria-label="Close"], button[title="Close"], button[aria-label="close"], button[title="close"]){
+  transform: translate3d(0, -2px, 0);
+  will-change: transform;
 }
