@@ -177,7 +177,9 @@ function normalizeToken(raw: string): string {
 }
 
 function looksLikeToken(s: string): boolean {
-  return /^[A-Za-z0-9_-]{16,}$/.test(s);
+  // Accept direct tokens AND legacy payload refs prefixed with j:/c:
+  const core = s.startsWith("j:") || s.startsWith("c:") ? s.slice(2) : s;
+  return /^[A-Za-z0-9_-]{16,}$/.test(core);
 }
 
 function normalizeBase64(input: string): string {
