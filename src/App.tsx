@@ -939,7 +939,7 @@ export function AppChrome(): React.JSX.Element {
     () => [
       { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
       { to: "/mint", label: "Mint ΦKey", desc: "Breath-mint artifact" },
-      { to: "/voh", label: "KaiVoh", desc: "Emission OS" },
+      { to: "/voh", label: "KaiVoh", desc: "Memory OS" },
       { to: "/keystream", label: "ΦStream", desc: "Live keystream" },
     ],
     [],
@@ -1283,10 +1283,10 @@ export function AppChrome(): React.JSX.Element {
                       href="https://github.com/phinetwork/phi.network"
                       target="_blank"
                       rel="noreferrer"
-                      aria-label="Version 29.3.2 (opens GitHub)"
+                      aria-label="Version 29.3.3 (opens GitHub)"
                       title="Open GitHub"
                     >
-                      29.3.2
+                      29.3.3
                     </a>
                   </div>
                 </footer>
