@@ -484,6 +484,11 @@
 .forest{ display: grid; gap: 14px; }
 
 .origin{
+  /* Prevent massive offscreen trees from triggering mobile tab reloads. */
+  content-visibility: auto;
+  contain: layout paint style;
+  contain-intrinsic-size: 1200px auto;
+
   border: 1px solid rgba(255,255,255,0.16);
   border-radius: var(--sx-radius);
   background:
