@@ -2546,12 +2546,6 @@ useEffect(() => {
 
       <div className="sp-viewport" aria-hidden={false}>
         <section className="sp-shell" data-center>
-          <nav className="sp-topnav" aria-label="Back navigation">
-            <Link className="btn-ghost sp-back" to="/explorer">
-              ← Back to Explorer
-            </Link>
-          </nav>
-
           <SigilHeader
             glyphAuth={glyphAuth}
             linkStatus={linkStatus}

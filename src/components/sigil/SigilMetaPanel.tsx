@@ -1,5 +1,6 @@
 // src/components/sigil/SigilMetaPanel.tsx
 import type * as React from "react";
+import { Link } from "react-router-dom";
 import { chakraDayToLabel, type SigilPayload } from "../../types/sigil";
 
 type PressHandlers = {
@@ -165,6 +166,9 @@ export default function SigilMetaPanel({
           <button className="btn-ghost" {...sharePress} aria-label="Share">
             Share
           </button>
+          <Link className="btn-ghost" to="/explorer">
+            Keystream
+          </Link>
         </div>
       </div>
 
