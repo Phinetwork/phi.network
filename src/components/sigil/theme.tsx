@@ -1,32 +1,32 @@
 // src/components/sigil/theme.ts
 export const CHAKRA_THEME = {
   Root: {
-    hue: 0,
-    accent: "#CC3F3F", // Darker red — grounding, blood, Earth core
+    hue: 190,
+    accent: "#33F6FF", // Glacial cyan — grounding via pure Kai current
   },
   Sacral: {
-    hue: 24,
-    accent: "#E86428", // Embodied fire, creative flow, womb of life
+    hue: 165,
+    accent: "#26FFC4", // Aurora teal — creative flow without heat
   },
   "Solar Plexus": {
-    hue: 48,
-    accent: "#E6B844", // Solar will, lion fire, sacred radiance
+    hue: 195,
+    accent: "#7BE2FF", // Ice halo — luminous will without amber
   },
   Heart: {
     hue: 140,
-    accent: "#2CCB99", // Living emerald, breath of coherence
+    accent: "#26FFC4", // Living emerald, breath of coherence (Atlantean glass)
   },
   Throat: {
     hue: 190,
-    accent: "#00D5AA", // Aqua truth, harmonic expression
+    accent: "#33F6FF", // Aqua truth, harmonic expression
   },
   "Third Eye": {
     hue: 260,
-    accent: "#6B4AC0", // Violet indigo, deep inner vision
+    accent: "#9B5BFF", // Violet indigo, deep inner vision
   },
   Crown: {
     hue: 300,
-    accent: "#C25AA4", // Amethyst gate, spiral of return
+    accent: "#C18BFF", // Amethyst gate, spiral of return
   },
 } as const;
 
