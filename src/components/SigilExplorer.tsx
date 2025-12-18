@@ -1,5 +1,5 @@
 // src/pages/SigilExplorer.tsx
-// v3.10.6 — LAH-MAH-TOR Breath Sync (Parent-First /s Branching) ✨
+// v3.10.7 — LAH-MAH-TOR Breath Sync (Mobile Scroll Stability Hardening) ✨
 //
 // CORE TRUTH (production behavior):
 // ✅ On OPEN: push (inhale) everything you have → API, then pull (exhale) anything new ← API
@@ -20,14 +20,24 @@
 // ✅ Probe runs only in idle time + never while user is actively scrolling
 // ✅ Stronger SSR/host canonicalization safety (no accidental host rewrites)
 // ✅ Hook ordering + refs cleaned (prevents subtle StrictMode/HMR weirdness)
+//
+// NEW (v3.10.7 — mobile scroll stability hardening):
+// ✅ ZERO “refresh feel” while reading: UI bumps (registry re-render + reorder) are DEFERRED during active scrolling/toggling
+// ✅ Sync work is SKIPPED while scrolling (prevents heavy mid-scroll diff + Chrome/iOS jank)
+// ✅ Toggle anchor preserved (opening nested replies never snaps / jumps the scroll container)
+// ✅ Pull-to-refresh / overscroll bounce guarded inside the scroll container (best-effort, mobile-safe)
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FeedPostPayload } from "../utils/feedPayload";
-import {
-  extractPayloadFromUrl,
-  resolveLineageBackwards,
-  getOriginUrl,
-} from "../utils/sigilUrl";
+import { extractPayloadFromUrl, resolveLineageBackwards, getOriginUrl } from "../utils/sigilUrl";
 import type { SigilSharePayloadLoose } from "../utils/sigilUrl";
 import { normalizeClaimGlyphRef, normalizeUsername } from "../utils/usernameClaim";
 import {
@@ -38,8 +48,6 @@ import {
 } from "../utils/usernameClaimRegistry";
 import { USERNAME_CLAIM_KIND, type UsernameClaimPayload } from "../types/usernameClaim";
 import "./SigilExplorer.css";
-
-
 
 /* ─────────────────────────────────────────────────────────────────────
    Live base (API + canonical sync target)
@@ -109,14 +117,7 @@ type ApiInhaleResponse = {
 /* ─────────────────────────────────────────────────────────────────────
  *  Chakra tint system (per node)
  *  ───────────────────────────────────────────────────────────────────── */
-type ChakraKey =
-  | "root"
-  | "sacral"
-  | "solar"
-  | "heart"
-  | "throat"
-  | "thirdEye"
-  | "crown";
+type ChakraKey = "root" | "sacral" | "solar" | "heart" | "throat" | "thirdEye" | "crown";
 
 const CHAKRA_COLORS: Record<ChakraKey, string> = {
   root: "#ff3b3b",
@@ -135,14 +136,11 @@ function normalizeChakraKey(v: unknown): ChakraKey | null {
 
   if (raw.includes("root")) return "root";
   if (raw.includes("sacral")) return "sacral";
-  if (raw.includes("solar") || raw.includes("plexus") || raw.includes("sun"))
-    return "solar";
+  if (raw.includes("solar") || raw.includes("plexus") || raw.includes("sun")) return "solar";
   if (raw.includes("heart")) return "heart";
   if (raw.includes("throat")) return "throat";
-  if (raw.includes("third") || raw.includes("eye") || raw.includes("indigo"))
-    return "thirdEye";
-  if (raw.includes("crown") || raw.includes("krown") || raw.includes("violet"))
-    return "crown";
+  if (raw.includes("third") || raw.includes("eye") || raw.includes("indigo")) return "thirdEye";
+  if (raw.includes("crown") || raw.includes("krown") || raw.includes("violet")) return "crown";
 
   if (raw === "1") return "root";
   if (raw === "2") return "sacral";
@@ -199,6 +197,23 @@ const URL_PROBE_TIMEOUT_MS = 2200;
 
 /** SSR fallback only (no host rewriting). */
 const VIEW_BASE_FALLBACK = "https://phi.network";
+
+/** UI stability windows (mobile). */
+const UI_SCROLL_INTERACT_MS = 520; // “reading” window after scroll events
+const UI_TOGGLE_INTERACT_MS = 900; // “reading” window after expanding/collapsing
+const UI_FLUSH_PAD_MS = 80; // padding before applying deferred bumps
+
+function nowMs(): number {
+  return Date.now();
+}
+
+function cssEscape(v: string): string {
+  if (!hasWindow) return v;
+  const w = window as unknown as { CSS?: { escape?: (s: string) => string } };
+  if (typeof w.CSS?.escape === "function") return w.CSS.escape(v);
+  // best-effort escape for attribute selectors
+  return v.replace(/[^a-zA-Z0-9_-]/gu, (m) => `\\${m}`);
+}
 
 /* ─────────────────────────────────────────────────────────────────────
  *  LAH-MAH-TOR API (Primary + IKANN Failover)
@@ -288,10 +303,7 @@ async function apiFetchWithFailover(
 async function apiFetchJsonWithFailover<T>(
   makeUrl: (base: string) => string,
   init?: RequestInit,
-): Promise<
-  | { ok: true; value: T; status: number }
-  | { ok: false; status: number }
-> {
+): Promise<{ ok: true; value: T; status: number } | { ok: false; status: number }> {
   const res = await apiFetchWithFailover(makeUrl, init);
   if (!res) return { ok: false, status: 0 };
   if (!res.ok) return { ok: false, status: res.status };
@@ -471,9 +483,7 @@ function explorerOpenUrl(raw: string): string {
     return `${origin}${u.pathname}${u.search}${u.hash}`;
   } catch {
     const m = safe.match(/^(?:https?:\/\/[^/]+)?(\/.*)$/i);
-    const rel = (m?.[1] ?? safe).startsWith("/")
-      ? (m?.[1] ?? safe)
-      : `/${m?.[1] ?? safe}`;
+    const rel = (m?.[1] ?? safe).startsWith("/") ? (m?.[1] ?? safe) : `/${m?.[1] ?? safe}`;
     return `${origin}${rel}`;
   }
 }
@@ -571,12 +581,7 @@ function isCanonicalHost(host: string): boolean {
   const backupHost = new URL(LIVE_BACKUP_URL).host;
   const viewHost = new URL(viewBaseOrigin()).host;
   const fallbackHost = new URL(VIEW_BASE_FALLBACK).host;
-  return (
-    host === liveHost ||
-    host === backupHost ||
-    host === viewHost ||
-    host === fallbackHost
-  );
+  return host === liveHost || host === backupHost || host === viewHost || host === fallbackHost;
 }
 
 async function probeUrl(u: string): Promise<"ok" | "bad" | "unknown"> {
@@ -859,10 +864,7 @@ function deriveWitnessContext(url: string): WitnessCtx {
   };
 }
 
-function mergeDerivedContext(
-  payload: SigilSharePayloadLoose,
-  ctx: WitnessCtx,
-): SigilSharePayloadLoose {
+function mergeDerivedContext(payload: SigilSharePayloadLoose, ctx: WitnessCtx): SigilSharePayloadLoose {
   const next: SigilSharePayloadLoose = { ...payload };
   if (ctx.originUrl && !next.originUrl) next.originUrl = ctx.originUrl;
   if (ctx.parentUrl && !next.parentUrl) next.parentUrl = ctx.parentUrl;
@@ -873,8 +875,7 @@ function mergeDerivedContext(
  *  Global in-memory registry (URL → payload)
  *  ───────────────────────────────────────────────────────────────────── */
 const memoryRegistry: Registry = new Map();
-const channel =
-  hasWindow && "BroadcastChannel" in window ? new BroadcastChannel(BC_NAME) : null;
+const channel = hasWindow && "BroadcastChannel" in window ? new BroadcastChannel(BC_NAME) : null;
 
 /** Extract Φ sent from a payload (tolerant to field names). */
 function getPhiFromPayload(payload: SigilSharePayloadLoose): number | undefined {
@@ -915,10 +916,7 @@ function persistRegistryToStorage(): void {
 }
 
 /** Upsert a payload into registry; returns true if materially changed. */
-function upsertRegistryPayload(
-  url: string,
-  payload: SigilSharePayloadLoose,
-): boolean {
+function upsertRegistryPayload(url: string, payload: SigilSharePayloadLoose): boolean {
   const key = canonicalizeUrl(url);
 
   ingestUsernameClaimEvidence(key, payload);
@@ -958,10 +956,8 @@ function ingestUsernameClaimEvidence(url: string, payload: SigilSharePayloadLoos
 
   const normalizedFromClaim = claimEvidence
     ? normalizeUsername(
-        (claimEvidence as { payload?: { normalized?: string; username?: string } }).payload
-          ?.normalized ||
-          (claimEvidence as { payload?: { normalized?: string; username?: string } }).payload
-            ?.username ||
+        (claimEvidence as { payload?: { normalized?: string; username?: string } }).payload?.normalized ||
+          (claimEvidence as { payload?: { normalized?: string; username?: string } }).payload?.username ||
           "",
       )
     : "";
@@ -977,9 +973,7 @@ function ingestUsernameClaimEvidence(url: string, payload: SigilSharePayloadLoos
 
   if (!claimHash || !claimUrl) return;
 
-  const payloadObj = (claimEvidence as { payload?: unknown }).payload as
-    | UsernameClaimPayload
-    | undefined;
+  const payloadObj = (claimEvidence as { payload?: unknown }).payload as UsernameClaimPayload | undefined;
 
   if (!payloadObj || payloadObj.kind !== USERNAME_CLAIM_KIND) return;
 
@@ -988,8 +982,7 @@ function ingestUsernameClaimEvidence(url: string, payload: SigilSharePayloadLoos
 
   if (normalizedPayloadUser !== normalizedUsername) return;
 
-  const ownerHint =
-    (claimEvidence as { ownerHint?: string | null }).ownerHint ?? payloadObj.ownerHint ?? null;
+  const ownerHint = (claimEvidence as { ownerHint?: string | null }).ownerHint ?? payloadObj.ownerHint ?? null;
 
   ingestUsernameClaimGlyph({
     hash: claimHash,
@@ -1010,10 +1003,7 @@ function ensureUrlInRegistry(url: string): boolean {
   return upsertRegistryPayload(abs, merged);
 }
 
-function synthesizeEdgesFromWitnessChain(
-  chain: readonly string[],
-  leafUrl: string,
-): boolean {
+function synthesizeEdgesFromWitnessChain(chain: readonly string[], leafUrl: string): boolean {
   if (chain.length === 0) return false;
 
   const origin = canonicalizeUrl(chain[0]);
@@ -1050,8 +1040,7 @@ function synthesizeEdgesFromWitnessChain(
   if (leafPayload) {
     const next: SigilSharePayloadLoose = { ...leafPayload };
     if (!next.originUrl) next.originUrl = origin;
-    if (!next.parentUrl)
-      next.parentUrl = canonicalizeUrl(chain[chain.length - 1]);
+    if (!next.parentUrl) next.parentUrl = canonicalizeUrl(chain[chain.length - 1]);
     changed = upsertRegistryPayload(leafAbs, next) || changed;
   }
 
@@ -1190,10 +1179,7 @@ async function flushInhaleQueue(): Promise<void> {
       }, 10);
     }
   } catch {
-    inhaleRetryMs = Math.min(
-      inhaleRetryMs ? inhaleRetryMs * 2 : INHALE_RETRY_BASE_MS,
-      INHALE_RETRY_MAX_MS,
-    );
+    inhaleRetryMs = Math.min(inhaleRetryMs ? inhaleRetryMs * 2 : INHALE_RETRY_BASE_MS, INHALE_RETRY_MAX_MS);
     inhaleFlushTimer = window.setTimeout(() => {
       inhaleFlushTimer = null;
       void flushInhaleQueue();
@@ -1265,10 +1251,7 @@ function addUrl(url: string, opts?: AddOptions): boolean {
 /* ─────────────────────────────────────────────────────────────────────
  *  Import JSON (urls + optional krystals)
  *  ───────────────────────────────────────────────────────────────────── */
-function parseImportedJson(value: unknown): {
-  urls: string[];
-  rawKrystals: Record<string, unknown>[];
-} {
+function parseImportedJson(value: unknown): { urls: string[]; rawKrystals: Record<string, unknown>[] } {
   const urls: string[] = [];
   const rawKrystals: Record<string, unknown>[] = [];
 
@@ -1473,10 +1456,7 @@ function buildContentIndex(reg: Registry): Map<string, ContentEntry> {
     const pm = prev.momentKey;
     const nm = mkey;
     if (pm.startsWith("u:") && !nm.startsWith("u:")) prev.momentKey = nm;
-    if (
-      pm.startsWith("h:") &&
-      (nm.startsWith("k:") || nm.startsWith("sig:") || nm.startsWith("tok:"))
-    ) {
+    if (pm.startsWith("h:") && (nm.startsWith("k:") || nm.startsWith("sig:") || nm.startsWith("tok:"))) {
       prev.momentKey = nm;
     }
   }
@@ -1518,9 +1498,7 @@ function buildContentIndex(reg: Registry): Map<string, ContentEntry> {
   const momentParentByUrl = new Map<string, string>();
 
   for (const [mk, ids] of momentGroups) {
-    const candidates = ids
-      .map((id) => entries.get(id))
-      .filter(Boolean) as EntryPre[];
+    const candidates = ids.map((id) => entries.get(id)).filter(Boolean) as EntryPre[];
 
     const postParents = candidates.filter((c) => c.kind === "post");
     let parent: EntryPre | undefined;
@@ -1528,19 +1506,11 @@ function buildContentIndex(reg: Registry): Map<string, ContentEntry> {
     if (postParents.length > 0) {
       parent = postParents
         .slice()
-        .sort(
-          (a, b) =>
-            scoreUrlForView(b.primaryUrl, "post") -
-            scoreUrlForView(a.primaryUrl, "post"),
-        )[0];
+        .sort((a, b) => scoreUrlForView(b.primaryUrl, "post") - scoreUrlForView(a.primaryUrl, "post"))[0];
     } else {
       parent = candidates
         .slice()
-        .sort(
-          (a, b) =>
-            scoreUrlForView(b.primaryUrl, b.kind) -
-            scoreUrlForView(a.primaryUrl, a.kind),
-        )[0];
+        .sort((a, b) => scoreUrlForView(b.primaryUrl, b.kind) - scoreUrlForView(a.primaryUrl, a.kind))[0];
     }
 
     const parentId = parent?.id ?? ids[0]!;
@@ -1561,15 +1531,11 @@ function buildContentIndex(reg: Registry): Map<string, ContentEntry> {
     if (e.id !== mp) continue;
 
     const originUrlRaw = readStringField(e.payload as unknown, "originUrl");
-    const originUrl =
-      originUrlRaw
-        ? canonicalizeUrl(originUrlRaw)
-        : (getOriginUrl(e.primaryUrl) ?? e.primaryUrl);
+    const originUrl = originUrlRaw ? canonicalizeUrl(originUrlRaw) : getOriginUrl(e.primaryUrl) ?? e.primaryUrl;
 
     const originAnyId = urlToContentId.get(originUrl);
     const originMomentParent =
-      momentParentByUrl.get(originUrl) ??
-      (originAnyId ? momentParentById.get(originAnyId) : undefined);
+      momentParentByUrl.get(originUrl) ?? (originAnyId ? momentParentById.get(originAnyId) : undefined);
 
     momentOriginByParent.set(mp, originMomentParent ?? mp);
   }
@@ -1590,8 +1556,7 @@ function buildContentIndex(reg: Registry): Map<string, ContentEntry> {
         const parentUrl = canonicalizeUrl(parentUrlRaw);
         const parentAnyId = urlToContentId.get(parentUrl);
         const parentMomentParent =
-          momentParentByUrl.get(parentUrl) ??
-          (parentAnyId ? momentParentById.get(parentAnyId) : undefined);
+          momentParentByUrl.get(parentUrl) ?? (parentAnyId ? momentParentById.get(parentAnyId) : undefined);
 
         if (parentMomentParent && parentMomentParent !== e.id) parentId = parentMomentParent;
       }
@@ -1623,11 +1588,7 @@ function contentChildrenOf(parentId: string, idx: Map<string, ContentEntry>): st
   return out;
 }
 
-function buildContentTree(
-  rootId: string,
-  idx: Map<string, ContentEntry>,
-  seen = new Set<string>(),
-): SigilNode | null {
+function buildContentTree(rootId: string, idx: Map<string, ContentEntry>, seen = new Set<string>()): SigilNode | null {
   const e = idx.get(rootId);
   if (!e) return null;
 
@@ -1701,10 +1662,7 @@ function buildForest(reg: Registry): SigilNode[] {
 /* ─────────────────────────────────────────────────────────────────────
  *  Memory Stream detail extraction (per content node)
  *  ───────────────────────────────────────────────────────────────────── */
-function buildDetailEntries(
-  node: SigilNode,
-  usernameClaims: UsernameClaimRegistry,
-): DetailEntry[] {
+function buildDetailEntries(node: SigilNode, usernameClaims: UsernameClaimRegistry): DetailEntry[] {
   const record = node.payload as unknown as Record<string, unknown>;
   const entries: DetailEntry[] = [];
   const usedKeys = new Set<string>();
@@ -1734,9 +1692,7 @@ function buildDetailEntries(
   if (normalizedUsername) {
     const claimEntry = usernameClaims[normalizedUsername];
     const displayName =
-      typeof authorRaw === "string" && authorRaw.trim().length > 0
-        ? authorRaw.trim()
-        : `@${normalizedUsername}`;
+      typeof authorRaw === "string" && authorRaw.trim().length > 0 ? authorRaw.trim() : `@${normalizedUsername}`;
 
     if (claimEntry) {
       entries.push({
@@ -1774,8 +1730,7 @@ function buildDetailEntries(
     usedKeys.add("originUrl");
   }
 
-  const labelCandidate =
-    record.label ?? record.title ?? record.type ?? record.note ?? record.description;
+  const labelCandidate = record.label ?? record.title ?? record.type ?? record.note ?? record.description;
   if (typeof labelCandidate === "string" && labelCandidate.trim().length > 0) {
     entries.push({ label: "Label / Type", value: labelCandidate.trim() });
   }
@@ -1806,9 +1761,7 @@ function buildDetailEntries(
 
   entries.push({ label: "Primary URL", value: browserViewUrl(node.url) });
 
-  const visibleVariants = node.urls
-    .filter((u) => !isPTildeUrl(u))
-    .map((u) => browserViewUrl(u));
+  const visibleVariants = node.urls.filter((u) => !isPTildeUrl(u)).map((u) => browserViewUrl(u));
 
   if (node.urls.length > 1) {
     entries.push({
@@ -1861,6 +1814,7 @@ async function copyText(text: string): Promise<void> {
  *  ───────────────────────────────────────────────────────────────────── */
 const Styles: React.FC = () => (
   <style>{`
+    /* glyph mark */
     .kx-glyph{
       display:flex;
       align-items:center;
@@ -1875,6 +1829,23 @@ const Styles: React.FC = () => (
       -webkit-user-drag:none;
       pointer-events:none;
       filter: drop-shadow(0 8px 22px rgba(0,0,0,.34));
+    }
+
+    /* mobile scroll stability */
+    .sigil-explorer,
+    .sigil-explorer *{
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sigil-explorer{
+      overscroll-behavior: none;
+      overscroll-behavior-y: none;
+      touch-action: pan-y;
+    }
+    .sigil-explorer .explorer-scroll{
+      overscroll-behavior: contain;
+      overscroll-behavior-y: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
     }
   `}</style>
 );
@@ -1902,13 +1873,7 @@ type SigilTreeNodeProps = {
   usernameClaims: UsernameClaimRegistry;
 };
 
-function SigilTreeNode({
-  node,
-  expanded,
-  toggle,
-  phiTotalsByPulse,
-  usernameClaims,
-}: SigilTreeNodeProps) {
+function SigilTreeNode({ node, expanded, toggle, phiTotalsByPulse, usernameClaims }: SigilTreeNodeProps) {
   const open = expanded.has(node.id);
 
   const hash = parseHashFromUrl(node.url);
@@ -1922,7 +1887,12 @@ function SigilTreeNode({
   const detailEntries = open ? buildDetailEntries(node, usernameClaims) : [];
 
   return (
-    <div className="node" style={chakraTintStyle(chakraDay)} data-chakra={String(chakraDay ?? "")}>
+    <div
+      className="node"
+      style={chakraTintStyle(chakraDay)}
+      data-chakra={String(chakraDay ?? "")}
+      data-node-id={node.id}
+    >
       <div className="node-row">
         <div className="node-main">
           <button
@@ -1936,7 +1906,13 @@ function SigilTreeNode({
             <span className={`tw ${open ? "open" : ""}`} />
           </button>
 
-          <a className="node-link" href={openHref} target="_blank" rel="noopener noreferrer" title={openHref}>
+          <a
+            className="node-link"
+            href={openHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={openHref}
+          >
             <span>{short(sig ?? hash ?? "glyph", 12)}</span>
           </a>
         </div>
@@ -2041,6 +2017,7 @@ function OriginPanel({
       aria-label="Sigil origin stream"
       style={chakraTintStyle(root.payload.chakraDay)}
       data-chakra={String(root.payload.chakraDay ?? "")}
+      data-node-id={root.id}
     >
       <header className="origin-head">
         <div className="o-meta">
@@ -2191,75 +2168,225 @@ function ExplorerToolbar({
 const SigilExplorer: React.FC = () => {
   const [registryRev, setRegistryRev] = useState(0);
   const [lastAdded, setLastAdded] = useState<string | undefined>(undefined);
-  const [usernameClaims, setUsernameClaims] = useState<UsernameClaimRegistry>(() =>
-    getUsernameClaimRegistry(),
-  );
+  const [usernameClaims, setUsernameClaims] = useState<UsernameClaimRegistry>(() => getUsernameClaimRegistry());
 
   const unmounted = useRef(false);
 
+  // Scroll safety guards (prevents “refresh feel” on mobile while reading)
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
+  const scrollingRef = useRef(false);
+  const scrollIdleTimerRef = useRef<number | null>(null);
+
+  // UI stability gate: during active scrolling/toggling, defer heavy bumps (registry re-render)
+  const interactUntilRef = useRef(0);
+  const flushTimerRef = useRef<number | null>(null);
+  const pendingBumpRef = useRef(false);
+  const pendingLastAddedRef = useRef<string | undefined>(undefined);
+  const pendingClaimEntriesRef = useRef<
+    Array<{
+      normalized: string;
+      claimHash: string;
+      claimUrl: string;
+      originHash?: string | null;
+      ownerHint?: string | null;
+    }>
+  >([]);
+
+  const markInteracting = useCallback((ms: number) => {
+    const until = nowMs() + ms;
+    if (until > interactUntilRef.current) interactUntilRef.current = until;
+  }, []);
+
+  const flushDeferredUi = useCallback(() => {
+    if (!hasWindow) return;
+    if (unmounted.current) return;
+
+    const now = nowMs();
+    const remaining = interactUntilRef.current - now;
+    if (remaining > 0) {
+      // still interacting → reschedule
+      if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = window.setTimeout(() => {
+        flushTimerRef.current = null;
+        flushDeferredUi();
+      }, remaining + UI_FLUSH_PAD_MS);
+      return;
+    }
+
+    // Apply queued username-claim updates (batched)
+    const queuedClaims = pendingClaimEntriesRef.current.splice(0);
+    if (queuedClaims.length > 0) {
+      startTransition(() => {
+        setUsernameClaims((prev) => {
+          let next = prev;
+
+          for (const entry of queuedClaims) {
+            const current = next[entry.normalized];
+            if (
+              current &&
+              current.claimHash === entry.claimHash &&
+              current.claimUrl === entry.claimUrl &&
+              current.originHash === (entry.originHash ?? current.originHash) &&
+              current.ownerHint === (entry.ownerHint ?? current.ownerHint)
+            ) {
+              continue;
+            }
+
+            next = {
+              ...next,
+              [entry.normalized]: {
+                ...current,
+                normalized: entry.normalized,
+                claimHash: entry.claimHash,
+                claimUrl: entry.claimUrl,
+                originHash: entry.originHash ?? current?.originHash,
+                ownerHint: entry.ownerHint ?? current?.ownerHint ?? null,
+              },
+            };
+          }
+
+          return next;
+        });
+      });
+    }
+
+    // Apply queued lastAdded change (if any)
+    if (pendingLastAddedRef.current !== undefined) {
+      const v = pendingLastAddedRef.current;
+      pendingLastAddedRef.current = undefined;
+      startTransition(() => setLastAdded(v));
+    }
+
+    // Apply queued bump (single)
+    if (pendingBumpRef.current) {
+      pendingBumpRef.current = false;
+      startTransition(() => setRegistryRev((v) => v + 1));
+    }
+  }, []);
+
+  const scheduleUiFlush = useCallback(() => {
+    if (!hasWindow) return;
+    if (flushTimerRef.current != null) return;
+
+    const now = nowMs();
+    const remaining = interactUntilRef.current - now;
+    const delay = Math.max(0, remaining) + UI_FLUSH_PAD_MS;
+
+    flushTimerRef.current = window.setTimeout(() => {
+      flushTimerRef.current = null;
+      flushDeferredUi();
+    }, delay);
+  }, [flushDeferredUi]);
+
+  const bump = useCallback(() => {
+    if (unmounted.current) return;
+
+    const now = nowMs();
+    if (now < interactUntilRef.current || scrollingRef.current) {
+      pendingBumpRef.current = true;
+      scheduleUiFlush();
+      return;
+    }
+
+    startTransition(() => setRegistryRev((v) => v + 1));
+  }, [scheduleUiFlush]);
+
+  const setLastAddedSafe = useCallback(
+    (v: string | undefined) => {
+      if (unmounted.current) return;
+
+      const now = nowMs();
+      if (now < interactUntilRef.current || scrollingRef.current) {
+        pendingLastAddedRef.current = v;
+        scheduleUiFlush();
+        return;
+      }
+
+      startTransition(() => setLastAdded(v));
+    },
+    [scheduleUiFlush],
+  );
+
+  // Toggle anchor preservation (prevents mobile “snap/refresh” feel when opening nested)
+  const lastToggleAnchorRef = useRef<{ id: string; scrollTop: number; rectTop: number } | null>(null);
+
+  const toggle = useCallback(
+    (id: string) => {
+      markInteracting(UI_TOGGLE_INTERACT_MS);
+
+      const el = scrollElRef.current;
+      if (el) {
+        const sel = `[data-node-id="${cssEscape(id)}"]`;
+        const nodeEl = el.querySelector(sel) as HTMLElement | null;
+
+        lastToggleAnchorRef.current = {
+          id,
+          scrollTop: el.scrollTop,
+          rectTop: nodeEl ? nodeEl.getBoundingClientRect().top : 0,
+        };
+      }
+
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+
+      scheduleUiFlush();
+    },
+    [markInteracting, scheduleUiFlush],
+  );
+
+  // Stable expand/collapse state (prevents “random refresh” feel)
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
   // Prevent browser-level pull-to-refresh / overscroll refresh while explorer is open.
-  // This is purely a scroll-behavior lock; it does not alter any of the push/pull
-  // breath-sync loops that keep the view receiving new data.
+  // Hardened: apply to html/body AND keep container guarded too.
   useEffect(() => {
     if (!hasWindow) return;
 
+    const html = document.documentElement as HTMLElement | null;
+    const body = document.body as HTMLElement | null;
     const root =
       (document.scrollingElement as HTMLElement | null) ||
       (document.documentElement as HTMLElement | null);
 
-    if (!root) return undefined;
+    const prev = {
+      htmlOverscroll: html?.style.overscrollBehavior ?? "",
+      htmlOverscrollY: html?.style.overscrollBehaviorY ?? "",
+      bodyOverscroll: body?.style.overscrollBehavior ?? "",
+      bodyOverscrollY: body?.style.overscrollBehaviorY ?? "",
+      rootOverscroll: root?.style.overscrollBehavior ?? "",
+      rootOverscrollY: root?.style.overscrollBehaviorY ?? "",
+    };
 
-    const prevOverscroll = root.style.overscrollBehavior;
-    const prevOverscrollY = root.style.overscrollBehaviorY;
-
-    root.style.overscrollBehavior = prevOverscroll || "contain";
-    root.style.overscrollBehaviorY = prevOverscrollY || "contain";
+    if (html) {
+      html.style.overscrollBehavior = "none";
+      html.style.overscrollBehaviorY = "none";
+    }
+    if (body) {
+      body.style.overscrollBehavior = "none";
+      body.style.overscrollBehaviorY = "none";
+    }
+    if (root) {
+      root.style.overscrollBehavior = "none";
+      root.style.overscrollBehaviorY = "none";
+    }
 
     return () => {
-      root.style.overscrollBehavior = prevOverscroll;
-      root.style.overscrollBehaviorY = prevOverscrollY;
-    };
-  }, []);
-
-  // Guard the scroll container against pull-to-refresh on mobile (top/bottom overdrag).
-  useEffect(() => {
-    if (!hasWindow) return;
-
-    const el = scrollElRef.current;
-    if (!el) return;
-
-    let lastY = 0;
-
-    const onTouchStart = (ev: TouchEvent) => {
-      lastY = ev.touches[0]?.clientY ?? 0;
-    };
-
-    const onTouchMove = (ev: TouchEvent) => {
-      if (ev.touches.length !== 1) return;
-
-      const y = ev.touches[0]?.clientY ?? 0;
-      const deltaY = y - lastY;
-      lastY = y;
-
-      const atTop = el.scrollTop <= 0;
-      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight;
-
-      const pullingDown = deltaY > 0;
-      const pushingUp = deltaY < 0;
-
-      if ((atTop && pullingDown) || (atBottom && pushingUp)) {
-        ev.preventDefault();
+      if (html) {
+        html.style.overscrollBehavior = prev.htmlOverscroll;
+        html.style.overscrollBehaviorY = prev.htmlOverscrollY;
       }
-    };
-
-    const opts: AddEventListenerOptions & EventListenerOptions = { passive: false };
-
-    el.addEventListener("touchstart", onTouchStart, opts);
-    el.addEventListener("touchmove", onTouchMove, opts);
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
+      if (body) {
+        body.style.overscrollBehavior = prev.bodyOverscroll;
+        body.style.overscrollBehaviorY = prev.bodyOverscrollY;
+      }
+      if (root) {
+        root.style.overscrollBehavior = prev.rootOverscroll;
+        root.style.overscrollBehaviorY = prev.rootOverscrollY;
+      }
     };
   }, []);
 
@@ -2272,76 +2399,6 @@ const SigilExplorer: React.FC = () => {
   // Full-seed guard: only repeat full seed if remote seal changed
   const lastFullSeedSealRef = useRef<string | null>(null);
 
-  // Stable expand/collapse state (prevents “random refresh” feel)
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-
-  // Scroll safety guards (prevents “refresh feel” on mobile while reading)
-  const scrollElRef = useRef<HTMLDivElement | null>(null);
-  const scrollingRef = useRef(false);
-  const scrollIdleTimerRef = useRef<number | null>(null);
-
-  const toggle = useCallback((id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const bump = useCallback(() => {
-    if (unmounted.current) return;
-    setRegistryRev((v) => v + 1);
-  }, []);
-
-  useEffect(() => {
-    return subscribeUsernameClaimRegistry((entry) => {
-      setUsernameClaims((prev) => {
-        const current = prev[entry.normalized];
-        if (
-          current &&
-          current.claimHash === entry.claimHash &&
-          current.claimUrl === entry.claimUrl &&
-          current.originHash === entry.originHash &&
-          current.ownerHint === entry.ownerHint
-        ) {
-          return prev;
-        }
-        return { ...prev, [entry.normalized]: entry };
-      });
-    });
-  }, []);
-
-  const forest = useMemo(() => buildForest(memoryRegistry), [registryRev]);
-
-  const phiTotalsByPulse = useMemo((): ReadonlyMap<number, number> => {
-    const totals = new Map<number, number>();
-    const seenByPulse = new Map<number, Set<string>>();
-
-    for (const [rawUrl, payload] of memoryRegistry) {
-      const pulse = typeof payload.pulse === "number" ? payload.pulse : undefined;
-      if (pulse == null) continue;
-
-      const url = canonicalizeUrl(rawUrl);
-      const mkey = momentKeyFor(url, payload);
-
-      let seen = seenByPulse.get(pulse);
-      if (!seen) {
-        seen = new Set<string>();
-        seenByPulse.set(pulse, seen);
-      }
-      if (seen.has(mkey)) continue;
-      seen.add(mkey);
-
-      const amt = getPhiFromPayload(payload);
-      if (amt === undefined) continue;
-
-      totals.set(pulse, (totals.get(pulse) ?? 0) + amt);
-    }
-
-    return totals;
-  }, [registryRev]);
-
   // Scroll listener (isolated; does not touch state)
   useEffect(() => {
     if (!hasWindow) return;
@@ -2351,10 +2408,14 @@ const SigilExplorer: React.FC = () => {
 
     const onScroll = () => {
       scrollingRef.current = true;
+      markInteracting(UI_SCROLL_INTERACT_MS);
+
       if (scrollIdleTimerRef.current != null) window.clearTimeout(scrollIdleTimerRef.current);
       scrollIdleTimerRef.current = window.setTimeout(() => {
         scrollingRef.current = false;
         scrollIdleTimerRef.current = null;
+        // after scroll settles, flush any deferred UI updates
+        scheduleUiFlush();
       }, 180);
     };
 
@@ -2366,42 +2427,74 @@ const SigilExplorer: React.FC = () => {
       scrollIdleTimerRef.current = null;
       scrollingRef.current = false;
     };
-  }, []);
+  }, [markInteracting, scheduleUiFlush]);
 
-  /** Opportunistically probe URL variants so “the one that loads” becomes primary. */
-  const probePrimaryCandidates = useCallback(async () => {
+  // Best-effort overscroll bounce guard inside the scroll container (mobile)
+  useEffect(() => {
     if (!hasWindow) return;
-    if (scrollingRef.current) return; // never probe while user is scrolling
-    if (!isOnline()) return; // skip probes offline (prevents noise)
 
-    const candidates: string[] = [];
+    const el = scrollElRef.current;
+    if (!el) return;
 
-    const walk = (n: SigilNode) => {
-      if (n.urls.length > 1) {
-        const prefer = contentKindForUrl(n.url);
+    let startY = 0;
+    let startX = 0;
 
-        const normalized = [...n.urls]
-          .map((u) => canonicalizeUrl(browserViewUrl(u))) // /stream/p → /stream#p
-          .filter((v, i, arr) => arr.indexOf(v) === i)
-          .sort((a, b) => scoreUrlForView(b, prefer) - scoreUrlForView(a, prefer));
-
-        for (const u of normalized.slice(0, 2)) {
-          const key = canonicalizeUrl(u);
-          if (!urlHealth.has(key) && !candidates.includes(key)) candidates.push(key);
-        }
-      }
-      n.children.forEach(walk);
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
     };
 
-    for (const r of forest) walk(r);
-    if (candidates.length === 0) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
 
-    for (const u of candidates.slice(0, URL_PROBE_MAX_PER_REFRESH)) {
-      const res = await probeUrl(u);
-      if (res === "ok") void setUrlHealth(u, 1);
-      if (res === "bad") void setUrlHealth(u, -1);
+      const y = e.touches[0].clientY;
+      const x = e.touches[0].clientX;
+      const dy = y - startY;
+      const dx = x - startX;
+
+      // Only care about vertical intent
+      if (Math.abs(dy) <= Math.abs(dx)) return;
+
+      const atTop = el.scrollTop <= 0;
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+
+      // Prevent bounce at extremes (helps avoid “refresh” gestures/jank on mobile)
+      if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+        e.preventDefault();
+      }
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
+  }, []);
+
+  // Apply toggle anchor preservation AFTER expanded changes commit to DOM
+  useLayoutEffect(() => {
+    const anchor = lastToggleAnchorRef.current;
+    if (!anchor) return;
+
+    lastToggleAnchorRef.current = null;
+
+    const el = scrollElRef.current;
+    if (!el) return;
+
+    const sel = `[data-node-id="${cssEscape(anchor.id)}"]`;
+    const nodeEl = el.querySelector(sel) as HTMLElement | null;
+    if (!nodeEl) return;
+
+    const afterTop = nodeEl.getBoundingClientRect().top;
+    const delta = afterTop - anchor.rectTop;
+
+    if (Number.isFinite(delta) && Math.abs(delta) > 1) {
+      el.scrollTop = Math.max(0, anchor.scrollTop + delta);
     }
-  }, [forest]);
+  }, [expanded]);
 
   useEffect(() => {
     unmounted.current = false;
@@ -2423,7 +2516,7 @@ const SigilExplorer: React.FC = () => {
           source: "local",
           enqueueToApi: true,
         });
-        setLastAdded(browserViewUrl(here));
+        setLastAddedSafe(browserViewUrl(here));
         if (changed) bump();
       }
     }
@@ -2439,7 +2532,7 @@ const SigilExplorer: React.FC = () => {
         enqueueToApi: true,
       });
       if (changed) {
-        setLastAdded(browserViewUrl(u));
+        setLastAddedSafe(browserViewUrl(u));
         bump();
       }
     };
@@ -2456,7 +2549,7 @@ const SigilExplorer: React.FC = () => {
           enqueueToApi: true,
         });
         if (changed) {
-          setLastAdded(browserViewUrl(u));
+          setLastAddedSafe(browserViewUrl(u));
           bump();
         }
       }
@@ -2475,7 +2568,7 @@ const SigilExplorer: React.FC = () => {
           enqueueToApi: true,
         });
         if (changed) {
-          setLastAdded(browserViewUrl(u));
+          setLastAddedSafe(browserViewUrl(u));
           bump();
         }
       }
@@ -2495,7 +2588,7 @@ const SigilExplorer: React.FC = () => {
             enqueueToApi: true,
           });
           if (changed) {
-            setLastAdded(browserViewUrl(data.url));
+            setLastAddedSafe(browserViewUrl(data.url));
             bump();
           }
         }
@@ -2525,7 +2618,7 @@ const SigilExplorer: React.FC = () => {
             }
           }
 
-          setLastAdded(undefined);
+          setLastAddedSafe(undefined);
           if (changed) {
             persistRegistryToStorage();
             bump();
@@ -2543,6 +2636,38 @@ const SigilExplorer: React.FC = () => {
     };
     window.addEventListener("pagehide", onPageHide);
 
+    // Username claim registry subscription (deferred while scrolling/toggling)
+    const unsubClaims = subscribeUsernameClaimRegistry((entry) => {
+      const now = nowMs();
+      if (now < interactUntilRef.current || scrollingRef.current) {
+        pendingClaimEntriesRef.current.push({
+          normalized: entry.normalized,
+          claimHash: entry.claimHash,
+          claimUrl: entry.claimUrl,
+          originHash: entry.originHash,
+          ownerHint: entry.ownerHint,
+        });
+        scheduleUiFlush();
+        return;
+      }
+
+      startTransition(() => {
+        setUsernameClaims((prevClaims) => {
+          const current = prevClaims[entry.normalized];
+          if (
+            current &&
+            current.claimHash === entry.claimHash &&
+            current.claimUrl === entry.claimUrl &&
+            current.originHash === entry.originHash &&
+            current.ownerHint === entry.ownerHint
+          ) {
+            return prevClaims;
+          }
+          return { ...prevClaims, [entry.normalized]: entry };
+        });
+      });
+    });
+
     // ── BREATH LOOP: inhale (push) ⇄ exhale (pull)
     const ac = new AbortController();
 
@@ -2550,6 +2675,12 @@ const SigilExplorer: React.FC = () => {
       if (unmounted.current) return;
       if (!isOnline()) return;
       if (syncInFlightRef.current) return;
+
+      // ✅ mobile stability: never sync while user is scrolling/reading
+      if (scrollingRef.current) return;
+
+      // ✅ mobile stability: avoid heavy remote import while in interaction window
+      if (nowMs() < interactUntilRef.current && reason === "pulse") return;
 
       syncInFlightRef.current = true;
 
@@ -2560,15 +2691,12 @@ const SigilExplorer: React.FC = () => {
         // (B) EXHALE — seal check
         const prevSeal = remoteSealRef.current;
 
-        const res = await apiFetchWithFailover(
-          (base) => new URL(API_SEAL_PATH, base).toString(),
-          {
-            method: "GET",
-            cache: "no-store",
-            signal: ac.signal,
-            headers: undefined,
-          },
-        );
+        const res = await apiFetchWithFailover((base) => new URL(API_SEAL_PATH, base).toString(), {
+          method: "GET",
+          cache: "no-store",
+          signal: ac.signal,
+          headers: undefined,
+        });
 
         if (!res) return;
 
@@ -2589,7 +2717,8 @@ const SigilExplorer: React.FC = () => {
         remoteSealRef.current = importedRes.remoteSeal ?? nextSeal ?? prevSeal ?? null;
 
         if (importedRes.imported > 0) {
-          setLastAdded(undefined);
+          // defer UI bumps if user is actively reading
+          setLastAddedSafe(undefined);
           bump();
         }
 
@@ -2636,12 +2765,81 @@ const SigilExplorer: React.FC = () => {
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVis);
       if (channel && onMsg) channel.removeEventListener("message", onMsg);
+      if (typeof unsubClaims === "function") unsubClaims();
+      if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
       window.clearInterval(intervalId);
       ac.abort();
       unmounted.current = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bump]);
+  }, [bump, markInteracting, scheduleUiFlush, setLastAddedSafe]);
+
+  const forest = useMemo(() => buildForest(memoryRegistry), [registryRev]);
+
+  const phiTotalsByPulse = useMemo((): ReadonlyMap<number, number> => {
+    const totals = new Map<number, number>();
+    const seenByPulse = new Map<number, Set<string>>();
+
+    for (const [rawUrl, payload] of memoryRegistry) {
+      const pulse = typeof payload.pulse === "number" ? payload.pulse : undefined;
+      if (pulse == null) continue;
+
+      const url = canonicalizeUrl(rawUrl);
+      const mkey = momentKeyFor(url, payload);
+
+      let seen = seenByPulse.get(pulse);
+      if (!seen) {
+        seen = new Set<string>();
+        seenByPulse.set(pulse, seen);
+      }
+      if (seen.has(mkey)) continue;
+      seen.add(mkey);
+
+      const amt = getPhiFromPayload(payload);
+      if (amt === undefined) continue;
+
+      totals.set(pulse, (totals.get(pulse) ?? 0) + amt);
+    }
+
+    return totals;
+  }, [registryRev]);
+
+  /** Opportunistically probe URL variants so “the one that loads” becomes primary. */
+  const probePrimaryCandidates = useCallback(async () => {
+    if (!hasWindow) return;
+    if (scrollingRef.current) return; // never probe while user is scrolling
+    if (!isOnline()) return; // skip probes offline (prevents noise)
+    if (nowMs() < interactUntilRef.current) return; // never probe during interaction window
+
+    const candidates: string[] = [];
+
+    const walk = (n: SigilNode) => {
+      if (n.urls.length > 1) {
+        const prefer = contentKindForUrl(n.url);
+
+        const normalized = [...n.urls]
+          .map((u) => canonicalizeUrl(browserViewUrl(u))) // /stream/p → /stream#p
+          .filter((v, i, arr) => arr.indexOf(v) === i)
+          .sort((a, b) => scoreUrlForView(b, prefer) - scoreUrlForView(a, prefer));
+
+        for (const u of normalized.slice(0, 2)) {
+          const key = canonicalizeUrl(u);
+          if (!urlHealth.has(key) && !candidates.includes(key)) candidates.push(key);
+        }
+      }
+      n.children.forEach(walk);
+    };
+
+    for (const r of forest) walk(r);
+    if (candidates.length === 0) return;
+
+    for (const u of candidates.slice(0, URL_PROBE_MAX_PER_REFRESH)) {
+      const res = await probeUrl(u);
+      if (res === "ok") void setUrlHealth(u, 1);
+      if (res === "bad") void setUrlHealth(u, -1);
+    }
+  }, [forest]);
 
   // After registry changes, probe a few URL candidates to improve primary URL selection.
   useEffect(() => {
@@ -2677,6 +2875,8 @@ const SigilExplorer: React.FC = () => {
 
   const handleAdd = useCallback(
     (url: string) => {
+      markInteracting(UI_TOGGLE_INTERACT_MS);
+
       const changed = addUrl(url, {
         includeAncestry: true,
         broadcast: true,
@@ -2685,16 +2885,18 @@ const SigilExplorer: React.FC = () => {
         enqueueToApi: true,
       });
       if (changed) {
-        setLastAdded(browserViewUrl(url));
+        setLastAddedSafe(browserViewUrl(url));
         bump();
       }
     },
-    [bump],
+    [bump, markInteracting, setLastAddedSafe],
   );
 
   const handleImport = useCallback(
     async (file: File) => {
       try {
+        markInteracting(UI_TOGGLE_INTERACT_MS);
+
         const text = await file.text();
         const parsed = JSON.parse(text) as unknown;
 
@@ -2716,7 +2918,7 @@ const SigilExplorer: React.FC = () => {
           }
         }
 
-        setLastAdded(undefined);
+        setLastAddedSafe(undefined);
 
         if (changed) {
           persistRegistryToStorage();
@@ -2733,7 +2935,7 @@ const SigilExplorer: React.FC = () => {
         // ignore
       }
     },
-    [bump],
+    [bump, markInteracting, setLastAddedSafe],
   );
 
   const handleExport = useCallback(() => {
@@ -2751,13 +2953,7 @@ const SigilExplorer: React.FC = () => {
     <div className="sigil-explorer">
       <Styles />
 
-      <ExplorerToolbar
-        onAdd={handleAdd}
-        onImport={handleImport}
-        onExport={handleExport}
-        total={memoryRegistry.size}
-        lastAdded={lastAdded}
-      />
+      <ExplorerToolbar onAdd={handleAdd} onImport={handleImport} onExport={handleExport} total={memoryRegistry.size} lastAdded={lastAdded} />
 
       <div
         className="explorer-scroll"
