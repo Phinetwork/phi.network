@@ -230,6 +230,11 @@ function parseJson<T>(text: string): T {
 /* ---------- token extraction (legacy + hash-router) ---------- */
 
 function extractFromPath(pathname: string): string | null {
+  // /s/<sigil-token>
+  {
+    const m = pathname.match(/\/s\/([^/?#]+)/);
+    if (m?.[1]) return m[1];
+  }
   // /p~TOKEN or /p~/TOKEN (tilde may be encoded)
   {
     const m = pathname.match(/\/p(?:~|%7[Ee])\/?([^/?#]+)/);
@@ -257,6 +262,10 @@ function extractFromPath(pathname: string): string | null {
 function extractFromHashPath(hashRaw: string): string | null {
   const h = stripEdgePunct(hashRaw);
   const s = h.startsWith("#") ? h.slice(1) : h;
+  {
+    const m = s.match(/\/?s\/([^/?#]+)/);
+    if (m?.[1]) return m[1];
+  }
   const m = s.match(/\/?p(?:~|%7[Ee])\/?([^/?#]+)/);
   return m?.[1] ?? null;
 }
@@ -555,7 +564,7 @@ export function decodeSigilUrl(url: string): DecodeResult {
       return {
         ok: false,
         error:
-          "No capsule token found (expected /p~<token>, /stream/p/<token>, ?p=, #t=, #/p~<token>, a raw token, or a Memory Stream with #root=j:<payload>).",
+          "No capsule token found (expected /s/<sigil>, /p~<token>, /stream/p/<token>, ?p=, #t=, #/p~<token>, a raw token, or a Memory Stream with #root=j:<payload>).",
       };
     }
 
