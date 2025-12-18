@@ -19,7 +19,7 @@ This repo contains the **ΦNet Sovereign Gate client**, the primary KaiOS app th
 - **Inhale** and **exhale** Φ value,
 - **Mint** and **verify** sigil-glyphs,
 - **View** the resonance stream and value history,
-- **Emit** posts and signals via KaiVoh (Emission OS),
+- **Emit** posts and signals via KaiVoh ( Memory OS),
 - All under the **Phi Network monetary and identity law**.
 
 ---
