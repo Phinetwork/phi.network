@@ -40,8 +40,11 @@ import HomePriceChartCard from "./components/HomePriceChartCard";
 import SovereignDeclarations from "./components/SovereignDeclarations";
 import SigilExplorer from "./components/SigilExplorer";
 import EternalKlock from "./components/EternalKlock";
+import PwaDelight from "./components/PwaDelight";
 
 import "./App.css";
+
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || "dev";
 
 type NavItem = {
   to: string;
@@ -1247,6 +1250,8 @@ export function AppChrome(): React.JSX.Element {
         role="main"
         aria-label="Sovereign Value Workspace"
       >
+        <PwaDelight emphasize />
+
         <div className="app-frame" role="region" aria-label="Secure frame">
           <div className="app-frame-inner">
             <div className="app-workspace">
@@ -1359,10 +1364,10 @@ export function AppChrome(): React.JSX.Element {
                       href="https://github.com/phinetwork/phi.network"
                       target="_blank"
                       rel="noreferrer"
-                      aria-label="Version 29.3.5 (opens GitHub)"
+                      aria-label={`Version ${APP_VERSION} (opens GitHub)`}
                       title="Open GitHub"
                     >
-                      29.3.5
+                      {APP_VERSION}
                     </a>
                   </div>
                 </footer>
