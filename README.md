@@ -6,7 +6,7 @@
 This app exposes two main surfaces:
 
 - **Verifier (Inhale + Exhale)** – proof, transfer, and audit of Φ value  
-- **KaiVoh (Emission OS)** – sovereign emission, signals, and broadcast rails
+- **KaiVoh (Memory OS)** – sovereign emission, signals, and broadcast rails
 
 It is designed to feel less like “a website” and more like a **mint / reserve console** for Kairos Notes and Sigil-Glyphs.
 
@@ -42,7 +42,7 @@ The app renders the canonical tender text:
 
 These lines define the monetary ontology of Φ inside the UI: notes, sigils, lineage, and audit.
 
-### KaiVoh (Emission OS)
+### KaiVoh (Memory OS)
 
 - **KaiVoh** tab opens the emission / broadcast surface
 - Uses **SigilAuth** context to carry:
