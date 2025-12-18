@@ -43,7 +43,8 @@ import EternalKlock from "./components/EternalKlock";
 
 import "./App.css";
 
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || "dev";
+const DEFAULT_APP_VERSION = import.meta.env.VITE_APP_VERSION || "dev";
+const SW_VERSION_EVENT = "kairos:sw-version";
 
 type NavItem = {
   to: string;
@@ -100,6 +101,12 @@ function isInteractiveTarget(t: EventTarget | null): boolean {
   if (tag === "a") return true;
   const ht = el as HTMLElement;
   return Boolean(ht.isContentEditable) || Boolean(el.closest("[contenteditable='true']"));
+}
+
+function getInitialAppVersion(): string {
+  const swVersion = typeof window !== "undefined" ? window.kairosSwVersion : undefined;
+  if (typeof swVersion === "string" && swVersion.length) return swVersion;
+  return DEFAULT_APP_VERSION;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
@@ -992,6 +999,19 @@ export function AppChrome(): React.JSX.Element {
   useDisableZoom();
   usePerfMode();
 
+  const [appVersion, setAppVersion] = useState<string>(getInitialAppVersion);
+
+  useEffect(() => {
+    const onVersion = (event: Event): void => {
+      const detail = (event as CustomEvent<string>).detail;
+      if (typeof detail === "string" && detail.length) setAppVersion(detail);
+    };
+
+    window.addEventListener(SW_VERSION_EVENT, onVersion);
+
+    return () => window.removeEventListener(SW_VERSION_EVENT, onVersion);
+  }, []);
+
   const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
   const BREATH_MS = useMemo(() => BREATH_S * 1000, [BREATH_S]);
   const BREATHS_PER_DAY = useMemo(() => 17_491.270421, []);
@@ -1361,10 +1381,10 @@ export function AppChrome(): React.JSX.Element {
                       href="https://github.com/phinetwork/phi.network"
                       target="_blank"
                       rel="noreferrer"
-                      aria-label={`Version ${APP_VERSION} (opens GitHub)`}
+                      aria-label={`Version ${appVersion} (opens GitHub)`}
                       title="Open GitHub"
                     >
-                      {APP_VERSION}
+                      {appVersion}
                     </a>
                   </div>
                 </footer>
