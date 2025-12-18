@@ -2390,6 +2390,56 @@ const SigilExplorer: React.FC = () => {
     };
   }, []);
 
+  // Guard the scroll container against pull-to-refresh on mobile (top/bottom overdrag)
+  // without blocking normal scrolling.
+  useEffect(() => {
+    if (!hasWindow) return;
+
+    const el = scrollElRef.current;
+    if (!el) return;
+
+    let lastY = 0;
+
+    const onTouchStart = (ev: TouchEvent) => {
+      lastY = ev.touches[0]?.clientY ?? 0;
+    };
+
+    const onTouchMove = (ev: TouchEvent) => {
+      if (!ev.cancelable) return;
+      if (ev.touches.length !== 1) return;
+
+      const y = ev.touches[0]?.clientY ?? 0;
+      const deltaY = y - lastY;
+      lastY = y;
+
+      // Only engage when the container actually has overflow to scroll.
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (maxScroll <= 0) return;
+
+      const atTop = el.scrollTop <= 0;
+      const atBottom = el.scrollTop >= maxScroll;
+
+      const pullingDown = deltaY > 0;
+      const pushingUp = deltaY < 0;
+
+      // Allow normal scroll while mid-stream; only stop edge overdrags that would
+      // trigger browser refresh.
+      if ((atTop && pullingDown && window.scrollY <= 0) || (atBottom && pushingUp)) {
+        ev.preventDefault();
+      }
+    };
+
+    const opts: AddEventListenerOptions & EventListenerOptions = { passive: false };
+
+    el.addEventListener("touchstart", onTouchStart, opts);
+    el.addEventListener("touchmove", onTouchMove, opts);
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
+  }, []);
+
   // Remote seal state
   const remoteSealRef = useRef<string | null>(null);
 
