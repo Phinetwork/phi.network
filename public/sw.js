@@ -9,7 +9,7 @@
 
 // Update this version string manually to keep the app + cache versions in sync.
 // The value is forwarded to the UI via the service worker "SW_ACTIVATED" message.
-const APP_VERSION = "29.3.9";
+const APP_VERSION = "29.5.1";
 const VERSION = new URL(self.location.href).searchParams.get("v") || APP_VERSION; // derived from build
 const PREFIX  = "PHINETWORK";
 const PRECACHE = `${PREFIX}-precache-${VERSION}`;
@@ -39,10 +39,52 @@ const CORE_SHELL = [
   OFFLINE_FALLBACK,
 ];
 
-const SHORTCUT_ROUTES = ["/klok", "/sigil/new", "/pulse", "/verifier.html"];
+const SIGIL_STREAM_ROUTES = [
+  "/stream",
+  "/stream/p",
+  "/stream/c",
+  "/feed",
+  "/feed/p",
+  "/p",
+  "/p~",
+];
 
-const PRECACHE_URLS = [...CORE_SHELL, ...SHORTCUT_ROUTES, ...MANIFEST_ASSETS];
+const SHORTCUT_ROUTES = [
+  "/",
+  "/mint",
+  "/voh",
+  "/keystream",
+  "/klock",
+  "/klok",
+  "/sigil/new",
+  "/pulse",
+  "/verify",
+  "/verifier.html",
+  ...SIGIL_STREAM_ROUTES,
+];
 
+// Assets required to keep verification + sigil flows alive while offline
+const CRITICAL_OFFLINE_ASSETS = [
+  "/sigil.wasm",
+  "/sigil.zkey",
+  "/sigil.artifacts.json",
+  "/sigil.vkey.json",
+  "/verification_key.json",
+  "/verifier-core.js",
+  "/verifier.inline.html",
+  "/verifier.html",
+  "/pdf-lib.min.js",
+];
+
+const PRECACHE_URLS = [
+  ...CORE_SHELL,
+  ...SHORTCUT_ROUTES,
+  ...CRITICAL_OFFLINE_ASSETS,
+  ...MANIFEST_ASSETS,
+];
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif"];
+const ASSET_EXTENSIONS = [".js", ".mjs", ".cjs", ".css", ".wasm", ".json", ".map"];
+const SEED_SIGILS_INDEX = "/sigils-index.json"; // optional list of popular /s/<hash>?p=... routes
 const sameOrigin = (url) => new URL(url, self.location.href).origin === self.location.origin;
 
 const withTimeout = (ms, promise) =>
@@ -57,6 +99,52 @@ async function safePut(cacheName, request, response) {
     const cache = await caches.open(cacheName);
     await cache.put(request, response.clone());
   } catch {}
+}
+function normalizeWarmUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl, self.location.origin);
+    if (url.origin !== self.location.origin) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function cacheBucketFor(url) {
+  const path = url.pathname.toLowerCase();
+
+  if (IMAGE_EXTENSIONS.some((ext) => path.endsWith(ext))) return IMAGECACHE;
+  if (ASSET_EXTENSIONS.some((ext) => path.endsWith(ext))) return ASSETCACHE;
+  if (url.pathname === "/" || !path.split("/").pop()?.includes(".")) return PRECACHE;
+  return RUNTIME;
+}
+
+async function warmUrls(urls, { mapShell = false } = {}) {
+  const unique = Array.from(new Set(urls || []));
+  if (!unique.length) return;
+
+  const shell = mapShell
+    ? await caches.match(OFFLINE_URL, { ignoreSearch: true }).catch(() => null)
+    : null;
+
+  await Promise.all(
+    unique.map(async (raw) => {
+      const url = normalizeWarmUrl(raw);
+      if (!url) return;
+
+      const cacheName = cacheBucketFor(url);
+      const req = new Request(url.href, { cache: "reload" });
+
+      try {
+        const res = await fetch(req);
+        if (!res || (!res.ok && res.type !== "opaque")) return;
+        await safePut(cacheName, req, res);
+        if (mapShell && shell && !url.pathname.split("/").pop()?.includes(".")) {
+          await mapShellToRoute(url.href, shell);
+        }
+      } catch {}
+    }),
+  );
 }
 
 async function staleWhileRevalidate(req, cacheName) {
@@ -199,6 +287,8 @@ self.addEventListener("install", (event) => {
     // Fetch a fresh shell to map (ensure correct headers)
     const shell = await cache.match(OFFLINE_URL, { ignoreSearch: true }) || await fetch(OFFLINE_URL);
     if (shell) {
+      // Pre-map shell to known shortcuts so they are instant + offline
+      await Promise.all(SHORTCUT_ROUTES.map((route) => mapShellToRoute(route, shell)));
       // Seed popular /s/... routes if you provide /sigils-index.json
       await seedSigilRoutes(shell);
     }
@@ -233,6 +323,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   const { data } = event;
   if (data === "SKIP_WAITING" || data?.type === "SKIP_WAITING") self.skipWaiting();
+    if (data?.type === "WARM_URLS" && Array.isArray(data.urls)) {
+    event.waitUntil(warmUrls(data.urls, { mapShell: Boolean(data.mapShell) }));
+  }
 });
 
 // --- Fetch routing ---

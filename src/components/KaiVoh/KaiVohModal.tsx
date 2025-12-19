@@ -117,6 +117,8 @@ function SigilAuthPill({ className }: { className?: string }) {
 export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
   // Hooks MUST run unconditionally (rules-of-hooks)
   const firstFocusableRef = useRef<HTMLButtonElement | null>(null);
+  const scrollRegionRef = useRef<HTMLDivElement | null>(null);
+  const touchStartYRef = useRef<number>(0);
 
   const [view, setView] = useState<ViewMode>("voh");
   const [realmsMounted, setRealmsMounted] = useState(false);
@@ -134,23 +136,22 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
     if (!open) return;
 
     const prevOverflow = document.body.style.overflow;
-    const prevDocOverscroll = document.documentElement.style.getPropertyValue(
-      "overscroll-behavior"
-    );
-    const prevBodyOverscroll = document.body.style.getPropertyValue(
-      "overscroll-behavior"
-    );
+    const prevDocOverscroll = document.documentElement.style.getPropertyValue("overscroll-behavior");
+    const prevBodyOverscroll = document.body.style.getPropertyValue("overscroll-behavior");
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyHeight = document.body.style.height;
+    const prevHtmlHeight = document.documentElement.style.height;
+    const prevTouchAction = document.documentElement.style.touchAction;
     const prevBreath = document.documentElement.style.getPropertyValue("--kai-breath");
     const prevPhi = document.documentElement.style.getPropertyValue("--kai-phi");
 
     document.body.style.overflow = "hidden";
+    document.body.style.height = "100%";
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.height = "100%";
     document.documentElement.style.setProperty("overscroll-behavior", "contain");
     document.body.style.setProperty("overscroll-behavior", "contain");
-
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
+    document.documentElement.style.touchAction = "manipulation";
 
     // set CSS custom props globally for timing/phi
     document.documentElement.style.setProperty("--kai-breath", `${BREATH_SEC}s`);
@@ -159,9 +160,44 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
     // focus first interactive (if present)
     firstFocusableRef.current?.focus();
 
+    const onTouchStart = (e: TouchEvent): void => {
+      touchStartYRef.current = e.touches[0]?.clientY ?? 0;
+    };
+
+    const onTouchMove = (e: TouchEvent): void => {
+      if (e.touches.length !== 1) return;
+      const scrollEl = scrollRegionRef.current;
+      if (!scrollEl) return;
+
+      const target = e.target as Node | null;
+      const insideScrollRegion = target ? scrollEl.contains(target) : false;
+
+      // Block any stray touches outside the KaiVoh scroll region (prevents pull-to-refresh)
+      if (!insideScrollRegion) {
+        e.preventDefault();
+        return;
+      }
+
+      const currentY = e.touches[0]?.clientY ?? touchStartYRef.current;
+      const deltaY = currentY - touchStartYRef.current;
+      const atTop = scrollEl.scrollTop <= 0;
+      const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight;
+
+      // When at the bounds, prevent the native overscroll that can trigger a reload in PWAs
+      if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+
     return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+
       document.body.style.overflow = prevOverflow;
-      document.removeEventListener("keydown", onKey);
+      document.body.style.height = prevBodyHeight;
 
       // restore prior values (avoid leaking globals across app)
       if (prevDocOverscroll)
@@ -171,6 +207,10 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
       if (prevBodyOverscroll) document.body.style.setProperty("overscroll-behavior", prevBodyOverscroll);
       else document.body.style.removeProperty("overscroll-behavior");
 
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.documentElement.style.height = prevHtmlHeight;
+      document.documentElement.style.touchAction = prevTouchAction;
+
       if (prevBreath) document.documentElement.style.setProperty("--kai-breath", prevBreath);
       else document.documentElement.style.removeProperty("--kai-breath");
 
@@ -178,15 +218,6 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
       else document.documentElement.style.removeProperty("--kai-phi");
     };
   }, [open, onClose]);
-
-  // Backdrop close (only if pointer down on backdrop itself)
-  const onBackdropPointerDown = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>): void => {
-      if (e.target !== e.currentTarget) return;
-      onClose();
-    },
-    [onClose]
-  );
 
   // Close button handlers
   const handleClosePointerDown = useCallback(
@@ -217,7 +248,6 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="kaivoh-title"
-      onPointerDown={onBackdropPointerDown}
       data-view={view}
     >
       {/* Dim stars + parallax halos */}
@@ -295,7 +325,7 @@ export default function KaiVohModal({ open, onClose }: KaiVohModalProps) {
           </div>
 
           {/* Body */}
-          <div className="kai-voh-body">
+          <div className="kai-voh-body" ref={scrollRegionRef}>
             <h2 id="kaivoh-title" className="sr-only">
               Kai Portal
             </h2>

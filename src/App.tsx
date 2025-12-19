@@ -1,20 +1,22 @@
 // src/App.tsx
 /* ──────────────────────────────────────────────────────────────────────────────
    App.tsx · ΦNet Sovereign Gate Shell (KaiOS-style PWA)
-   v28.7.7 · Layout Fix: extra space goes to Verifier panel, NOT Sovereign Writ
+   v29.4.4 · INSTANT LOAD / NO-HOMEPAGE-SPLASH / WarmTimer Fix / Heavy UI Deferred
 
-   ✅ CHANGE (requested):
-   - When viewport grows, Sovereign Writ should NOT get extra vertical spacing.
-   - Extra space should go to the Verifier panel.
-   - Structural fix (no CSS required):
-     • SovereignDeclarations is wrapped so its internal `.nav-foot { margin-top:auto }`
-       no longer “eats” height in the nav column.
-     • Optional roomy layout flag + align-self:start for nav.
+   ✅ GOALS (implemented):
+   - Fix linter/TS error: warmTimer not defined → ref-based timer.
+   - Instant first paint: code-split heavy modules (Chart / Modals / Explorer / Klock).
+   - Homepage splash killer: remove any boot/splash overlays on "/" immediately.
+   - SW warming: idle-only + focus rewarm, abort-safe, respects Save-Data/2G.
+   - Zero “loading splash” fallbacks: Suspense fallback is null/blank spacer.
 ────────────────────────────────────────────────────────────────────────────── */
 
 import React, {
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -22,9 +24,6 @@ import React, {
 } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-
-import KaiVohModal from "./components/KaiVoh/KaiVohModal";
-import SigilModal from "./components/SigilModal";
 
 import {
   momentFromUTC,
@@ -36,15 +35,124 @@ import {
 import { fmt2, formatPulse, modPos, readNum } from "./utils/kaiTimeDisplay";
 import { usePerfMode } from "./hooks/usePerfMode";
 
-import HomePriceChartCard from "./components/HomePriceChartCard";
 import SovereignDeclarations from "./components/SovereignDeclarations";
-import SigilExplorer from "./components/SigilExplorer";
-import EternalKlock from "./components/EternalKlock";
 
 import "./App.css";
 
-export const DEFAULT_APP_VERSION = "29.3.9";  // sync with public/sw.js
+declare global {
+  interface Window {
+    kairosSwVersion?: string;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Lazy-loaded heavy modules (instant first paint)
+────────────────────────────────────────────────────────────────────────────── */
+const KaiVohModal = lazy(
+  () => import("./components/KaiVoh/KaiVohModal"),
+) as React.LazyExoticComponent<React.ComponentType<{ open: boolean; onClose: () => void }>>;
+
+const SigilModal = lazy(
+  () => import("./components/SigilModal"),
+) as React.LazyExoticComponent<
+  React.ComponentType<{ initialPulse: number; onClose: () => void }>
+>;
+
+
+
+const HomePriceChartCard = lazy(
+  () => import("./components/HomePriceChartCard"),
+) as React.LazyExoticComponent<
+  React.ComponentType<{ apiBase: string; ctaAmountUsd: number; chartHeight: number }>
+>;
+
+const SigilExplorer = lazy(
+  () => import("./components/SigilExplorer"),
+) as React.LazyExoticComponent<React.ComponentType<Record<string, never>>>;
+
+type EternalKlockProps = { initialDetailsOpen?: boolean };
+
+const EternalKlockLazy = lazy(
+  () => import("./components/EternalKlock"),
+) as React.LazyExoticComponent<React.ComponentType<EternalKlockProps>>;
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Splash killer (homepage only)
+   - Runs at module eval + again in layout effect to guarantee removal.
+────────────────────────────────────────────────────────────────────────────── */
+function killSplashOnHome(): void {
+  if (typeof document === "undefined" || typeof window === "undefined") return;
+  if (window.location.pathname !== "/") return;
+
+  const ids = ["app-splash", "pwa-splash", "splash", "splash-screen", "boot-splash"];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  document
+    .querySelectorAll<HTMLElement>(
+      "[data-splash], .app-splash, .pwa-splash, .splash-screen, .splash, .boot-splash",
+    )
+    .forEach((el) => el.remove());
+}
+
+// Run ASAP on module load (best effort; removes splash without waiting for React)
+try {
+  killSplashOnHome();
+} catch {
+  /* ignore */
+}
+
+// Isomorphic layout effect (prevents paint-flash)
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   App constants
+────────────────────────────────────────────────────────────────────────────── */
+export const DEFAULT_APP_VERSION = "29.5.1"; // sync with public/sw.js
 const SW_VERSION_EVENT = "kairos:sw-version";
+
+const OFFLINE_ASSETS_TO_WARM: readonly string[] = [
+  "/sigil.wasm",
+  "/sigil.zkey",
+  "/sigil.artifacts.json",
+  "/sigil.vkey.json",
+  "/verification_key.json",
+  "/verifier-core.js",
+  "/verifier.inline.html",
+  "/verifier.html",
+  "/pdf-lib.min.js",
+];
+
+const SIGIL_STREAM_ROUTES: readonly string[] = [
+  "/stream",
+  "/stream/p",
+  "/stream/c",
+  "/feed",
+  "/feed/p",
+  "/p",
+  "/p~",
+];
+
+const SHELL_ROUTES_TO_WARM: readonly string[] = [
+  "/",
+  "/mint",
+  "/voh",
+  "/keystream",
+  "/klock",
+  "/klok",
+  "/sigil/new",
+  "/pulse",
+  "/verify",
+  ...SIGIL_STREAM_ROUTES,
+];
+
+const APP_SHELL_HINTS: readonly string[] = [
+  "/", // canonical shell
+  "/?source=pwa",
+  "/index.html",
+];
 
 type NavItem = {
   to: string;
@@ -86,10 +194,6 @@ type KlockPopoverProps = {
 };
 
 type KlockNavState = { openDetails?: boolean };
-
-type EternalKlockProps = {
-  initialDetailsOpen?: boolean;
-};
 
 type KaiMoment = ReturnType<typeof momentFromUTC>;
 
@@ -166,25 +270,18 @@ function computeBeatStepDMY(m: KaiMoment): BeatStepDMY {
   const rawStepOfDay = Math.floor(dayFrac * STEPS_PER_DAY);
   const stepOfDay = Math.min(STEPS_PER_DAY - 1, Math.max(0, rawStepOfDay));
 
-  const beat = Math.min(
-    BEATS_PER_DAY - 1,
-    Math.max(0, Math.floor(stepOfDay / STEPS_PER_BEAT)),
-  );
+  const beat = Math.min(BEATS_PER_DAY - 1, Math.max(0, Math.floor(stepOfDay / STEPS_PER_BEAT)));
   const step = Math.min(
     STEPS_PER_BEAT - 1,
     Math.max(0, stepOfDay - beat * STEPS_PER_BEAT),
   );
 
   const dayIndexFromMoment =
-    readNum(m, "dayIndex") ??
-    readNum(m, "dayIndex0") ??
-    readNum(m, "dayIndexSinceGenesis");
+    readNum(m, "dayIndex") ?? readNum(m, "dayIndex0") ?? readNum(m, "dayIndexSinceGenesis");
 
   const eps = 1e-9;
   const dayIndex =
-    dayIndexFromMoment !== null
-      ? Math.floor(dayIndexFromMoment)
-      : Math.floor((pulse + eps) / PULSES_PER_DAY);
+    dayIndexFromMoment !== null ? Math.floor(dayIndexFromMoment) : Math.floor((pulse + eps) / PULSES_PER_DAY);
 
   const daysPerYear = Number.isFinite(DAYS_PER_YEAR) ? DAYS_PER_YEAR : 336;
   const daysPerMonth = Number.isFinite(DAYS_PER_MONTH) ? DAYS_PER_MONTH : 42;
@@ -476,7 +573,7 @@ function getPortalHost(): HTMLElement {
     try {
       if (isFixedSafeHost(shell)) return shell;
     } catch {
-      // ignore
+      /* ignore */
     }
   }
   return document.body;
@@ -543,6 +640,16 @@ function ExplorerPopover({
       if (e.target === e.currentTarget) {
         e.preventDefault();
         e.stopPropagation();
+      }
+    },
+    [],
+  );
+
+  const onBackdropClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>): void => {
+      if (e.target === e.currentTarget) {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
       }
     },
@@ -553,9 +660,8 @@ function ExplorerPopover({
     (e: React.PointerEvent<HTMLButtonElement>): void => {
       e.preventDefault();
       e.stopPropagation();
-      onClose();
     },
-    [onClose],
+    [],
   );
 
   if (!open || !isClient || !portalHost) return null;
@@ -568,7 +674,7 @@ function ExplorerPopover({
       aria-modal="true"
       aria-label="PhiStream Explorer"
       onPointerDown={onBackdropPointerDown}
-      onClick={(e) => e.stopPropagation()}
+      onClick={onBackdropClick}
     >
       <div className="explorer-pop__panel" role="document">
         <button
@@ -653,6 +759,16 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
       if (e.target === e.currentTarget) {
         e.preventDefault();
         e.stopPropagation();
+      }
+    },
+    [],
+  );
+
+  const onBackdropClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>): void => {
+      if (e.target === e.currentTarget) {
+        e.preventDefault();
+        e.stopPropagation();
         onClose();
       }
     },
@@ -663,9 +779,8 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
     (e: React.PointerEvent<HTMLButtonElement>): void => {
       e.preventDefault();
       e.stopPropagation();
-      onClose();
     },
-    [onClose],
+    [],
   );
 
   if (!open || !isClient || !portalHost) return null;
@@ -678,7 +793,7 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
       aria-modal="true"
       aria-label="Eternal KaiKlok"
       onPointerDown={onBackdropPointerDown}
-      onClick={(e) => e.stopPropagation()}
+      onClick={onBackdropClick}
     >
       <div className="klock-pop__panel" role="document" data-klock-size="xl">
         <button
@@ -713,7 +828,7 @@ function KlockPopover({ open, onClose, children }: KlockPopoverProps): React.JSX
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   Routes
+   Routes (lazy + no “splash” fallbacks)
 ────────────────────────────────────────────────────────────────────────────── */
 export function KaiVohRoute(): React.JSX.Element {
   const navigate = useNavigate();
@@ -726,7 +841,9 @@ export function KaiVohRoute(): React.JSX.Element {
 
   return (
     <>
-      <KaiVohModal open={open} onClose={handleClose} />
+      <Suspense fallback={null}>
+        <KaiVohModal open={open} onClose={handleClose} />
+      </Suspense>
       <div className="sr-only" aria-live="polite">
         KaiVoh portal open
       </div>
@@ -747,7 +864,9 @@ export function SigilMintRoute(): React.JSX.Element {
 
   return (
     <>
-      {open ? <SigilModal initialPulse={initialPulse} onClose={handleClose} /> : null}
+      <Suspense fallback={null}>
+        {open ? <SigilModal initialPulse={initialPulse} onClose={handleClose} /> : null}
+      </Suspense>
       <div className="sr-only" aria-live="polite">
         Sigil mint portal open
       </div>
@@ -767,7 +886,9 @@ export function ExplorerRoute(): React.JSX.Element {
   return (
     <>
       <ExplorerPopover open={open} onClose={handleClose}>
-        <SigilExplorer />
+        <Suspense fallback={null}>
+          <SigilExplorer />
+        </Suspense>
       </ExplorerPopover>
 
       <div className="sr-only" aria-live="polite">
@@ -790,12 +911,12 @@ export function KlockRoute(): React.JSX.Element {
   const navState = (location.state as KlockNavState | null) ?? null;
   const initialDetailsOpen = navState?.openDetails ?? true;
 
-  const EternalKlockTyped = EternalKlock as unknown as React.ComponentType<EternalKlockProps>;
-
   return (
     <>
       <KlockPopover open={open} onClose={handleClose}>
-        <EternalKlockTyped initialDetailsOpen={initialDetailsOpen} />
+        <Suspense fallback={null}>
+          <EternalKlockLazy initialDetailsOpen={initialDetailsOpen} />
+        </Suspense>
       </KlockPopover>
 
       <div className="sr-only" aria-live="polite">
@@ -881,11 +1002,12 @@ function LiveKaiButton({
   }, [snap.beatStepDMY.month]);
 
   const timeStyle = useMemo<CSSProperties>(
-    () => ({
-      ["--kai-ark"]: arcColor,
-      ["--kai-chakra"]: chakraColor,
-      ["--kai-month"]: monthColor,
-    }) as CSSProperties,
+    () =>
+      ({
+        ["--kai-ark"]: arcColor,
+        ["--kai-chakra"]: chakraColor,
+        ["--kai-month"]: monthColor,
+      }) as CSSProperties,
     [arcColor, chakraColor, monthColor],
   );
 
@@ -905,11 +1027,7 @@ function LiveKaiButton({
       const dmyLabel = formatDMYLabel(bsd);
 
       setSnap((prev) => {
-        if (
-          prev.pulseStr === pulseStr &&
-          prev.beatStepLabel === beatStepLabel &&
-          prev.dmyLabel === dmyLabel
-        ) {
+        if (prev.pulseStr === pulseStr && prev.beatStepLabel === beatStepLabel && prev.dmyLabel === dmyLabel) {
           return prev;
         }
         return {
@@ -924,8 +1042,8 @@ function LiveKaiButton({
     };
 
     tick();
-
     const id = window.setInterval(tick, 250);
+
     return () => {
       alive = false;
       window.clearInterval(id);
@@ -999,6 +1117,11 @@ export function AppChrome(): React.JSX.Element {
   useDisableZoom();
   usePerfMode();
 
+  // Re-kill splash on "/" before paint (guarantee)
+  useIsoLayoutEffect(() => {
+    killSplashOnHome();
+  }, [location.pathname]);
+
   const [appVersion, setAppVersion] = useState<string>(getInitialAppVersion);
 
   useEffect(() => {
@@ -1008,8 +1131,122 @@ export function AppChrome(): React.JSX.Element {
     };
 
     window.addEventListener(SW_VERSION_EVENT, onVersion);
-
     return () => window.removeEventListener(SW_VERSION_EVENT, onVersion);
+  }, []);
+
+  // Warm timers (fix: no global warmTimer)
+  const warmTimerRef = useRef<number | null>(null);
+
+  // Heavy UI gating for instant first paint (chart + chunk prefetch)
+  const [heavyUiReady, setHeavyUiReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const idleWin = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    const handle =
+      typeof idleWin.requestIdleCallback === "function"
+        ? idleWin.requestIdleCallback(() => setHeavyUiReady(true), { timeout: 900 })
+        : window.setTimeout(() => setHeavyUiReady(true), 220);
+
+    return () => {
+      if (typeof idleWin.cancelIdleCallback === "function") idleWin.cancelIdleCallback(handle as number);
+      else window.clearTimeout(handle as number);
+    };
+  }, []);
+
+  // Optional: prefetch lazy chunks in idle (no UI impact)
+  useEffect(() => {
+    if (!heavyUiReady) return;
+    void import("./components/HomePriceChartCard");
+    void import("./components/KaiVoh/KaiVohModal");
+    void import("./components/SigilModal");
+    void import("./components/SigilExplorer");
+    void import("./components/EternalKlock");
+    void import("./pages/sigilstream/SigilStreamRoot");
+  }, [heavyUiReady]);
+
+  // SW warm-up (idle-only + focus cadence, abort-safe, respects Save-Data/2G)
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return undefined;
+
+    const aborter = new AbortController();
+
+    const navAny = navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    };
+    const saveData = Boolean(navAny.connection?.saveData);
+    const et = navAny.connection?.effectiveType || "";
+    const slowNet = et === "slow-2g" || et === "2g";
+
+    if (saveData || slowNet) {
+      return () => aborter.abort();
+    }
+
+    const warmOffline = async (): Promise<void> => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const controller = registration.active || registration.waiting || registration.installing;
+
+        controller?.postMessage({
+          type: "WARM_URLS",
+          urls: [...OFFLINE_ASSETS_TO_WARM, ...SHELL_ROUTES_TO_WARM, ...APP_SHELL_HINTS],
+          mapShell: true,
+        });
+
+        await Promise.all(
+          [...OFFLINE_ASSETS_TO_WARM, ...SHELL_ROUTES_TO_WARM].map(async (url) => {
+            try {
+              await fetch(url, { cache: "no-cache", signal: aborter.signal });
+            } catch {
+              /* non-blocking warm-up */
+            }
+          }),
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const idleWin = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    const runWarm = (): void => void warmOffline();
+
+    const idleHandle =
+      typeof idleWin.requestIdleCallback === "function"
+        ? idleWin.requestIdleCallback(runWarm, { timeout: 2500 })
+        : window.setTimeout(runWarm, 1200);
+
+    const onFocus = (): void => {
+      if (warmTimerRef.current !== null) window.clearTimeout(warmTimerRef.current);
+      warmTimerRef.current = window.setTimeout(runWarm, 240);
+    };
+
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      aborter.abort();
+
+      if (warmTimerRef.current !== null) {
+        window.clearTimeout(warmTimerRef.current);
+        warmTimerRef.current = null;
+      }
+
+      if (typeof idleWin.cancelIdleCallback === "function") {
+        idleWin.cancelIdleCallback(idleHandle as number);
+      } else {
+        window.clearTimeout(idleHandle as number);
+      }
+
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
@@ -1018,7 +1255,7 @@ export function AppChrome(): React.JSX.Element {
 
   const vvSize = useVisualViewportSize();
 
-  // ✅ Layout signal: “roomy” screens (desktop / tablet / very tall)
+  // Layout signal: “roomy” screens (desktop / tablet / very tall)
   const roomy = useMemo(() => {
     const h = vvSize.height || 0;
     const w = vvSize.width || 0;
@@ -1130,7 +1367,6 @@ export function AppChrome(): React.JSX.Element {
     }
 
     window.addEventListener("resize", onAnyResize, { passive: true });
-
     scheduleMeasure();
 
     return () => {
@@ -1220,7 +1456,7 @@ export function AppChrome(): React.JSX.Element {
     }
   }, []);
 
-  // ✅ Nav: don’t stretch on roomy screens (lets panel “own” the extra space visually)
+  // Nav: don’t stretch on roomy screens (lets panel “own” the extra space visually)
   const navInlineStyle = useMemo<CSSProperties | undefined>(() => {
     if (!roomy) return undefined;
     return { alignSelf: "start", height: "auto" };
@@ -1263,12 +1499,7 @@ export function AppChrome(): React.JSX.Element {
         />
       </header>
 
-      <main
-        className="app-stage"
-        id="app-content"
-        role="main"
-        aria-label="Sovereign Value Workspace"
-      >
+      <main className="app-stage" id="app-content" role="main" aria-label="Sovereign Value Workspace">
         <div className="app-frame" role="region" aria-label="Secure frame">
           <div className="app-frame-inner">
             <div className="app-workspace">
@@ -1289,11 +1520,17 @@ export function AppChrome(): React.JSX.Element {
                       borderRadius: "inherit",
                     }}
                   >
-                    <HomePriceChartCard
-                      apiBase="https://pay.kaiklok.com"
-                      ctaAmountUsd={144}
-                      chartHeight={chartHeight}
-                    />
+                    {heavyUiReady ? (
+                      <Suspense fallback={<div style={{ height: chartHeight }} aria-hidden="true" />}>
+                        <HomePriceChartCard
+                          apiBase="https://pay.kaiklok.com"
+                          ctaAmountUsd={144}
+                          chartHeight={chartHeight}
+                        />
+                      </Suspense>
+                    ) : (
+                      <div style={{ height: chartHeight }} aria-hidden="true" />
+                    )}
                   </div>
                 </div>
               )}
@@ -1309,20 +1546,13 @@ export function AppChrome(): React.JSX.Element {
                   <div className="nav-head__sub">Breath-Sealed Identity · Kairos-ZK Proof</div>
                 </div>
 
-                <div
-                  ref={navListRef}
-                  className="nav-list"
-                  role="list"
-                  aria-label="Atrium navigation tiles"
-                >
+                <div ref={navListRef} className="nav-list" role="list" aria-label="Atrium navigation tiles">
                   {navItems.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
                       end={item.end}
-                      className={({ isActive }) =>
-                        `nav-item ${isActive ? "nav-item--active" : ""}`
-                      }
+                      className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}
                       aria-label={`${item.label}: ${item.desc}`}
                     >
                       <div className="nav-item__label">{item.label}</div>
@@ -1331,9 +1561,7 @@ export function AppChrome(): React.JSX.Element {
                   ))}
                 </div>
 
-                {/* ✅ CRITICAL STRUCTURAL FIX:
-                    SovereignDeclarations is wrapped so its internal `.nav-foot { margin-top:auto }`
-                    no longer “eats” extra height in the nav column when the viewport grows. */}
+                {/* Structural fix: prevent SovereignDeclarations from eating extra height */}
                 <div className="nav-writ-slot" data-writ-slim="1">
                   <SovereignDeclarations />
                 </div>
