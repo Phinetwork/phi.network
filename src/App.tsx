@@ -58,6 +58,7 @@ const OFFLINE_ASSETS_TO_WARM: readonly string[] = [
 ];
 
 
+
 const SHELL_ROUTES_TO_WARM: readonly string[] = [
   "/",
   "/mint",
