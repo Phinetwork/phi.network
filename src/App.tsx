@@ -36,6 +36,7 @@ import { fmt2, formatPulse, modPos, readNum } from "./utils/kaiTimeDisplay";
 import { usePerfMode } from "./hooks/usePerfMode";
 
 import SovereignDeclarations from "./components/SovereignDeclarations";
+import { DEFAULT_APP_VERSION, SW_VERSION_EVENT } from "./version";
 
 import "./App.css";
 
@@ -110,9 +111,6 @@ const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : use
 /* ──────────────────────────────────────────────────────────────────────────────
    App constants
 ────────────────────────────────────────────────────────────────────────────── */
-export const DEFAULT_APP_VERSION = "29.5.8"; // sync with public/sw.js
-const SW_VERSION_EVENT = "kairos:sw-version";
-
 const OFFLINE_ASSETS_TO_WARM: readonly string[] = [
   "/sigil.wasm",
   "/sigil.zkey",

@@ -6,10 +6,9 @@ import "./styles.css";
 import "./App.css";
 
 import AppRouter from "./router/AppRouter";
+import { APP_VERSION, SW_VERSION_EVENT } from "./version";
 
 const isProduction = import.meta.env.MODE === "production";
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || "dev";
-const SW_VERSION_EVENT = "kairos:sw-version";
 
 declare global {
   interface Window {
