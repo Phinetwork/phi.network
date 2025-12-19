@@ -33,7 +33,7 @@ function RouteLoader(): React.JSX.Element {
       <div className="route-loader__glow" />
       <div className="route-loader__content">
         <div className="route-loader__dot" aria-hidden="true" />
-        <div className="route-loader__text">Loading secure Kai workspace…</div>
+        <div className="route-loader__text"> MEMORY REMEMBERS...</div>
       </div>
     </div>
   );
