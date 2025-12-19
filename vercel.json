@@ -16,6 +16,9 @@
     { "source": "/verifier.inline.html", "destination": "/verifier.inline.html" },
     { "source": "/verifier-core.js", "destination": "/verifier-core.js" },
 
+    { "source": "/sw.js", "destination": "/sw.js" },
+    { "source": "/service-worker.js", "destination": "/service-worker.js" },
+
     { "source": "/(.*)", "destination": "/" }
   ],
   "headers": [
