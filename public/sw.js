@@ -39,6 +39,27 @@ const CORE_SHELL = [
   OFFLINE_FALLBACK,
 ];
 
+// Icons we want available immediately for install/badge/shortcut UX
+const ICON_ASSETS = [
+  "/logo-maskable.png",
+  "/favicon-16x16.png",
+  "/favicon-32x32.png",
+  "/android-icon-36x36.png",
+  "/android-icon-48x48.png",
+  "/android-icon-72x72.png",
+  "/android-icon-96x96.png",
+  "/android-icon-144x144.png",
+  "/android-icon-192x192.png",
+  "/icons/128.png",
+  "/icons/192.png",
+  "/icons/256.png",
+  "/icons/384.png",
+  "/icons/512.png",
+  "/shortcuts/klok.png",
+  "/shortcuts/sigil.png",
+  "/shortcuts/pulse.png",
+];
+
 const SIGIL_STREAM_ROUTES = [
   "/stream",
   "/stream/p",
@@ -76,12 +97,11 @@ const CRITICAL_OFFLINE_ASSETS = [
   "/pdf-lib.min.js",
 ];
 
-const PRECACHE_URLS = [
+const PRECACHE_URLS = Array.from(new Set([
   ...CORE_SHELL,
-  ...SHORTCUT_ROUTES,
-  ...CRITICAL_OFFLINE_ASSETS,
-  ...MANIFEST_ASSETS,
-];
+  ...ICON_ASSETS,
+  ...MANIFEST_ASSETS.filter((url) => url.includes("icon") || url.endsWith("manifest.json")),
+]));
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif"];
 const ASSET_EXTENSIONS = [".js", ".mjs", ".cjs", ".css", ".wasm", ".json", ".map"];
 const SEED_SIGILS_INDEX = "/sigils-index.json"; // optional list of popular /s/<hash>?p=... routes
@@ -277,15 +297,32 @@ async function handleRangeRequest(event) {
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(PRECACHE);
-    // Precache the shell & some basic assets
-    await cache.addAll(PRECACHE_URLS.map(u => new Request(u, { cache: "reload" })));
+    const precacheRequests = PRECACHE_URLS.map((u) => new Request(u, { cache: "reload" }));
+
+    // Precache the shell & some basic assets, but allow partial success
+    await Promise.allSettled(
+      precacheRequests.map(async (req) => {
+        try {
+          const res = await fetch(req);
+          if (res && (res.ok || res.type === "opaque")) await cache.put(req, res.clone());
+        } catch {}
+      }),
+    );
 
     // Discover & precache hashed bundles
     await precacheDiscoveredAssets();
 
     // Map the shell to known dynamic routes (seed list)
     // Fetch a fresh shell to map (ensure correct headers)
-    const shell = await cache.match(OFFLINE_URL, { ignoreSearch: true }) || await fetch(OFFLINE_URL);
+    let shell = await cache.match(OFFLINE_URL, { ignoreSearch: true });
+    if (!shell) {
+      try {
+        shell = await fetch(OFFLINE_URL);
+        if (shell && (shell.ok || shell.type === "opaque")) {
+          await cache.put(new Request(OFFLINE_URL), shell.clone());
+        }
+      } catch {}
+    }
     if (shell) {
       // Pre-map shell to known shortcuts so they are instant + offline
       await Promise.all(SHORTCUT_ROUTES.map((route) => mapShellToRoute(route, shell)));
@@ -311,19 +348,33 @@ self.addEventListener("activate", (event) => {
     if ("navigationPreload" in self.registration) {
       try { await self.registration.navigationPreload.enable(); } catch {}
     }
+
+    let claimed = false;
+    try {
+      await warmUrls(CRITICAL_OFFLINE_ASSETS, { mapShell: true });
+    } catch {}
+
+    try {
+      await self.clients.claim();
+      claimed = true;
+    } catch {}
+
     try {
       const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      clients.forEach((client) => client.postMessage({ type: "SW_ACTIVATED", version: VERSION }));
+      clients.forEach((client) => client.postMessage({ type: "SW_ACTIVATED", version: VERSION, claimed }));
+    } catch {}
+
+    try {
+      console.info("Kai service worker activated", { version: VERSION, claimed });
     } catch {}
   })());
-  self.clients.claim();
 });
 
 // Allow app to trigger immediate takeover
 self.addEventListener("message", (event) => {
   const { data } = event;
   if (data === "SKIP_WAITING" || data?.type === "SKIP_WAITING") self.skipWaiting();
-    if (data?.type === "WARM_URLS" && Array.isArray(data.urls)) {
+  if (data?.type === "WARM_URLS" && Array.isArray(data.urls)) {
     event.waitUntil(warmUrls(data.urls, { mapShell: Boolean(data.mapShell) }));
   }
 });
