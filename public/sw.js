@@ -7,7 +7,10 @@
    - Audio/video range support; fonts cached; CDNs handled
 */
 
-const VERSION = "v29.3.5"; // ⬅️ bump every deploy
+// Update this version string manually to keep the app + cache versions in sync.
+// The value is forwarded to the UI via the service worker "SW_ACTIVATED" message.
+const APP_VERSION = "29.3.9";
+const VERSION = new URL(self.location.href).searchParams.get("v") || APP_VERSION; // derived from build
 const PREFIX  = "PHINETWORK";
 const PRECACHE = `${PREFIX}-precache-${VERSION}`;
 const RUNTIME  = `${PREFIX}-runtime-${VERSION}`;
@@ -16,48 +19,29 @@ const FONTCACHE  = `${PREFIX}-fonts-${VERSION}`;
 const IMAGECACHE = `${PREFIX}-images-${VERSION}`;
 
 const OFFLINE_URL = "/index.html";
+const OFFLINE_FALLBACK = "/offline.html";
 
+const MANIFEST_ASSETS = Array.isArray(self.__WB_MANIFEST)
+  ? self.__WB_MANIFEST.map((entry) => entry.url)
+  : [];
 
 // Minimal shell (we also discover hashed bundles from index.html)
-const PRECACHE_URLS = [
+const CORE_SHELL = [
   "/",               // iOS needs both "/" and "/index.html"
   "/index.html",
   "/?source=pwa",    // if your manifest start_url includes this
   "/manifest.json",
   "/favicon.ico",
   "/logo.png",
-  "/KairosKurrensy.jpg",
-  "/verification_key.json",
-  "/assets/favicon.ico",
-  "/assets/chimes/kai_turah_tone.mp3",
-  "/assets/addressicon.svg",
-  "/assets/balanceicon.svg",
-  "/assets/fundicon.svg",
-  "/assets/loginSwirl.svg",
   "/assets/logo.svg",
-  "/assets/logoutIcon.svg",
-  "/assets/magnifyingGlass.svg",
-  "/assets/phi.svg",
-  "/assets/sendIcon.svg",
-  "/assets/vite.svg",
-  "/assets/verify.svg",
-  "/assets/seal.svg",
-  "/assets/stargate.svg",
-  "/assets/kai-streams.svg",
-  "/assets/spiral-logo.svg",
   "/assets/kai-icon.svg",
-  "/assets/kai-logo.svg",
-  "/assets/star.svg",
-  "/assets/weekkalendar.svg",
-  "/assets/eternal.svg",
-  "/assets/embodied_solar_aligned.svg",
-  // Optional: precache your shortcut routes so they cold-boot offline too:
-  "/klok",
-  "/sigil/new",
-  "/pulse",
-  "/verifier.html",
-
+  "/assets/favicon.ico",
+  OFFLINE_FALLBACK,
 ];
+
+const SHORTCUT_ROUTES = ["/klok", "/sigil/new", "/pulse", "/verifier.html"];
+
+const PRECACHE_URLS = [...CORE_SHELL, ...SHORTCUT_ROUTES, ...MANIFEST_ASSETS];
 
 const sameOrigin = (url) => new URL(url, self.location.href).origin === self.location.origin;
 
@@ -218,6 +202,12 @@ self.addEventListener("install", (event) => {
       // Seed popular /s/... routes if you provide /sigils-index.json
       await seedSigilRoutes(shell);
     }
+
+    // Make sure the offline fallback is cached so navigations stay friendly
+    const offlineCached = await cache.match(OFFLINE_FALLBACK, { ignoreSearch: true });
+    if (!offlineCached) {
+      try { await cache.add(new Request(OFFLINE_FALLBACK, { cache: "reload" })); } catch {}
+    }
   })());
   self.skipWaiting();
 });
@@ -231,13 +221,18 @@ self.addEventListener("activate", (event) => {
     if ("navigationPreload" in self.registration) {
       try { await self.registration.navigationPreload.enable(); } catch {}
     }
+    try {
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      clients.forEach((client) => client.postMessage({ type: "SW_ACTIVATED", version: VERSION }));
+    } catch {}
   })());
   self.clients.claim();
 });
 
 // Allow app to trigger immediate takeover
 self.addEventListener("message", (event) => {
-  if (event.data === "SKIP_WAITING") self.skipWaiting();
+  const { data } = event;
+  if (data === "SKIP_WAITING" || data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 // --- Fetch routing ---
@@ -290,6 +285,8 @@ self.addEventListener("fetch", (event) => {
         await mapShellToRoute(req.url, net);
         return net;
       } catch {
+        const cachedFallback = await caches.match(OFFLINE_FALLBACK, { ignoreSearch: true });
+        if (cachedFallback) return cachedFallback;
         return new Response(
           "<!doctype html><meta charset=utf-8><title>Offline</title><h1>Offline</h1><p>Open once online to cache the app shell.</p>",
           { headers: { "Content-Type": "text/html" }, status: 503 }
