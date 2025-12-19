@@ -156,22 +156,21 @@ export default function KaiSplashScreen(): React.JSX.Element | null {
       <div className="kai-splash__halo" aria-hidden="true" />
       <div className="kai-splash__glow" aria-hidden="true" />
 
-      <div className="kai-splash__content">
-        <div className="kai-splash__badge" aria-hidden="true">
+      <div className="kai-splash__content" aria-hidden="true">
+        <div className="kai-splash__badge">
           <div className="kai-splash__rays" />
           <div className="kai-splash__badge-core">
-            <img src="/phi.svg" alt="Phi sigil" loading="eager" decoding="sync" />
+            <img src="/phi.svg" alt="" loading="eager" decoding="sync" />
             <span className="kai-splash__badge-orb" />
+            <span className="kai-splash__badge-core-shine" />
           </div>
           <div className="kai-splash__ring" />
-        </div>
-
-        <div className="kai-splash__text">
-          <div className="kai-splash__eyebrow">Atlantean Gate • Live</div>
-          <div className="kai-splash__title">ΦNet Sovereign Link</div>
-          <div className="kai-splash__subtitle">Preparing memory tides &amp; sigil stream…</div>
+          <div className="kai-splash__ring kai-splash__ring--inner" />
+          <div className="kai-splash__flare" />
         </div>
       </div>
+
+      <span className="sr-only">Preparing Atlantean link…</span>
     </div>,
     document.body,
   );
