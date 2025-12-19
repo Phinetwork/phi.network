@@ -1,5 +1,5 @@
-// public/service-worker.js
 /* KAIKLOK SW — offline-first + route mapping for /s/* (sigil links)
+   - Canonical service worker (legacy /service-worker.js removed to avoid conflicts)
    - Instant offline boot (app-shell)
    - Seeds known sigil links from /sigils-index.json (optional)
    - Lazily maps any visited route → shell so it re-opens offline next time
