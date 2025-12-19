@@ -344,3 +344,9 @@
     .btn.save:focus-visible { animation: none; }
   }
   
+/* Kill the square card behind the klock face */
+.solar-anchored-dial .dial-stage.depth-3d{
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
