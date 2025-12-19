@@ -344,9 +344,10 @@
     .btn.save:focus-visible { animation: none; }
   }
   
-/* Kill the square card behind the klock face */
+/* Keep subtle depth, but make it perfectly circular (no square card) */
 .solar-anchored-dial .dial-stage.depth-3d{
+  border-radius: 999px !important;
   background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
+  box-shadow: none !important; /* or keep a soft glow if you want */
+  overflow: hidden; /* prevents any inner square bleed */
 }
