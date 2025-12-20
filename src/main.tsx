@@ -8,6 +8,9 @@ import "./App.css";
 import AppRouter from "./router/AppRouter";
 import { APP_VERSION, SW_VERSION_EVENT } from "./version";
 
+// ✅ REPLACE scheduler impl with your utils cadence file
+import { startKaiCadence } from "./utils/kai_cadence";
+
 const isProduction = import.meta.env.MODE === "production";
 
 declare global {
@@ -42,7 +45,6 @@ function rewriteLegacyHash(): void {
 if (isProduction) {
   window.addEventListener("DOMContentLoaded", rewriteLegacyHash, { once: true });
 }
-
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
@@ -93,11 +95,14 @@ if ("serviceWorker" in navigator && isProduction) {
         }
       });
 
-      // Periodically ask the browser to re-check the SW script to reduce staleness on mobile
-      const ONE_HOUR = 60 * 60 * 1000;
-      window.setInterval(() => {
-        reg.update().catch(() => {});
-      }, ONE_HOUR);
+      // ✅ REPLACES the hour interval: Kai beat cadence via utils
+      startKaiCadence({
+        unit: "beat",
+        every: 1, // "do a beat"
+        onTick: async () => {
+          await reg.update();
+        },
+      });
 
       console.log("Kairos Service Worker registered:", reg);
     } catch (err) {
