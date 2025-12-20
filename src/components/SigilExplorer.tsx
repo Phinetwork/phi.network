@@ -51,6 +51,7 @@ import {
   type UsernameClaimRegistry,
 } from "../utils/usernameClaimRegistry";
 import { USERNAME_CLAIM_KIND, type UsernameClaimPayload } from "../types/usernameClaim";
+import { SIGIL_EXPLORER_OPEN_EVENT } from "../constants/sigilExplorer";
 import "./SigilExplorer.css";
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -119,6 +120,8 @@ type ApiInhaleResponse = {
   urls?: string[] | null;
 };
 
+type SyncReason = "open" | "pulse" | "visible" | "focus" | "online" | "import";
+
 /* ─────────────────────────────────────────────────────────────────────
  *  Chakra tint system (per node)
  *  ───────────────────────────────────────────────────────────────────── */
@@ -180,7 +183,35 @@ const hasWindow = typeof window !== "undefined";
 const canStorage = hasWindow && typeof window.localStorage !== "undefined";
 
 /** KKS-1.0 φ-breath pulse cadence (ms). Used ONLY for cadence, never ordering. */
-const PULSE_POLL_MS = 5236;
+/** KKS-1.0 φ-exact breath (seconds). */
+const KAI_BREATH_SEC = 3 + Math.sqrt(5);
+/** Breath duration in ms (≈ 5236.0679ms). Used ONLY to schedule, never to order. */
+const KAI_BREATH_MS = KAI_BREATH_SEC * 1000;
+
+/**
+ * Genesis epoch (bridge only) used to phase-lock “pulse ticks” to breath boundaries.
+ * Ordering still uses payload pulse/beat/stepIndex; this is only the wake cadence.
+ */
+const KAI_GENESIS_EPOCH_MS = 1715323541888;
+
+/** Timer guards (avoid 0ms storms / long sleeps). */
+const KAI_TIMER_MIN_MS = 25;
+const KAI_TIMER_MAX_MS = 30_000;
+
+function msUntilNextKaiBreath(now = nowMs()): number {
+  const dt = now - KAI_GENESIS_EPOCH_MS;
+  if (!Number.isFinite(dt)) return 5236;
+
+  const breaths = dt / KAI_BREATH_MS;
+  const nextBreathIndex = Math.floor(breaths) + 1;
+  const nextAt = KAI_GENESIS_EPOCH_MS + nextBreathIndex * KAI_BREATH_MS;
+
+  const ms = nextAt - now;
+  const safe = Number.isFinite(ms) ? ms : 5236;
+
+  return Math.min(KAI_TIMER_MAX_MS, Math.max(KAI_TIMER_MIN_MS, Math.round(safe)));
+}
+
 
 /** Remote pull limits. */
 const URLS_PAGE_LIMIT = 5000;
@@ -2286,6 +2317,7 @@ const SigilExplorer: React.FC = () => {
       ownerHint?: string | null;
     }>
   >([]);
+  const syncNowRef = useRef<((reason: SyncReason) => Promise<void>) | null>(null);
 
   const markInteracting = useCallback((ms: number) => {
     const until = nowMs() + ms;
@@ -2785,7 +2817,7 @@ const SigilExplorer: React.FC = () => {
     // ── BREATH LOOP: inhale (push) ⇄ exhale (pull)
     const ac = new AbortController();
 
-    const syncOnce = async (reason: "open" | "pulse" | "visible" | "focus" | "online") => {
+    const syncOnce = async (reason: SyncReason) => {
       if (unmounted.current) return;
       if (!isOnline()) return;
       if (syncInFlightRef.current) return;
@@ -2794,7 +2826,7 @@ const SigilExplorer: React.FC = () => {
       if (scrollingRef.current) return;
 
       // ✅ mobile stability: avoid heavy remote import while in interaction window
-      if (nowMs() < interactUntilRef.current && reason === "pulse") return;
+      if (nowMs() < interactUntilRef.current && (reason === "pulse" || reason === "import")) return;
 
       syncInFlightRef.current = true;
 
@@ -2846,7 +2878,7 @@ const SigilExplorer: React.FC = () => {
         const sealNow = remoteSealRef.current;
         const shouldFullSeed =
           reason === "open" ||
-          ((reason === "visible" || reason === "focus" || reason === "online") &&
+          ((reason === "visible" || reason === "focus" || reason === "online" || reason === "import") &&
             sealNow !== lastFullSeedSealRef.current);
 
         if (shouldFullSeed) {
@@ -2859,21 +2891,67 @@ const SigilExplorer: React.FC = () => {
       }
     };
 
+    syncNowRef.current = syncOnce;
+
     // OPEN: do a full inhale seed immediately (guarantees repopulation power)
     seedInhaleFromRegistry();
     void syncOnce("open");
 
-    const intervalId = window.setInterval(() => void syncOnce("pulse"), PULSE_POLL_MS);
+let breathTimer: number | null = null;
 
-    const onVis = () => {
-      if (document.visibilityState === "visible") void syncOnce("visible");
-    };
-    document.addEventListener("visibilitychange", onVis);
+const scheduleNextBreath = (): void => {
+  if (!hasWindow) return;
+  if (unmounted.current) return;
 
-    const onFocus = () => void syncOnce("focus");
-    const onOnline = () => void syncOnce("online");
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("online", onOnline);
+  if (breathTimer != null) window.clearTimeout(breathTimer);
+
+  const delay = msUntilNextKaiBreath();
+  breathTimer = window.setTimeout(() => {
+    breathTimer = null;
+
+    // Stay phase-locked, but don’t do network work while hidden/offline.
+    if (document.visibilityState !== "visible") {
+      scheduleNextBreath();
+      return;
+    }
+    if (!isOnline()) {
+      scheduleNextBreath();
+      return;
+    }
+
+    void syncOnce("pulse");
+    scheduleNextBreath(); // re-locks every tick → no drift
+  }, delay);
+};
+
+const resnapBreath = (): void => {
+  // Re-phase immediately off “now”
+  scheduleNextBreath();
+};
+
+// Start breath scheduler (phase-locked) after open sync is kicked
+scheduleNextBreath();
+
+const onVis = () => {
+  if (document.visibilityState === "visible") {
+    resnapBreath();
+    void syncOnce("visible");
+  }
+};
+document.addEventListener("visibilitychange", onVis);
+
+const onFocus = () => {
+  resnapBreath();
+  void syncOnce("focus");
+};
+
+const onOnline = () => {
+  resnapBreath();
+  void syncOnce("online");
+};
+
+window.addEventListener("focus", onFocus);
+window.addEventListener("online", onOnline);
 
     return () => {
       if (window.__SIGIL__) window.__SIGIL__.registerSigilUrl = prev;
@@ -2888,12 +2966,30 @@ const SigilExplorer: React.FC = () => {
       if (typeof unsubClaims === "function") unsubClaims();
       if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
       flushTimerRef.current = null;
-      window.clearInterval(intervalId);
+      if (breathTimer != null) window.clearTimeout(breathTimer);
+breathTimer = null;
       ac.abort();
+      syncNowRef.current = null;
       unmounted.current = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bump, markInteracting, scheduleUiFlush, setLastAddedSafe]);
+
+  const requestImmediateSync = useCallback(
+    (reason: SyncReason) => {
+      const fn = syncNowRef.current;
+      if (fn) void fn(reason);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!hasWindow) return;
+
+    const onOpen = () => requestImmediateSync("visible");
+    window.addEventListener(SIGIL_EXPLORER_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(SIGIL_EXPLORER_OPEN_EVENT, onOpen);
+  }, [requestImmediateSync]);
 
   const forest = useMemo(() => buildForest(memoryRegistry), [registryRev]);
 
@@ -3102,11 +3198,13 @@ const SigilExplorer: React.FC = () => {
         } else if (urls.length > 0) {
           forceInhaleUrls(urls);
         }
+
+        requestImmediateSync("import");
       } catch {
         // ignore
       }
     },
-    [bump, markInteracting, setLastAddedSafe],
+    [bump, markInteracting, requestImmediateSync, setLastAddedSafe],
   );
 
   const handleExport = useCallback(() => {
