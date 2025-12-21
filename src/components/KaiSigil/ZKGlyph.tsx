@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import { CENTER, PHI, SPACE, lissajousPath } from "./constants";
 import { PULSE_MS } from "../../utils/kai_pulse";
 
@@ -13,8 +13,13 @@ type Props = {
 };
 
 const ZKGlyph: React.FC<Props> = ({
-  uid, size, phaseColor, outerRingText, innerRingText,
-  animate, prefersReduce,
+  uid,
+  size,
+  phaseColor,
+  outerRingText,
+  innerRingText,
+  animate,
+  prefersReduce,
 }) => {
   const rOuter = SPACE * 0.34;
   const rInner = rOuter / PHI;
@@ -46,8 +51,12 @@ const ZKGlyph: React.FC<Props> = ({
     const fB = (1 / secPerPulse) * ((PHI - 1) * 0.17);
     const fD = (1 / secPerPulse) * (Math.SQRT2 * 0.15);
 
-    const a0 = 5, b0 = 8, aAmp = 1.6, bAmp = 1.2;
-    const d0 = Math.PI / 2, dAmp = Math.PI / 3;
+    const a0 = 5,
+      b0 = 8,
+      aAmp = 1.6,
+      bAmp = 1.2;
+    const d0 = Math.PI / 2,
+      dAmp = Math.PI / 3;
 
     const render = () => {
       const t = (performance.now() - t0) / 1000;
@@ -62,8 +71,105 @@ const ZKGlyph: React.FC<Props> = ({
     return () => cancelAnimationFrame(raf);
   }, [doAnim]);
 
+  // ─────────────────────────────────────────────────────────────
+  // Φ RING TEXT — export-safe (no textPath fallback ever)
+  // ─────────────────────────────────────────────────────────────
+
+  const mono = `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+  const uiSans = `ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`;
+
+  const outerFont = Math.max(8, (size ?? 240) * 0.026);
+  const innerFont = Math.max(7, (size ?? 240) * 0.022);
+
+  const approxCharW = (fs: number) => fs * 0.62; // good mono approximation
+  const maxCharsForRadius = (radius: number, fs: number) => {
+    const circ = 2 * Math.PI * radius;
+    return Math.max(48, Math.floor(circ / approxCharW(fs)));
+  };
+
+  const condenseSeal = (raw: string, maxLen: number) => {
+    const s = (raw ?? "").trim();
+    if (!s) return "";
+
+    // Prefer showing the *seal fields*, not the whole URL/payload.
+    // Deterministic pick order:
+    const wanted = ["sig=", "b58=", "len=", "crc32=", "creator=", "zk=", "alg=", "day=", "beat=", "hz=", "poseidon="];
+
+    const parts = s.split(" · ").map((p) => p.trim()).filter(Boolean);
+    const kept = parts.filter((p) => wanted.some((w) => p.startsWith(w)));
+
+    const out = (kept.length ? kept : parts).join(" · ");
+    if (out.length <= maxLen) return out;
+    return out.slice(0, Math.max(0, maxLen - 1)).trimEnd() + "…";
+  };
+
+  const outerDisplay = useMemo(() => {
+    const maxLen = maxCharsForRadius(rOuter, outerFont);
+    return condenseSeal(outerRingText, maxLen);
+  }, [outerRingText, rOuter, outerFont]);
+
+  const innerDisplay = useMemo(() => {
+    const maxLen = maxCharsForRadius(rInner, innerFont);
+    return condenseSeal(innerRingText, maxLen);
+  }, [innerRingText, rInner, innerFont]);
+
+  const renderRingText = (
+    text: string,
+    radius: number,
+    fontFamily: string,
+    fontSize: number,
+    fill: string,
+    opacity: number
+  ) => {
+    const chars = Array.from(text);
+    if (!chars.length) return null;
+
+    // Start at 12 o’clock, tangent direction
+    const start = -Math.PI / 2;
+    const n = chars.length;
+
+    const stroke = "#001014";
+    const strokeW = Math.max(0.45, fontSize * 0.085);
+
+    return (
+      <g aria-hidden="true" pointerEvents="none">
+        {chars.map((ch, i) => {
+          const t = i / n;
+          const ang = start + t * Math.PI * 2;
+          const x = CENTER + radius * Math.cos(ang);
+          const y = CENTER + radius * Math.sin(ang);
+          const deg = (ang * 180) / Math.PI + 90; // tangent
+
+          return (
+            <text
+              key={`${i}-${ch}`}
+              transform={`translate(${x} ${y}) rotate(${deg})`}
+              fontFamily={fontFamily}
+              fontSize={fontSize}
+              fill={fill}
+              opacity={opacity}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              letterSpacing="0"
+              stroke={stroke}
+              strokeOpacity="0.6"
+              strokeWidth={strokeW}
+              paintOrder="stroke"
+            >
+              {ch}
+            </text>
+          );
+        })}
+      </g>
+    );
+  };
+
   return (
-    <g id={`${uid}-zk-glyph`} aria-label="Atlantean zero-knowledge verification glyph" pointerEvents="none">
+    <g
+      id={`${uid}-zk-glyph`}
+      aria-label="Atlantean zero-knowledge verification glyph"
+      pointerEvents="none"
+    >
       <defs>
         <radialGradient id={gradId} cx="50%" cy="50%" r="60%">
           <stop offset="0%" stopColor={phaseColor} stopOpacity="0.85">
@@ -86,6 +192,7 @@ const ZKGlyph: React.FC<Props> = ({
           </stop>
         </radialGradient>
 
+        {/* keep these paths (harmless) in case anything else wants them */}
         <path
           id={phiRingId}
           d={`M ${CENTER} ${CENTER - rOuter} a ${rOuter} ${rOuter} 0 1 1 0 ${2 * rOuter} a ${rOuter} ${rOuter} 0 1 1 0 -${2 * rOuter}`}
@@ -100,7 +207,16 @@ const ZKGlyph: React.FC<Props> = ({
         <path id={petalUseId} ref={petalDefRef} d={lissajousPath(5, 8, Math.PI / 2)} />
       </defs>
 
-      <circle cx={CENTER} cy={CENTER} r={rOuter} fill="none" stroke={`url(#${gradId})`} strokeWidth={wGlow} opacity="0.5" vectorEffect="non-scaling-stroke" />
+      <circle
+        cx={CENTER}
+        cy={CENTER}
+        r={rOuter}
+        fill="none"
+        stroke={`url(#${gradId})`}
+        strokeWidth={wGlow}
+        opacity="0.5"
+        vectorEffect="non-scaling-stroke"
+      />
 
       {Array.from({ length: 12 }, (_, i) => (
         <use
@@ -122,33 +238,38 @@ const ZKGlyph: React.FC<Props> = ({
         <circle cx={CENTER + rInner / 2.2} cy={CENTER} r={rInner * 0.86} fill="none" stroke="#00FFD0" strokeWidth={wRing} />
       </g>
 
-      <circle cx={CENTER} cy={CENTER} r={rInner} fill="none" stroke={`url(#${gradId})`} strokeWidth={wRing} opacity="0.55" vectorEffect="non-scaling-stroke" />
+      <circle
+        cx={CENTER}
+        cy={CENTER}
+        r={rInner}
+        fill="none"
+        stroke={`url(#${gradId})`}
+        strokeWidth={wRing}
+        opacity="0.55"
+        vectorEffect="non-scaling-stroke"
+      />
 
-      <text
-        key={`outer-${outerRingText}`}
-        fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-        fontSize={Math.max(8, (size ?? 240) * 0.035)}
-        fill={phaseColor}
-        opacity="0.33"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        letterSpacing={Math.max(0.8, (size ?? 240) * 0.002)}
-        pointerEvents="none"
-      >
-        <textPath href={`#${phiRingId}`} startOffset="50%">{outerRingText}</textPath>
-      </text>
+      {/* Φ ring (mono, engraved) */}
+      {outerDisplay &&
+        renderRingText(
+          outerDisplay,
+          rOuter,
+          mono,
+          outerFont,
+          phaseColor,
+          0.33
+        )}
 
-      <text
-        fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
-        fontSize={Math.max(7, (size ?? 240) * 0.03)}
-        fill="#00FFD0"
-        opacity="0.28"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        pointerEvents="none"
-      >
-        <textPath href={`#${binRingId}`} startOffset="50%">{innerRingText}</textPath>
-      </text>
+      {/* binary / seal ring (sans, lighter) */}
+      {innerDisplay &&
+        renderRingText(
+          innerDisplay,
+          rInner,
+          uiSans,
+          innerFont,
+          "#00FFD0",
+          0.28
+        )}
     </g>
   );
 };
