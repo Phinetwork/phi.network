@@ -13,12 +13,10 @@
 
 import { blake3 } from "@noble/hashes/blake3";
 import { bytesToHex } from "@noble/hashes/utils";
-import { getKaiTimeSource, type KaiTimeSource } from "./kai_pulse";
 
 ////////////////////////////////////////////////////////////////////////////////
 // ░░  CONSTANTS  ░░
 ////////////////////////////////////////////////////////////////////////////////
-
 /** Genesis Breath — the harmonic epoch. */
 export const GENESIS_TS = Date.UTC(2024, 4, 10, 6, 45, 41, 888);
 
@@ -33,14 +31,8 @@ export const SYSTEM_INTENTION = "Enter my portal";
 ////////////////////////////////////////////////////////////////////////////////
 
 /** Returns the current Kai-Pulse number since Genesis. */
-export const getCurrentKaiPulse = (
-  source: KaiTimeSource | number = getKaiTimeSource(),
-): number => {
-  if (typeof source === "number") {
-    return Math.floor((source - GENESIS_TS) / PULSE_MS);
-  }
-  return source.nowPulse();
-};
+export const getCurrentKaiPulse = (now: number = Date.now()): number =>
+  Math.floor((now - GENESIS_TS) / PULSE_MS);
 
 ////////////////////////////////////////////////////////////////////////////////
 // ░░  INTERNAL HELPERS  ░░
