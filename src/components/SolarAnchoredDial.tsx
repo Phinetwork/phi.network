@@ -1,7 +1,7 @@
 // SolarAnchoredDial.tsx — Offline, sunrise-anchored dial + controls
 // Drop-in child component for EternalKlock.tsx (no geolocation, no network)
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import KaiKlock from "./KaiKlock";
 import "./SolarAnchoredDial.css";
 
@@ -20,7 +20,6 @@ import {
   setSunriseFromLocalHHMM,
   tapSunroseNow,
 } from "../SovereignSolar";
-import { getKaiTimeSource } from "../utils/kai_pulse";
 
 /* Types */
 type ChakraStep = {
@@ -62,9 +61,8 @@ const SolarAnchoredDial: React.FC<SolarAnchoredDialProps> = ({
   className = "",
   onSunriseChange,
 }) => {
-  const timeSourceRef = useRef(getKaiTimeSource());
   const [glowPulse, setGlowPulse] = useState(false);
-  const [now, setNow] = useState<Date>(() => new Date(timeSourceRef.current.nowEpochMs()));
+  const [now, setNow] = useState<Date>(new Date());
   const [hhmm, setHhmm] = useState("");
   const [offsetPreview, setOffsetPreview] = useState<number | null>(null);
   const [showExplainer, setShowExplainer] = useState(false);
@@ -72,7 +70,7 @@ const SolarAnchoredDial: React.FC<SolarAnchoredDialProps> = ({
   // φ tick
   useEffect(() => {
     const tick = () => {
-      setNow(new Date(timeSourceRef.current.nowEpochMs()));
+      setNow(new Date());
       setGlowPulse(true);
       setTimeout(() => setGlowPulse(false), 750);
     };
@@ -158,7 +156,7 @@ const SolarAnchoredDial: React.FC<SolarAnchoredDialProps> = ({
     const off = getSunriseOffsetSec();
     setOffsetPreview(off);
     onSunriseChange?.(off);
-    setNow(new Date(timeSourceRef.current.nowEpochMs()));
+    setNow(new Date());
   };
 
   const handleTapSunrose = () => {
@@ -166,7 +164,7 @@ const SolarAnchoredDial: React.FC<SolarAnchoredDialProps> = ({
     const off = getSunriseOffsetSec();
     setOffsetPreview(off);
     onSunriseChange?.(off);
-    setNow(new Date(timeSourceRef.current.nowEpochMs()));
+    setNow(new Date());
   };
 // Turn digits into H:MM or HH:MM as you type (works with numeric keypad)
 const handleHHMMMaskedChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
