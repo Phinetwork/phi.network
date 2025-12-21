@@ -31,7 +31,6 @@ import UpgradeSigilModal from "../../components/sigil/UpgradeSigilModal";
 import SigilConflictBanner from "../../components/SigilConflictBanner";
 import ValueHistoryModal from "../../components/ValueHistoryModal";
 import { useValueHistory } from "../../hooks/useValueHistory";
-import SigilPublisherPanel from "../../components/SigilPublisherPanel";
 /* ——— App-level Kai math ——— */
 import {
   ETERNAL_STEPS_PER_BEAT as STEPS_PER_BEAT,
@@ -3525,7 +3524,6 @@ useEffect(() => {
 <section className="sigil-tools">
 
 {/* 2) Publisher — mints derivative action glyphs */}
-<SigilPublisherPanel />
 </section>
   <SovereignControls
     isArchived={isArchived}
