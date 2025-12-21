@@ -1888,14 +1888,14 @@ a:hover {
   }
 
   .nav-item {
-    flex: 0 0 clamp(168px, 42vw, 210px);
-    min-height: clamp(150px, 40vw, 200px);
+    flex: 0 0 clamp(130px, 38vw, 170px);
+    height: auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 0.3rem;
-    padding: 0.7rem 0.72rem;
+    padding: 0.62rem 0.66rem;
 
     scroll-snap-align: start;
     scroll-snap-stop: always;
@@ -2016,8 +2016,8 @@ a:hover {
   }
 
   .nav-item {
-    flex: 0 0 clamp(150px, 52vw, 184px);
-    min-height: clamp(132px, 48vw, 180px);
+    flex: 0 0 clamp(120px, 48vw, 158px);
+    height: auto;
   }
 }
 
@@ -2044,8 +2044,8 @@ a:hover {
   }
 
   .nav-item {
-    flex: 0 0 clamp(138px, 64vw, 168px);
-    min-height: clamp(120px, 58vw, 160px);
+    flex: 0 0 clamp(112px, 60vw, 148px);
+    height: auto;
   }
 
   .nav-head,
