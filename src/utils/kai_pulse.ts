@@ -2,6 +2,11 @@
 // Single source of truth for Kai-Klok timing & parsing (no React hooks).
 // φ-exact engine: integers + fixed-point only. No float accumulation anywhere.
 //
+// v13.3.0 — SOVEREIGN BUILD-TIME ANCHOR (NO .env)
+//   - Adds optional build-time μpulse seed via Vite `define` constant: __KAI_ANCHOR_MICRO__
+//   - Auto-seeds deterministic NOW on first read (or import) if constant is present
+//   - No behavior change to all pure math / parsing. No Chronos “NOW” usage.
+//
 // v13.2.1 — TYPE-UNIFIED UTC INPUTS (fix TS2345)
 //   - Accepts UTC inputs as: string | number(ms) | bigint(ms) | Date
 //   - Fixes: bigint not assignable to number|Date, and number not assignable to string|bigint|Date
@@ -159,6 +164,7 @@ const chakraForWeekdayIndex = (idx: number): { weekday: Weekday; chakraDay: Chak
 // DETERMINISTIC “NOW” (μpulse provider)
 //   - NO Date.now / new Date defaults
 //   - Seed once with μpulses coordinate, then advance via monotonic time
+//   - v13.3.0: optional build-time hard-coded anchor (Vite define)
 // ─────────────────────────────────────────────────────────────
 export type KaiNowMicroProvider = () => bigint;
 
@@ -188,6 +194,60 @@ function monotonicNowUs(): bigint {
   }
 
   return 0n;
+}
+
+function hasMonotonicClock(): boolean {
+  const g = globalThis as unknown as GlobalLike;
+  return !!(g.performance && typeof g.performance.now === "function") ||
+         !!(g.process?.hrtime && typeof g.process.hrtime.bigint === "function");
+}
+
+/**
+ * Build-time sovereign anchor injection (NO env files):
+ *   In vite.config.ts you will define:
+ *     define: { __KAI_ANCHOR_MICRO__: '"1749123456789012"' }
+ *   (string is safest; numbers lose precision)
+ */
+declare const __KAI_ANCHOR_MICRO__: unknown;
+
+function parseBuildAnchorMicro(v: unknown): bigint | null {
+  if (typeof v === "bigint") return v;
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) return null;
+    return BigInt(Math.trunc(v));
+  }
+  if (typeof v === "string") {
+    const s0 = v.trim();
+    if (!s0) return null;
+    const s = s0.endsWith("n") ? s0.slice(0, -1) : s0;
+    if (!/^[+-]?\d+$/.test(s)) return null;
+    const bi = BigInt(s);
+    return bi;
+  }
+  return null;
+}
+
+function tryAutoSeedFromBuildAnchor(): void {
+  if (__seeded || __nowProvider) return;
+
+  // Only auto-seed when a monotonic clock exists; otherwise seeding at mono=0 would drift incorrectly later.
+  if (!hasMonotonicClock()) return;
+
+  // `typeof` guard: if the symbol is not defined by bundler, referencing it would throw.
+  // In Vite builds with `define`, it WILL be defined.
+  let raw: unknown = undefined;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    raw = typeof __KAI_ANCHOR_MICRO__ === "undefined" ? undefined : __KAI_ANCHOR_MICRO__;
+  } catch {
+    raw = undefined;
+  }
+
+  const anchor = parseBuildAnchorMicro(raw);
+  if (anchor === null) return;
+  if (anchor < 0n) throw new Error("Invalid __KAI_ANCHOR_MICRO__: must be >= 0.");
+
+  seedKaiNowMicroPulses(anchor);
 }
 
 /** Seed deterministic NOW from a known μpulse coordinate. */
@@ -223,10 +283,18 @@ export function setKaiNowMicroProvider(provider: KaiNowMicroProvider | null): vo
   __nowProvider = provider;
 }
 
-/** Read deterministic NOW μpulses (requires seed or provider). */
+/** Read deterministic NOW μpulses (requires seed/provider; auto-seeds if build anchor is present). */
 function kaiNowMicroPulses(): bigint {
   if (!__nowProvider) {
-    throw new Error("Kai NOW provider not set. Call seedKaiNowMicroPulses() or setKaiNowMicroProvider().");
+    tryAutoSeedFromBuildAnchor();
+  }
+  if (!__nowProvider) {
+    throw new Error(
+      "Kai NOW provider not set. Sovereign options:\n" +
+        "  1) Build-time define: __KAI_ANCHOR_MICRO__ (recommended)\n" +
+        "  2) Call seedKaiNowMicroPulses(anchorMicro) once on boot\n" +
+        "  3) Call setKaiNowMicroProvider(() => microPulses)\n"
+    );
   }
   return __nowProvider();
 }
@@ -1152,6 +1220,7 @@ export async function buildKaiKlockResponse(utc?: string | number | Date | bigin
 
   return res;
 }
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Compatibility exports (number-facing callers)
 //   NOTE: kairosEpochNow() returns μpulses (BigInt), not ms.
