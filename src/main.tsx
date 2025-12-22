@@ -10,7 +10,7 @@ import { APP_VERSION, SW_VERSION_EVENT } from "./version";
 
 // ✅ REPLACE scheduler impl with your utils cadence file
 import { startKaiCadence } from "./utils/kai_cadence";
-import { seedKaiNowMicroPulses } from "./utils/kai_pulse";
+import { microPulsesSinceGenesis, seedKaiNowMicroPulses } from "./utils/kai_pulse";
 
 
 /* ────────────────────────────────────────────────────────────────
@@ -62,6 +62,17 @@ const readSeedFromEnv = (): bigint | null => {
   return parseBigInt(typeof raw === "string" ? raw : undefined);
 };
 
+const hostEpochMs = (): number => {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    const origin =
+      typeof performance.timeOrigin === "number" && Number.isFinite(performance.timeOrigin)
+        ? performance.timeOrigin
+        : Date.now() - performance.now();
+    return origin + performance.now();
+  }
+  return Date.now();
+};
+
 const pickSeedMicroPulses = (): bigint => {
   const fromLS = readSeedFromLocalStorage();
   if (fromLS !== null) return fromLS;
@@ -69,8 +80,8 @@ const pickSeedMicroPulses = (): bigint => {
   const fromEnv = readSeedFromEnv();
   if (fromEnv !== null) return fromEnv;
 
-  // sealed Genesis anchor (pulse 0) when no saved seed exists
-  return 0n;
+  // deterministic anchor derived from host epoch once at boot
+  return microPulsesSinceGenesis(hostEpochMs());
 };
 
 // 🔒 MUST happen before any component calls kairosEpochNow()

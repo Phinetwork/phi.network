@@ -259,6 +259,23 @@ function tryAutoSeedFromBuildAnchor(): void {
   seedKaiNowMicroPulses(anchor);
 }
 
+const hostEpochMs = (): number => {
+  const g = globalThis as unknown as { performance?: { now?: () => number; timeOrigin?: number } };
+  const perf = g.performance;
+  if (perf && typeof perf.now === "function") {
+    const origin =
+      typeof perf.timeOrigin === "number" && Number.isFinite(perf.timeOrigin)
+        ? perf.timeOrigin
+        : Date.now() - perf.now();
+    return origin + perf.now();
+  }
+  return Date.now();
+};
+
+const defaultKaiAnchorMicro = (): bigint => {
+  return microPulsesSinceGenesis(hostEpochMs());
+};
+
 /** Seed deterministic NOW from a known μpulse coordinate. */
 export function seedKaiNowMicroPulses(pμ: bigint): void {
   __currentMicro = pμ;
@@ -291,8 +308,7 @@ function kaiNowMicroPulses(): bigint {
     tryAutoSeedFromBuildAnchor();
   }
   if (!__nowProvider) {
-    // Final fallback: sealed Genesis anchor (pulse 0) with deterministic ticker.
-    seedKaiNowMicroPulses(0n);
+    seedKaiNowMicroPulses(defaultKaiAnchorMicro());
   }
   const fn = __nowProvider;
   if (!fn) throw new Error("Kai NOW provider unavailable after seeding.");
