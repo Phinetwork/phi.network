@@ -3494,7 +3494,7 @@ const onSealModalClose = useCallback((ev?: unknown, reason?: string) => {
                                 <> to <abbr title={c.recipientPhiKey}>{c.recipientPhiKey.slice(0, 10)}…</abbr></>
                               ) : null}
                             </span>
-                            <span className="meta">Pulse {c.timestamp}</span>
+                            <span className="meta">☤Kai {c.timestamp}</span>
                           </div>
                         </li>
                       ))}
