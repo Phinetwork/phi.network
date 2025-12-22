@@ -350,57 +350,25 @@ function ensureKaiAnchor(): KaiAnchor {
     return kaiAnchorStore.anchor;
   }
 
-  const perf0 = window.performance.now();
-
-  // 1) storage μpulse checkpoint
-  const stored = readLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY);
-  if (stored !== null && stored > 0n) {
-    kaiAnchorStore.anchor = { pμ0: stored, perf0, source: "storage" };
-    return kaiAnchorStore.anchor;
-  }
-
-  // migrate legacy msUTC checkpoint (if present)
-  const legacyMs = readLocalStorageMsUTC(KAI_ANCHOR_MSUTC_LEGACY_KEY);
-  if (legacyMs !== null && legacyMs > 0) {
-    const migrated = microPulsesSinceGenesisMs(legacyMs);
-    if (migrated > 0n) {
-      writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, migrated);
-      kaiAnchorStore.anchor = { pμ0: migrated, perf0, source: "storage" };
-      return kaiAnchorStore.anchor;
-    }
-  }
-
-  // 2) build-injected checkpoint
-  const envPμ = readInjectedEnvAnchorMicroPulses();
-  if (envPμ !== null && envPμ > 0n) {
-    writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, envPμ);
-    kaiAnchorStore.anchor = { pμ0: envPμ, perf0, source: "env" };
-    return kaiAnchorStore.anchor;
-  }
-
-  // 3) canonical now (kai_pulse.ts)
   const pμ0 = seedFromKaiPulseNow();
-  if (pμ0 > 0n) writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, pμ0);
-  kaiAnchorStore.anchor = { pμ0, perf0, source: "kpp" };
+  kaiAnchorStore.anchor = { pμ0, perf0: 0, source: "kpp" };
   return kaiAnchorStore.anchor;
 }
 
 // Force-resync anchor from canonical now (eliminates stale-storage offsets)
 function hardResyncKaiAnchor(): void {
   if (typeof window === "undefined") return;
-  const perf0 = window.performance.now();
   const pμ0 = seedFromKaiPulseNow();
   if (pμ0 > 0n) writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, pμ0);
-  kaiAnchorStore.anchor = { pμ0, perf0, source: "kpp" };
+  kaiAnchorStore.anchor = { pμ0, perf0: 0, source: "kpp" };
 }
 
 // μpulses since Genesis “now” (deterministic after seed)
 function microPulsesNow(): bigint {
   if (typeof window === "undefined") return 0n;
-  const a = ensureKaiAnchor();
-  const elapsedMs = window.performance.now() - a.perf0;
-  const deltaPμ = roundTiesToEvenBigInt((elapsedMs / PULSE_MS) * 1_000_000);
-  return a.pμ0 + deltaPμ;
+  const now = normalizeKaiEpochRawToMicroPulses(kairosEpochNow());
+  kaiAnchorStore.anchor = { pμ0: now, perf0: 0, source: "kpp" };
+  return now;
 }
 
 // μpulses → epoch ms (number) — derived ONLY from GENESIS_TS + PULSE_MS
