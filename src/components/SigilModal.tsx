@@ -1395,9 +1395,9 @@ const SigilModal: FC<Props> = ({ initialPulse = 0, onClose }) => {
               </span>
 
               <span className="mint-btn__text">
-                <span className="mint-btn__title">MINT MOMENT</span>
+                <span className="mint-btn__title">MINT ΦKey </span>
                 <span className="mint-btn__sub">
-                  Pulse {pulse.toLocaleString()} • {beatStepDisp}
+                  ☤KAI {pulse.toLocaleString()}
                 </span>
               </span>
             </button>
