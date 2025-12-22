@@ -13,7 +13,7 @@ export type SendLockWire = {
   canonical: string;
   token: string;
   id: string;
-  at: number;
+  at: number; // epoch-ms (number) for JSON/localStorage + cross-tab messaging
 };
 
 export type SendLockRecord = { id: string; at: number };
@@ -35,7 +35,17 @@ type SendLockErrorDetail = {
   error: Record<string, unknown>;
 };
 
-const nowMs = (): number => kairosEpochNow();
+/**
+ * kairosEpochNow() is bigint; this lock layer persists timestamps in JSON,
+ * so we downcast to number (safe at present epoch scales).
+ */
+const nowMs = (): number => {
+  const b = kairosEpochNow();
+  const n = Number(b);
+  // best-effort safety: avoid NaN/Infinity
+  if (!Number.isFinite(n)) return Number.MAX_SAFE_INTEGER;
+  return n;
+};
 
 const sendLockKey = (canonical: string, token: string) =>
   `sigil:sendlock:${canonical}:t:${token}`;
@@ -77,7 +87,7 @@ const generateId = (): string => {
       return Array.from(a, (n) => n.toString(36)).join("");
     }
   } catch {
-    // fall through to Math.random
+    // fall through
   }
   const t = nowMs();
   return `${t.toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -111,7 +121,17 @@ export function acquireSendLock(
       const raw = localStorage.getItem(key);
       if (raw) {
         try {
-          rec = JSON.parse(raw) as SendLockRecord;
+          const parsed = JSON.parse(raw) as unknown;
+          if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            typeof (parsed as Record<string, unknown>).id === "string" &&
+            typeof (parsed as Record<string, unknown>).at === "number"
+          ) {
+            rec = parsed as SendLockRecord;
+          } else {
+            rec = null;
+          }
         } catch (e) {
           dispatchAsync(SEND_LOCK_ERROR_EVENT, {
             stage: "parse",
@@ -197,16 +217,16 @@ export function acquireSendLock(
     }
 
     return { ok: true, id };
-  } else {
-    // Existing live lock; report stale-check decision
-    dispatchAsync(SEND_LOCK_ERROR_EVENT, {
-      stage: "stale-check",
-      canonical: c,
-      token,
-      id,
-      error: { message: "Lock already held and not stale." },
-    } as SendLockErrorDetail);
   }
+
+  // Existing live lock; report stale-check decision
+  dispatchAsync(SEND_LOCK_ERROR_EVENT, {
+    stage: "stale-check",
+    canonical: c,
+    token,
+    id,
+    error: { message: "Lock already held and not stale." },
+  } as SendLockErrorDetail);
 
   return { ok: false, id };
 }
@@ -236,7 +256,19 @@ export function releaseSendLock(
   try {
     if (typeof localStorage !== "undefined") {
       const raw = localStorage.getItem(key);
-      rec = raw ? (JSON.parse(raw) as SendLockRecord) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          typeof (parsed as Record<string, unknown>).id === "string" &&
+          typeof (parsed as Record<string, unknown>).at === "number"
+        ) {
+          rec = parsed as SendLockRecord;
+        } else {
+          rec = null;
+        }
+      }
     }
   } catch (e) {
     dispatchAsync(SEND_LOCK_ERROR_EVENT, {

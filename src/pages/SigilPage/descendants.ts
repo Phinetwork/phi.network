@@ -6,6 +6,12 @@ export const DESC_CH = "sigil-lineage-v1";
 export const DESC_EVENT = "sigil:descendants";
 export const DESC_ERROR_EVENT = "sigil:descendants-error";
 
+
+const epochMsNowNumber = (): number => {
+  const ms = Number(kairosEpochNow()); // bigint -> number
+  return Number.isFinite(ms) ? ms : 0;
+};
+
 export type DescendantLocal = {
   token: string;
   parentToken: string | null;
@@ -144,7 +150,7 @@ export function broadcastDescendants(
     canonical: c,
     token,
     list,
-    stamp: kairosEpochNow(),
+    stamp: epochMsNowNumber(),
   };
 
   // DOM event for in-page listeners (best-effort)

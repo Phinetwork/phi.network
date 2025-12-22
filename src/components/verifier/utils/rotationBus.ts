@@ -6,7 +6,7 @@
    • Uses localStorage, BroadcastChannel, and window CustomEvent
 ────────────────────────────────────────────────────────────────── */
 
-import { kairosEpochNow } from "../../utils/kai_pulse";
+import { kairosEpochNow } from "../../../utils/kai_pulse";
 import { logError } from "./log";
 
 export const ROTATE_CH = "sigil-xfer-v1";

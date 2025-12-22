@@ -332,7 +332,9 @@ const NoteModal: FC<NoteModalProps> = ({ pulse, initialText, onSave, onClose }) 
     if (!trimmed || saving) return;
     setSaving(true);
 
-    const nowKai = computeLocalKai(new Date(kairosEpochNow()));
+    const nowMsBI = kairosEpochNow();                 // bigint (epoch ms)
+const nowKai = computeLocalKai(new Date(Number(nowMsBI))); // Date needs number
+
     const livePulse = Math.max(0, nowKai.livePulseApprox ?? Math.round(pulse));
     const note: Note = {
       id: `${livePulse}-${kairosEpochNow()}`,
