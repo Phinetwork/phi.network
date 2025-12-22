@@ -294,7 +294,9 @@ function kaiNowMicroPulses(): bigint {
     // Final fallback: sealed Genesis anchor (pulse 0) with deterministic ticker.
     seedKaiNowMicroPulses(0n);
   }
-  return __nowProvider();
+  const fn = __nowProvider;
+  if (!fn) throw new Error("Kai NOW provider unavailable after seeding.");
+  return fn();
 }
 
 /** Subscribe to deterministic Kai ticks (fires immediately with current snapshot). */
