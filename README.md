@@ -1,6 +1,6 @@
 # OFFICIAL NOTICE — REPOSITORY RELOCATED
 
-This repository is **no longer the canonical source of truth** for **Verify.Kai**.
+This repository is **no longer the canonical source of truth** for **PHI.NETWORK**.
 
 ✅ **New official repository:** https://github.com/phinetwork/phi_network
 
