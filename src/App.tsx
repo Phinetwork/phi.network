@@ -1,25 +1,19 @@
 // src/App.tsx
 /* ──────────────────────────────────────────────────────────────────────────────
    App.tsx · ΦNet Sovereign Gate Shell (KaiOS-style PWA)
-   v29.4.4 · INSTANT LOAD / NO-HOMEPAGE-SPLASH / WarmTimer Fix / Heavy UI Deferred
+   v29.4.4 → v30.0.0 · Performance-focused modular refactor
 
-   ✅ GOALS (implemented):
-   - Fix linter/TS error: warmTimer not defined → ref-based timer.
-   - Instant first paint: code-split heavy modules (Chart / Modals / Explorer / Klock).
-   - Homepage splash killer: remove any boot/splash overlays on "/" immediately.
-   - SW warming: idle-only + focus rewarm, abort-safe, respects Save-Data/2G.
-   - Zero “loading splash” fallbacks: Suspense fallback is null/blank spacer.
-
-   ✅ UPDATE (drop-in):
-   - Deterministic Kai seed now follows μpulse-first:
-       localStorage μpulse checkpoint > build-injected μpulse checkpoint > kairosEpochNow() fallback
-   - App.tsx still never uses Date APIs.
-   - While running, we continuously refresh the stored μpulse checkpoint (so reload/SW-refresh won’t “jump”).
+   Goals:
+   - Preserve instant load / zero-splash behavior.
+   - Keep deterministic Kai clock + μpulse checkpoint persistence.
+   - Modularize behaviors into focused hooks to minimize re-render surfaces.
+   - Prefetch heavy UI only when safe, keep Suspense fallbacks empty.
 ────────────────────────────────────────────────────────────────────────────── */
 
 import React, {
   Suspense,
   lazy,
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -160,6 +154,59 @@ const APP_SHELL_HINTS: readonly string[] = [
   "/index.html",
 ];
 
+const NAV_ITEMS: readonly NavItem[] = [
+  { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
+  { to: "/mint", label: "Mint ΦKey", desc: "Breath-minted seal" },
+  { to: "/voh", label: "KaiVoh", desc: "Memory OS" },
+  { to: "/keystream", label: "ΦStream", desc: "Live keystream" },
+];
+
+const DNS_IP = "137.66.18.241";
+
+const BREATH_S = 3 + Math.sqrt(5);
+const BREATH_MS = BREATH_S * 1000;
+const BREATHS_PER_DAY = 17_491.270421;
+
+const BEATS_PER_DAY = 36;
+const STEPS_PER_BEAT = 44;
+const STEPS_PER_DAY = BEATS_PER_DAY * STEPS_PER_BEAT;
+
+// Canon breath count per day (precision)
+const PULSES_PER_DAY = 17_491.270421;
+
+const ARK_COLORS: readonly string[] = [
+  "var(--chakra-ark-0)",
+  "var(--chakra-ark-1)",
+  "var(--chakra-ark-2)",
+  "var(--chakra-ark-3)",
+  "var(--chakra-ark-4)",
+  "var(--chakra-ark-5)",
+];
+
+const CHAKRA_DAY_COLORS: Record<ChakraDay, string> = {
+  Root: "var(--chakra-ink-0)",
+  Sacral: "var(--chakra-ink-1)",
+  "Solar Plexus": "var(--chakra-ink-2)",
+  Heart: "var(--chakra-ink-3)",
+  Throat: "var(--chakra-ink-4)",
+  "Third Eye": "var(--chakra-ink-5)",
+  Crown: "var(--chakra-ink-6)",
+};
+
+const MONTH_CHAKRA_COLORS: readonly string[] = [
+  "#ff7a7a",
+  "#ffbd66",
+  "#ffe25c",
+  "#86ff86",
+  "#79c2ff",
+  "#c99aff",
+  "#e29aff",
+  "#e5e5e5",
+];
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Types
+────────────────────────────────────────────────────────────────────────────── */
 type NavItem = {
   to: string;
   label: string;
@@ -201,17 +248,6 @@ type KlockPopoverProps = {
 
 type KlockNavState = { openDetails?: boolean };
 
-type KaiMoment = ReturnType<typeof momentFromUTC>;
-
-/* ──────────────────────────────────────────────────────────────────────────────
-   Deterministic "NOW" (KKS-1.0, μpulse-first)
-   - App.tsx never touches Date APIs.
-   - Bootstrap coordinate from:
-       1) localStorage μpulse checkpoint (fast reloads / SW refresh)
-       2) build-injected μpulse checkpoint (VITE_KAI_ANCHOR_PMICRO or legacy VITE_KAI_ANCHOR_MICRO)
-       3) kairosEpochNow() (kai_pulse.ts handles checkpoint > signed anchor > RTC fallback)
-   - After bootstrap, advance deterministically with performance.now() only.
-────────────────────────────────────────────────────────────────────────────── */
 type TimeoutHandle = number;
 
 const ONE_PULSE_MICRO = 1_000_000n;
@@ -219,11 +255,41 @@ const ONE_PULSE_MICRO = 1_000_000n;
 // ✅ NEW canonical key (μpulses since Genesis)
 const KAI_ANCHOR_PMICRO_KEY = "phi_kai_anchor_pmicro_v1";
 
+// ✅ legacy key you previously wrote (epoch ms)
+const KAI_ANCHOR_MSUTC_LEGACY_KEY = "phi_kai_anchor_msutc_v1";
 
+// Vite env typing (no `any`)
+type ViteEnv = {
+  VITE_KAI_ANCHOR_PMICRO?: string; // preferred: μpulses since Genesis
+  VITE_KAI_ANCHOR_MICRO?: string; // legacy name; treat same as above
+};
 
 type KaiAnchorSource = "storage" | "env" | "kpp"; // kpp = kai_pulse.ts
 type KaiAnchor = { pμ0: bigint; perf0: number; source: KaiAnchorSource };
 
+type KaiMoment = ReturnType<typeof momentFromUTC>;
+type VVSize = { width: number; height: number };
+
+type LiveKaiSnapshot = {
+  pulse: number;
+  pulseStr: string;
+  beatStepDMY: BeatStepDMY;
+  beatStepLabel: string;
+  dmyLabel: string;
+  chakraDay: ChakraDay;
+};
+
+type BeatStepDMY = {
+  beat: number; // 0..35
+  step: number; // 0..43
+  day: number; // 1..DAYS_PER_MONTH
+  month: number; // 1..MONTHS_PER_YEAR
+  year: number; // 0-based
+};
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Kai anchor + deterministic clock helpers
+────────────────────────────────────────────────────────────────────────────── */
 const kaiAnchorStore: { anchor: KaiAnchor | null } = { anchor: null };
 
 function floorDiv(n: bigint, d: bigint): bigint {
@@ -244,6 +310,18 @@ function roundTiesToEvenBigInt(x: number): bigint {
   return BigInt(s * (i % 2 === 0 ? i : i + 1));
 }
 
+function readLocalStorageBigInt(key: string): bigint | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    if (!/^-?\d+$/.test(raw.trim())) return null;
+    return BigInt(raw.trim());
+  } catch {
+    return null;
+  }
+}
+
 function writeLocalStorageBigInt(key: string, v: bigint): void {
   if (typeof window === "undefined") return;
   try {
@@ -253,7 +331,18 @@ function writeLocalStorageBigInt(key: string, v: bigint): void {
   }
 }
 
-
+function readLocalStorageMsUTC(key: string): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return Math.floor(n);
+  } catch {
+    return null;
+  }
+}
 
 /* epoch-ms → μpulses since Genesis (bridge uses canonical GENESIS_TS / PULSE_MS) */
 function microPulsesSinceGenesisMs(msUTC: number): bigint {
@@ -264,13 +353,10 @@ function microPulsesSinceGenesisMs(msUTC: number): bigint {
 
 /* Normalize kairosEpochNow() raw → μpulses since Genesis (BigInt) */
 function normalizeKaiEpochRawToMicroPulses(raw: bigint): bigint {
-  // If raw is already μpulses since Genesis, pulses = raw/1e6 should be "reasonable".
   const pulseGuess = floorDiv(raw, ONE_PULSE_MICRO);
 
-  // If raw is epoch microseconds, raw/1e6 ≈ epoch seconds (~1.7e9) → too large → convert.
   if (pulseGuess >= 0n && pulseGuess < 500_000_000n) return raw;
 
-  // Fallback: treat raw as epoch microseconds → epoch ms → μpulses since Genesis
   const epochMsBI = raw / 1000n;
   const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
   const minSafe = BigInt(Number.MIN_SAFE_INTEGER);
@@ -282,32 +368,87 @@ function normalizeKaiEpochRawToMicroPulses(raw: bigint): bigint {
   return microPulsesSinceGenesisMs(epochMs);
 }
 
+function readInjectedEnvAnchorMicroPulses(): bigint | null {
+  try {
+    const env = (import.meta as unknown as { env?: ViteEnv }).env;
+    const raw = (env?.VITE_KAI_ANCHOR_PMICRO ?? env?.VITE_KAI_ANCHOR_MICRO)?.trim();
+    if (!raw) return null;
 
+    if (!/^-?\d+$/.test(raw)) return null;
+
+    const bi = BigInt(raw);
+
+    if (bi > 0n && bi < 4_000_000_000_000n) {
+      const ms = Number(bi);
+      if (Number.isFinite(ms)) return microPulsesSinceGenesisMs(ms);
+    }
+
+    return bi;
+  } catch {
+    return null;
+  }
+}
 
 function seedFromKaiPulseNow(): bigint {
-  // kairosEpochNow() is the canonical source (matches SigilModal)
   const raw = kairosEpochNow();
   return normalizeKaiEpochRawToMicroPulses(raw);
 }
 
+function ensureKaiAnchor(): KaiAnchor {
+  if (kaiAnchorStore.anchor) return kaiAnchorStore.anchor;
 
-// Force-resync anchor from canonical now (eliminates stale-storage offsets)
-function hardResyncKaiAnchor(): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    kaiAnchorStore.anchor = { pμ0: 0n, perf0: 0, source: "kpp" };
+    return kaiAnchorStore.anchor;
+  }
+
+  const perf0 = window.performance.now();
+
+  const stored = readLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY);
+  if (stored !== null && stored > 0n) {
+    kaiAnchorStore.anchor = { pμ0: stored, perf0, source: "storage" };
+    return kaiAnchorStore.anchor;
+  }
+
+  const legacyMs = readLocalStorageMsUTC(KAI_ANCHOR_MSUTC_LEGACY_KEY);
+  if (legacyMs !== null && legacyMs > 0) {
+    const migrated = microPulsesSinceGenesisMs(legacyMs);
+    if (migrated > 0n) {
+      writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, migrated);
+      kaiAnchorStore.anchor = { pμ0: migrated, perf0, source: "storage" };
+      return kaiAnchorStore.anchor;
+    }
+  }
+
+  const envPμ = readInjectedEnvAnchorMicroPulses();
+  if (envPμ !== null && envPμ > 0n) {
+    writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, envPμ);
+    kaiAnchorStore.anchor = { pμ0: envPμ, perf0, source: "env" };
+    return kaiAnchorStore.anchor;
+  }
+
   const pμ0 = seedFromKaiPulseNow();
   if (pμ0 > 0n) writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, pμ0);
-  kaiAnchorStore.anchor = { pμ0, perf0: 0, source: "kpp" };
+  kaiAnchorStore.anchor = { pμ0, perf0, source: "kpp" };
+  return kaiAnchorStore.anchor;
 }
 
-// μpulses since Genesis “now” (deterministic after seed)
+function hardResyncKaiAnchor(): void {
+  if (typeof window === "undefined") return;
+  const perf0 = window.performance.now();
+  const pμ0 = seedFromKaiPulseNow();
+  if (pμ0 > 0n) writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, pμ0);
+  kaiAnchorStore.anchor = { pμ0, perf0, source: "kpp" };
+}
+
 function microPulsesNow(): bigint {
   if (typeof window === "undefined") return 0n;
-  const now = normalizeKaiEpochRawToMicroPulses(kairosEpochNow());
-  kaiAnchorStore.anchor = { pμ0: now, perf0: 0, source: "kpp" };
-  return now;
+  const a = ensureKaiAnchor();
+  const elapsedMs = window.performance.now() - a.perf0;
+  const deltaPμ = roundTiesToEvenBigInt((elapsedMs / PULSE_MS) * 1_000_000);
+  return a.pμ0 + deltaPμ;
 }
 
-// μpulses → epoch ms (number) — derived ONLY from GENESIS_TS + PULSE_MS
 function epochMsFromMicroPulses(pμ: bigint): number {
   const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
   const minSafe = BigInt(Number.MIN_SAFE_INTEGER);
@@ -329,13 +470,12 @@ function kaiMomentNow(): KaiMoment {
   return momentFromUTC(kaiMsUTCNow());
 }
 
-
-
 function isInteractiveTarget(t: EventTarget | null): boolean {
   const el = t instanceof Element ? t : null;
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button") return true;
+  if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button")
+    return true;
   if (tag === "a") return true;
   const ht = el as HTMLElement;
   return Boolean(ht.isContentEditable) || Boolean(el.closest("[contenteditable='true']"));
@@ -350,51 +490,6 @@ function getInitialAppVersion(): string {
 /* ──────────────────────────────────────────────────────────────────────────────
    KKS v1.0 display math (exact step)
 ────────────────────────────────────────────────────────────────────────────── */
-const BEATS_PER_DAY = 36;
-const STEPS_PER_BEAT = 44;
-const STEPS_PER_DAY = BEATS_PER_DAY * STEPS_PER_BEAT;
-
-// Canon breath count per day (precision)
-const PULSES_PER_DAY = 17_491.270421;
-
-const ARK_COLORS: readonly string[] = [
-  "var(--chakra-ark-0)",
-  "var(--chakra-ark-1)",
-  "var(--chakra-ark-2)",
-  "var(--chakra-ark-3)",
-  "var(--chakra-ark-4)",
-  "var(--chakra-ark-5)",
-];
-
-const CHAKRA_DAY_COLORS: Record<ChakraDay, string> = {
-  Root: "var(--chakra-ink-0)",
-  Sacral: "var(--chakra-ink-1)",
-  "Solar Plexus": "var(--chakra-ink-2)",
-  Heart: "var(--chakra-ink-3)",
-  Throat: "var(--chakra-ink-4)",
-  "Third Eye": "var(--chakra-ink-5)",
-  Crown: "var(--chakra-ink-6)",
-};
-
-const MONTH_CHAKRA_COLORS: readonly string[] = [
-  "#ff7a7a",
-  "#ffbd66",
-  "#ffe25c",
-  "#86ff86",
-  "#79c2ff",
-  "#c99aff",
-  "#e29aff",
-  "#e5e5e5",
-];
-
-type BeatStepDMY = {
-  beat: number; // 0..35
-  step: number; // 0..43
-  day: number; // 1..DAYS_PER_MONTH
-  month: number; // 1..MONTHS_PER_YEAR
-  year: number; // 0-based
-};
-
 function computeBeatStepDMY(m: KaiMoment): BeatStepDMY {
   const pulse = readNum(m, "pulse") ?? 0;
 
@@ -528,8 +623,6 @@ function useDisableZoom(): void {
 /* ──────────────────────────────────────────────────────────────────────────────
    Shared VisualViewport publisher (RAF-throttled)
 ────────────────────────────────────────────────────────────────────────────── */
-type VVSize = { width: number; height: number };
-
 type VVStore = {
   size: VVSize;
   subs: Set<(s: VVSize) => void>;
@@ -713,6 +806,341 @@ function getPortalHost(): HTMLElement {
     }
   }
   return document.body;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   Derived helpers
+────────────────────────────────────────────────────────────────────────────── */
+function pageTitleFromPath(pathname: string): string {
+  if (pathname === "/") return "Verifier";
+  if (pathname.startsWith("/mint")) return "Mint Sigil";
+  if (pathname.startsWith("/voh")) return "KaiVoh";
+  if (pathname.startsWith("/keystream")) return "PhiStream";
+  if (pathname.startsWith("/klock")) return "KaiKlok";
+  return "Sovereign Gate";
+}
+
+function lockPanelForPath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/voh") ||
+    pathname.startsWith("/mint") ||
+    pathname.startsWith("/keystream") ||
+    pathname.startsWith("/klock")
+  );
+}
+
+function chartHeightFromViewport(height: number): number {
+  if (height < 680) return 200;
+  return 240;
+}
+
+function topbarScrollMaxFromViewport(height: number): number {
+  return Math.max(220, Math.min(520, Math.floor(height * 0.52)));
+}
+
+function useDocumentTitle(title: string): void {
+  useEffect(() => {
+    document.title = `ΦNet • ${title}`;
+  }, [title]);
+}
+
+function useRoomyLayout(vvSize: VVSize): boolean {
+  return useMemo(() => {
+    const h = vvSize.height || 0;
+    const w = vvSize.width || 0;
+    return h >= 820 && w >= 980;
+  }, [vvSize.height, vvSize.width]);
+}
+
+function useAppVersionSync(): string {
+  const [appVersion, setAppVersion] = useState<string>(getInitialAppVersion);
+
+  useEffect(() => {
+    const onVersion = (event: Event): void => {
+      const detail = (event as CustomEvent<string>).detail;
+      if (typeof detail === "string" && detail.length) setAppVersion(detail);
+    };
+
+    window.addEventListener(SW_VERSION_EVENT, onVersion);
+    return () => window.removeEventListener(SW_VERSION_EVENT, onVersion);
+  }, []);
+
+  return appVersion;
+}
+
+function useKaiAnchorPersistence(): void {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    hardResyncKaiAnchor();
+
+    const writeAnchor = (): void => {
+      const pμ = microPulsesNow();
+      if (pμ > 0n) writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, pμ);
+    };
+
+    const onVis = (): void => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") writeAnchor();
+    };
+
+    writeAnchor();
+    const id = window.setInterval(writeAnchor, 15_000);
+
+    window.addEventListener("pagehide", writeAnchor);
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("pagehide", writeAnchor);
+      document.removeEventListener("visibilitychange", onVis);
+      writeAnchor();
+    };
+  }, []);
+}
+
+function useHeavyUiGate(): boolean {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const idleWin = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    const handle =
+      typeof idleWin.requestIdleCallback === "function"
+        ? idleWin.requestIdleCallback(() => setReady(true), { timeout: 900 })
+        : window.setTimeout(() => setReady(true), 220);
+
+    return () => {
+      if (typeof idleWin.cancelIdleCallback === "function") idleWin.cancelIdleCallback(handle);
+      else window.clearTimeout(handle);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    void import("./components/HomePriceChartCard");
+    void import("./components/KaiVoh/KaiVohModal");
+    void import("./components/SigilModal");
+    void import("./components/SigilExplorer");
+    void import("./components/EternalKlock");
+    void import("./pages/sigilstream/SigilStreamRoot");
+  }, [ready]);
+
+  return ready;
+}
+
+function useServiceWorkerWarmup(warmTimerRef: React.MutableRefObject<number | null>): void {
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return undefined;
+
+    const aborter = new AbortController();
+
+    const navAny = navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    };
+    const saveData = Boolean(navAny.connection?.saveData);
+    const et = navAny.connection?.effectiveType || "";
+    const slowNet = et === "slow-2g" || et === "2g";
+
+    if (saveData || slowNet) {
+      return () => aborter.abort();
+    }
+
+    const warmOffline = async (): Promise<void> => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const controller = registration.active || registration.waiting || registration.installing;
+
+        controller?.postMessage({
+          type: "WARM_URLS",
+          urls: [...OFFLINE_ASSETS_TO_WARM, ...SHELL_ROUTES_TO_WARM, ...APP_SHELL_HINTS],
+          mapShell: true,
+        });
+
+        await Promise.all(
+          [...OFFLINE_ASSETS_TO_WARM, ...SHELL_ROUTES_TO_WARM].map(async (url) => {
+            try {
+              await fetch(url, { cache: "no-cache", signal: aborter.signal });
+            } catch {
+              /* non-blocking warm-up */
+            }
+          }),
+        );
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const idleWin = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    const runWarm = (): void => void warmOffline();
+
+    const idleHandle =
+      typeof idleWin.requestIdleCallback === "function"
+        ? idleWin.requestIdleCallback(runWarm, { timeout: 2500 })
+        : window.setTimeout(runWarm, 1200);
+
+    const onFocus = (): void => {
+      if (warmTimerRef.current !== null) window.clearTimeout(warmTimerRef.current);
+      warmTimerRef.current = window.setTimeout(runWarm, 240);
+    };
+
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      aborter.abort();
+
+      if (warmTimerRef.current !== null) {
+        window.clearTimeout(warmTimerRef.current);
+        warmTimerRef.current = null;
+      }
+
+      if (typeof idleWin.cancelIdleCallback === "function") {
+        idleWin.cancelIdleCallback(idleHandle);
+      } else {
+        window.clearTimeout(idleHandle);
+      }
+
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [warmTimerRef]);
+}
+
+function usePanelScrollMeasurement(
+  lockPanelByRoute: boolean,
+  pathname: string,
+): {
+  panelBodyRef: React.MutableRefObject<HTMLDivElement | null>;
+  panelCenterRef: React.MutableRefObject<HTMLDivElement | null>;
+  panelShouldScroll: boolean;
+  panelBodyInlineStyle?: CSSProperties;
+  panelCenterInlineStyle?: CSSProperties;
+} {
+  const panelBodyRef = useRef<HTMLDivElement | null>(null);
+  const panelCenterRef = useRef<HTMLDivElement | null>(null);
+  const [needsInternalScroll, setNeedsInternalScroll] = useState<boolean>(false);
+  const rafIdRef = useRef<number | null>(null);
+
+  const computeOverflow = useCallback((): boolean => {
+    const body = panelBodyRef.current;
+    const center = panelCenterRef.current;
+    if (!body || !center) return false;
+
+    const contentEl = center.firstElementChild as HTMLElement | null;
+    const contentHeight = contentEl ? contentEl.scrollHeight : center.scrollHeight;
+    const availableHeight = body.clientHeight;
+
+    return contentHeight > availableHeight + 6;
+  }, []);
+
+  const scheduleMeasure = useCallback((): void => {
+    if (rafIdRef.current !== null) return;
+
+    rafIdRef.current = window.requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const next = computeOverflow();
+      setNeedsInternalScroll((prev) => (prev === next ? prev : next));
+    });
+  }, [computeOverflow]);
+
+  useEffect(() => {
+    if (!lockPanelByRoute) return;
+    scheduleMeasure();
+  }, [lockPanelByRoute, pathname, scheduleMeasure]);
+
+  useEffect(() => {
+    const body = panelBodyRef.current;
+    const center = panelCenterRef.current;
+    if (!body || !center) return;
+
+    const contentEl = center.firstElementChild as HTMLElement | null;
+    const onAnyResize = (): void => scheduleMeasure();
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(onAnyResize);
+      ro.observe(body);
+      ro.observe(center);
+      if (contentEl) ro.observe(contentEl);
+    }
+
+    window.addEventListener("resize", onAnyResize, { passive: true });
+    scheduleMeasure();
+
+    return () => {
+      window.removeEventListener("resize", onAnyResize);
+      ro?.disconnect();
+      if (rafIdRef.current !== null) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, [scheduleMeasure, pathname]);
+
+  const panelShouldScroll = lockPanelByRoute && needsInternalScroll;
+
+  const panelBodyInlineStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!panelShouldScroll) return undefined;
+    return {
+      overflowY: "auto",
+      overflowX: "hidden",
+      WebkitOverflowScrolling: "touch",
+      alignItems: "stretch",
+      justifyContent: "flex-start",
+      paddingBottom: "calc(1.25rem + var(--safe-bottom))",
+    };
+  }, [panelShouldScroll]);
+
+  const panelCenterInlineStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!panelShouldScroll) return undefined;
+    return {
+      height: "auto",
+      minHeight: "100%",
+      alignItems: "flex-start",
+      justifyContent: "flex-start",
+    };
+  }, [panelShouldScroll]);
+
+  return {
+    panelBodyRef,
+    panelCenterRef,
+    panelShouldScroll,
+    panelBodyInlineStyle,
+    panelCenterInlineStyle,
+  };
+}
+
+function useNavAutoscroll(navListRef: React.MutableRefObject<HTMLDivElement | null>, pathname: string): void {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const list = navListRef.current;
+    if (!list) return;
+
+    if (!window.matchMedia("(max-width: 980px)").matches) return;
+
+    const active = list.querySelector<HTMLElement>(".nav-item--active");
+    if (!active) return;
+
+    window.requestAnimationFrame(() => {
+      try {
+        active.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      } catch {
+        active.scrollIntoView();
+      }
+    });
+  }, [pathname, navListRef]);
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
@@ -1060,8 +1488,106 @@ export function KlockRoute(): React.JSX.Element {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   Live header button (isolated ticker = no full-app rerenders)
+   Live Kai ticker
 ────────────────────────────────────────────────────────────────────────────── */
+function snapshotFromMicroPulses(pμ: bigint): LiveKaiSnapshot {
+  const msUTC = epochMsFromMicroPulses(pμ);
+  const m = momentFromUTC(msUTC);
+
+  const pulseBI = floorDiv(pμ, ONE_PULSE_MICRO);
+  const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
+  const pulse = pulseBI > maxSafe ? Number.MAX_SAFE_INTEGER : pulseBI < 0n ? 0 : Number(pulseBI);
+
+  const pulseStr = formatPulse(pulse);
+  const m2 = { ...m, pulse } as KaiMoment;
+
+  const bsd = computeBeatStepDMY(m2);
+  const beatStepLabel = formatBeatStepLabel(bsd);
+  const dmyLabel = formatDMYLabel(bsd);
+
+  return {
+    pulse,
+    pulseStr,
+    beatStepDMY: bsd,
+    beatStepLabel,
+    dmyLabel,
+    chakraDay: m2.chakraDay,
+  };
+}
+
+function useLiveKaiTicker(): LiveKaiSnapshot {
+  const [snap, setSnap] = useState<LiveKaiSnapshot>(() => snapshotFromMicroPulses(microPulsesNow()));
+
+  useEffect(() => {
+    let alive = true;
+    let t: TimeoutHandle | null = null;
+
+    const clear = (): void => {
+      if (t !== null) {
+        window.clearTimeout(t);
+        t = null;
+      }
+    };
+
+    const applyMicro = (pμ: bigint): void => {
+      const next = snapshotFromMicroPulses(pμ);
+      setSnap((prev) => {
+        if (
+          prev.pulseStr === next.pulseStr &&
+          prev.beatStepLabel === next.beatStepLabel &&
+          prev.dmyLabel === next.dmyLabel
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    };
+
+    const scheduleNext = (): void => {
+      if (!alive) return;
+
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        clear();
+        return;
+      }
+
+      const pμ = microPulsesNow();
+      applyMicro(pμ);
+
+      let into = pμ % ONE_PULSE_MICRO;
+      if (into < 0n) into += ONE_PULSE_MICRO;
+      const remainMicro = ONE_PULSE_MICRO - into;
+      const remainMicroN = Number(remainMicro);
+      const delayMs = Math.max(0, Math.floor((remainMicroN / 1_000_000) * PULSE_MS));
+
+      clear();
+      t = window.setTimeout(scheduleNext, delayMs);
+    };
+
+    scheduleNext();
+
+    const onVis = (): void => {
+      if (!alive) return;
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        hardResyncKaiAnchor();
+        scheduleNext();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
+
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onVis);
+      clear();
+    };
+  }, []);
+
+  return snap;
+}
+
 type LiveKaiButtonProps = {
   onOpenKlock: () => void;
   breathS: number;
@@ -1069,33 +1595,13 @@ type LiveKaiButtonProps = {
   breathsPerDay: number;
 };
 
-function LiveKaiButton({
+const LiveKaiButton = memo(function LiveKaiButton({
   onOpenKlock,
   breathS,
   breathMs,
   breathsPerDay,
 }: LiveKaiButtonProps): React.JSX.Element {
-  const [snap, setSnap] = useState<{
-    pulse: number;
-    pulseStr: string;
-    beatStepDMY: BeatStepDMY;
-    beatStepLabel: string;
-    dmyLabel: string;
-    chakraDay: ChakraDay;
-  }>(() => {
-    const m = kaiMomentNow();
-    const pulse = readNum(m, "pulse") ?? 0;
-    const pulseStr = formatPulse(pulse);
-    const bsd = computeBeatStepDMY(m);
-    return {
-      pulse,
-      pulseStr,
-      beatStepDMY: bsd,
-      beatStepLabel: formatBeatStepLabel(bsd),
-      dmyLabel: formatDMYLabel(bsd),
-      chakraDay: m.chakraDay,
-    };
-  });
+  const snap = useLiveKaiTicker();
 
   const neonTextStyle = useMemo<CSSProperties>(
     () => ({
@@ -1143,100 +1649,6 @@ function LiveKaiButton({
       }) as CSSProperties,
     [arcColor, chakraColor, monthColor],
   );
-
-// ✅ μpulse-aligned ticker (same determinism pattern as VerifierStamper)
-useEffect(() => {
-  let alive = true;
-  let t: TimeoutHandle | null = null;
-
-  const clear = (): void => {
-    if (t !== null) {
-      window.clearTimeout(t);
-      t = null;
-    }
-  };
-
-  const applyMicro = (pμ: bigint): void => {
-    const msUTC = epochMsFromMicroPulses(pμ);
-    const m = momentFromUTC(msUTC);
-
-    // Pulse MUST come from μpulses (source of truth), not from any derived ms math.
-    const pulseBI = floorDiv(pμ, ONE_PULSE_MICRO);
-    const maxSafe = BigInt(Number.MAX_SAFE_INTEGER);
-    const pulse =
-      pulseBI > maxSafe ? Number.MAX_SAFE_INTEGER : pulseBI < 0n ? 0 : Number(pulseBI);
-
-    const pulseStr = formatPulse(pulse);
-
-    // keep KaiMoment-derived fields (chakra/dayIndex), but drive pulse from μpulses
-    const m2 = { ...m, pulse } as KaiMoment;
-
-    const bsd = computeBeatStepDMY(m2);
-    const beatStepLabel = formatBeatStepLabel(bsd);
-    const dmyLabel = formatDMYLabel(bsd);
-
-    setSnap((prev) => {
-      if (
-        prev.pulseStr === pulseStr &&
-        prev.beatStepLabel === beatStepLabel &&
-        prev.dmyLabel === dmyLabel
-      ) {
-        return prev;
-      }
-      return {
-        pulse,
-        pulseStr,
-        beatStepDMY: bsd,
-        beatStepLabel,
-        dmyLabel,
-        chakraDay: m2.chakraDay,
-      };
-    });
-  };
-
-  const scheduleNext = (): void => {
-    if (!alive) return;
-
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-      clear();
-      return;
-    }
-
-    const pμ = microPulsesNow();
-    applyMicro(pμ);
-
-    // schedule exactly to next μpulse boundary
-    let into = pμ % ONE_PULSE_MICRO;
-    if (into < 0n) into += ONE_PULSE_MICRO;
-    const remainMicro = ONE_PULSE_MICRO - into; // <= 1e6
-    const remainMicroN = Number(remainMicro); // safe (<= 1,000,000)
-    const delayMs = Math.max(0, Math.floor((remainMicroN / 1_000_000) * PULSE_MS));
-
-    clear();
-    t = window.setTimeout(scheduleNext, delayMs);
-  };
-
-  // initial sync (seed+catch-up happens inside ensureKaiAnchor)
-  scheduleNext();
-
-  const onVis = (): void => {
-    if (!alive) return;
-    if (typeof document !== "undefined" && document.visibilityState === "visible") {
-      hardResyncKaiAnchor();
-      scheduleNext();
-    }
-  };
-
-  document.addEventListener("visibilitychange", onVis);
-  window.addEventListener("focus", onVis);
-
-  return () => {
-    alive = false;
-    document.removeEventListener("visibilitychange", onVis);
-    window.removeEventListener("focus", onVis);
-    clear();
-  };
-}, []);
 
   const liveTitle = useMemo(() => {
     return `LIVE • NOW PULSE ${snap.pulseStr} • ${snap.beatStepLabel} • ${snap.dmyLabel} • Breath ${breathS.toFixed(
@@ -1295,7 +1707,7 @@ useEffect(() => {
       </div>
     </button>
   );
-}
+});
 
 /* ──────────────────────────────────────────────────────────────────────────────
    AppChrome
@@ -1307,352 +1719,55 @@ export function AppChrome(): React.JSX.Element {
   useDisableZoom();
   usePerfMode();
 
-  // Re-kill splash on "/" before paint (guarantee)
   useIsoLayoutEffect(() => {
     killSplashOnHome();
   }, [location.pathname]);
 
-  const [appVersion, setAppVersion] = useState<string>(getInitialAppVersion);
+  useKaiAnchorPersistence();
 
-  useEffect(() => {
-    const onVersion = (event: Event): void => {
-      const detail = (event as CustomEvent<string>).detail;
-      if (typeof detail === "string" && detail.length) setAppVersion(detail);
-    };
-
-    window.addEventListener(SW_VERSION_EVENT, onVersion);
-    return () => window.removeEventListener(SW_VERSION_EVENT, onVersion);
-  }, []);
-
-  // ✅ keep μpulse checkpoint fresh + hard-resync on boot (prevents stale offsets)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    // Hard resync once on boot so App.tsx matches SigilModal immediately.
-    hardResyncKaiAnchor();
-
-    const writeAnchor = (): void => {
-      const pμ = microPulsesNow();
-      if (pμ > 0n) writeLocalStorageBigInt(KAI_ANCHOR_PMICRO_KEY, pμ);
-    };
-
-    const onVis = (): void => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") writeAnchor();
-    };
-
-    writeAnchor();
-    const id = window.setInterval(writeAnchor, 15_000);
-
-    window.addEventListener("pagehide", writeAnchor);
-    document.addEventListener("visibilitychange", onVis);
-
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener("pagehide", writeAnchor);
-      document.removeEventListener("visibilitychange", onVis);
-      writeAnchor();
-    };
-  }, []);
-
-  // Warm timers (fix: no global warmTimer)
+  const appVersion = useAppVersionSync();
+  const heavyUiReady = useHeavyUiGate();
   const warmTimerRef = useRef<number | null>(null);
-
-  // Heavy UI gating for instant first paint (chart + chunk prefetch)
-  const [heavyUiReady, setHeavyUiReady] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const idleWin = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-
-    const handle =
-      typeof idleWin.requestIdleCallback === "function"
-        ? idleWin.requestIdleCallback(() => setHeavyUiReady(true), { timeout: 900 })
-        : window.setTimeout(() => setHeavyUiReady(true), 220);
-
-    return () => {
-      if (typeof idleWin.cancelIdleCallback === "function") idleWin.cancelIdleCallback(handle);
-      else window.clearTimeout(handle);
-    };
-  }, []);
-
-  // Optional: prefetch lazy chunks in idle (no UI impact)
-  useEffect(() => {
-    if (!heavyUiReady) return;
-    void import("./components/HomePriceChartCard");
-    void import("./components/KaiVoh/KaiVohModal");
-    void import("./components/SigilModal");
-    void import("./components/SigilExplorer");
-    void import("./components/EternalKlock");
-    void import("./pages/sigilstream/SigilStreamRoot");
-  }, [heavyUiReady]);
-
-  // SW warm-up (idle-only + focus cadence, abort-safe, respects Save-Data/2G)
-  useEffect(() => {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return undefined;
-
-    const aborter = new AbortController();
-
-    const navAny = navigator as Navigator & {
-      connection?: { saveData?: boolean; effectiveType?: string };
-    };
-    const saveData = Boolean(navAny.connection?.saveData);
-    const et = navAny.connection?.effectiveType || "";
-    const slowNet = et === "slow-2g" || et === "2g";
-
-    if (saveData || slowNet) {
-      return () => aborter.abort();
-    }
-
-    const warmOffline = async (): Promise<void> => {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        const controller = registration.active || registration.waiting || registration.installing;
-
-        controller?.postMessage({
-          type: "WARM_URLS",
-          urls: [...OFFLINE_ASSETS_TO_WARM, ...SHELL_ROUTES_TO_WARM, ...APP_SHELL_HINTS],
-          mapShell: true,
-        });
-
-        await Promise.all(
-          [...OFFLINE_ASSETS_TO_WARM, ...SHELL_ROUTES_TO_WARM].map(async (url) => {
-            try {
-              await fetch(url, { cache: "no-cache", signal: aborter.signal });
-            } catch {
-              /* non-blocking warm-up */
-            }
-          }),
-        );
-      } catch {
-        /* ignore */
-      }
-    };
-
-    const idleWin = window as Window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-
-    const runWarm = (): void => void warmOffline();
-
-    const idleHandle =
-      typeof idleWin.requestIdleCallback === "function"
-        ? idleWin.requestIdleCallback(runWarm, { timeout: 2500 })
-        : window.setTimeout(runWarm, 1200);
-
-    const onFocus = (): void => {
-      if (warmTimerRef.current !== null) window.clearTimeout(warmTimerRef.current);
-      warmTimerRef.current = window.setTimeout(runWarm, 240);
-    };
-
-    window.addEventListener("focus", onFocus);
-
-    return () => {
-      aborter.abort();
-
-      if (warmTimerRef.current !== null) {
-        window.clearTimeout(warmTimerRef.current);
-        warmTimerRef.current = null;
-      }
-
-      if (typeof idleWin.cancelIdleCallback === "function") {
-        idleWin.cancelIdleCallback(idleHandle);
-      } else {
-        window.clearTimeout(idleHandle);
-      }
-
-      window.removeEventListener("focus", onFocus);
-    };
-  }, []);
-
-  const BREATH_S = useMemo(() => 3 + Math.sqrt(5), []);
-  const BREATH_MS = useMemo(() => BREATH_S * 1000, [BREATH_S]);
-  const BREATHS_PER_DAY = useMemo(() => 17_491.270421, []);
+  useServiceWorkerWarmup(warmTimerRef);
 
   const vvSize = useVisualViewportSize();
-
-  // Layout signal: “roomy” screens (desktop / tablet / very tall)
-  const roomy = useMemo(() => {
-    const h = vvSize.height || 0;
-    const w = vvSize.width || 0;
-    return h >= 820 && w >= 980;
-  }, [vvSize]);
+  const roomy = useRoomyLayout(vvSize);
 
   const shellStyle = useMemo<AppShellStyle>(
     () => ({
       "--breath-s": `${BREATH_S}s`,
       "--vvh-px": `${vvSize.height}px`,
     }),
-    [BREATH_S, vvSize.height],
+    [vvSize.height],
   );
 
-  const navItems = useMemo<NavItem[]>(
-    () => [
-      { to: "/", label: "Verifier", desc: "Inhale + Exhale", end: true },
-      { to: "/mint", label: "Mint ΦKey", desc: "Breath-minted seal" },
-      { to: "/voh", label: "KaiVoh", desc: "Memory OS" },
-      { to: "/keystream", label: "ΦStream", desc: "Live keystream" },
-    ],
-    [],
-  );
+  const pageTitle = useMemo<string>(() => pageTitleFromPath(location.pathname), [location.pathname]);
+  useDocumentTitle(pageTitle);
 
-  const pageTitle = useMemo<string>(() => {
-    const p = location.pathname;
-    if (p === "/") return "Verifier";
-    if (p.startsWith("/mint")) return "Mint Sigil";
-    if (p.startsWith("/voh")) return "KaiVoh";
-    if (p.startsWith("/keystream")) return "PhiStream";
-    if (p.startsWith("/klock")) return "KaiKlok";
-    return "Sovereign Gate";
-  }, [location.pathname]);
-
-  useEffect(() => {
-    document.title = `ΦNet • ${pageTitle}`;
-  }, [pageTitle]);
-
-  const lockPanelByRoute = useMemo(() => {
-    const p = location.pathname;
-    return (
-      p === "/" ||
-      p.startsWith("/voh") ||
-      p.startsWith("/mint") ||
-      p.startsWith("/keystream") ||
-      p.startsWith("/klock")
-    );
-  }, [location.pathname]);
-
+  const lockPanelByRoute = useMemo(() => lockPanelForPath(location.pathname), [location.pathname]);
   const showAtriumChartBar = lockPanelByRoute;
 
-  const chartHeight = useMemo<number>(() => {
-    const h = vvSize.height || 800;
-    if (h < 680) return 200;
-    return 240;
-  }, [vvSize.height]);
+  const chartHeight = useMemo<number>(() => chartHeightFromViewport(vvSize.height || 800), [vvSize.height]);
+  const topbarScrollMaxH = useMemo<number>(
+    () => topbarScrollMaxFromViewport(vvSize.height || 800),
+    [vvSize.height],
+  );
 
-  const topbarScrollMaxH = useMemo<number>(() => {
-    const h = vvSize.height || 800;
-    return Math.max(220, Math.min(520, Math.floor(h * 0.52)));
-  }, [vvSize.height]);
-
-  const panelBodyRef = useRef<HTMLDivElement | null>(null);
-  const panelCenterRef = useRef<HTMLDivElement | null>(null);
-  const [needsInternalScroll, setNeedsInternalScroll] = useState<boolean>(false);
-  const rafIdRef = useRef<number | null>(null);
-
-  const computeOverflow = useCallback((): boolean => {
-    const body = panelBodyRef.current;
-    const center = panelCenterRef.current;
-    if (!body || !center) return false;
-
-    const contentEl = center.firstElementChild as HTMLElement | null;
-    const contentHeight = contentEl ? contentEl.scrollHeight : center.scrollHeight;
-    const availableHeight = body.clientHeight;
-
-    return contentHeight > availableHeight + 6;
-  }, []);
-
-  const scheduleMeasure = useCallback((): void => {
-    if (rafIdRef.current !== null) return;
-
-    rafIdRef.current = window.requestAnimationFrame(() => {
-      rafIdRef.current = null;
-      const next = computeOverflow();
-      setNeedsInternalScroll((prev) => (prev === next ? prev : next));
-    });
-  }, [computeOverflow]);
-
-  useEffect(() => {
-    if (!lockPanelByRoute) return;
-    scheduleMeasure();
-  }, [lockPanelByRoute, location.pathname, scheduleMeasure]);
-
-  useEffect(() => {
-    const body = panelBodyRef.current;
-    const center = panelCenterRef.current;
-    if (!body || !center) return;
-
-    const contentEl = center.firstElementChild as HTMLElement | null;
-    const onAnyResize = (): void => scheduleMeasure();
-
-    let ro: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(onAnyResize);
-      ro.observe(body);
-      ro.observe(center);
-      if (contentEl) ro.observe(contentEl);
-    }
-
-    window.addEventListener("resize", onAnyResize, { passive: true });
-    scheduleMeasure();
-
-    return () => {
-      window.removeEventListener("resize", onAnyResize);
-      ro?.disconnect();
-      if (rafIdRef.current !== null) {
-        window.cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-    };
-  }, [scheduleMeasure, location.pathname]);
-
-  const panelShouldScroll = lockPanelByRoute && needsInternalScroll;
-
-  const panelBodyInlineStyle = useMemo<CSSProperties | undefined>(() => {
-    if (!panelShouldScroll) return undefined;
-    return {
-      overflowY: "auto",
-      overflowX: "hidden",
-      WebkitOverflowScrolling: "touch",
-      alignItems: "stretch",
-      justifyContent: "flex-start",
-      paddingBottom: "calc(1.25rem + var(--safe-bottom))",
-    };
-  }, [panelShouldScroll]);
-
-  const panelCenterInlineStyle = useMemo<CSSProperties | undefined>(() => {
-    if (!panelShouldScroll) return undefined;
-    return {
-      height: "auto",
-      minHeight: "100%",
-      alignItems: "flex-start",
-      justifyContent: "flex-start",
-    };
-  }, [panelShouldScroll]);
+  const {
+    panelBodyRef,
+    panelCenterRef,
+    panelShouldScroll,
+    panelBodyInlineStyle,
+    panelCenterInlineStyle,
+  } = usePanelScrollMeasurement(lockPanelByRoute, location.pathname);
 
   const navListRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const list = navListRef.current;
-    if (!list) return;
-
-    if (!window.matchMedia("(max-width: 980px)").matches) return;
-
-    const active = list.querySelector<HTMLElement>(".nav-item--active");
-    if (!active) return;
-
-    window.requestAnimationFrame(() => {
-      try {
-        active.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-          inline: "center",
-        });
-      } catch {
-        active.scrollIntoView();
-      }
-    });
-  }, [location.pathname]);
+  useNavAutoscroll(navListRef, location.pathname);
 
   const openKlock = useCallback((): void => {
     const st: KlockNavState = { openDetails: true };
     navigate("/klock", { state: st });
   }, [navigate]);
-
-  const DNS_IP = "137.66.18.241";
 
   const copyDnsIp = useCallback(async (btn?: HTMLButtonElement | null) => {
     try {
@@ -1676,7 +1791,6 @@ export function AppChrome(): React.JSX.Element {
     }
   }, []);
 
-  // Nav: don’t stretch on roomy screens (lets panel “own” the extra space visually)
   const navInlineStyle = useMemo<CSSProperties | undefined>(() => {
     if (!roomy) return undefined;
     return { alignSelf: "start", height: "auto" };
@@ -1774,7 +1888,7 @@ export function AppChrome(): React.JSX.Element {
                   role="list"
                   aria-label="Atrium navigation tiles"
                 >
-                  {navItems.map((item) => (
+                  {NAV_ITEMS.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
@@ -1788,7 +1902,6 @@ export function AppChrome(): React.JSX.Element {
                   ))}
                 </div>
 
-                {/* Structural fix: prevent SovereignDeclarations from eating extra height */}
                 <div className="nav-writ-slot" data-writ-slim="1">
                   <SovereignDeclarations />
                 </div>
