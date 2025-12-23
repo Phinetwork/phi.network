@@ -1,3 +1,18 @@
+# OFFICIAL NOTICE — REPOSITORY RELOCATED
+
+This repository is **no longer the canonical source of truth** for **Verify.Kai**.
+
+✅ **New official repository:** https://github.com/[OWNER]/[NEW_REPO]
+
+## Effective Immediately
+
+All **development**, **releases**, **issues**, and **pull requests** must be directed to the new repository.
+
+## Status of This Repository
+
+This repository is retained for **historical reference only** and will receive **no further updates**.
+
+
 
 # Φ Network (ΦNet) — Sovereign Kairos Monetary & Identity System
 
