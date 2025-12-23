@@ -4,7 +4,7 @@ This repository is **no longer the canonical source of truth** for **PHI.NETWORK
 
 ✅ **New official repository:** https://github.com/phinetwork/phi_network
 
-## Effective Immediately
+## Effective Immediately 
 
 All **development**, **releases**, **issues**, and **pull requests** must be directed to the new repository.
 
