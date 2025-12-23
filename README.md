@@ -2,7 +2,7 @@
 
 This repository is **no longer the canonical source of truth** for **Verify.Kai**.
 
-✅ **New official repository:** https://github.com/[OWNER]/[NEW_REPO]
+✅ **New official repository:** https://github.com/phinetwork/phi_network
 
 ## Effective Immediately
 
